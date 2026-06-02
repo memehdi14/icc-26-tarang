@@ -1,0 +1,31 @@
+# Tarang Firmware
+
+This project contains the embedded firmware for Tarang, Team Ocelleon's IoT Challenge 2026 wearable pipeline.
+
+## Target
+
+- Board family: Silicon Labs EFR32MG26
+- Core: Cortex-M33
+- SDK: Silicon Labs Simplicity SDK
+- Project file: [Tarang_Core_Pipeline.slcp](Tarang_Core_Pipeline.slcp)
+
+## Main files
+
+- [app.c](app.c) contains the core application logic.
+- [tarang_pipeline.h](tarang_pipeline.h) defines the physiological frame pipeline types and handoffs.
+- [tarang_model.h](tarang_model.h) contains the embedded model interface/data used by the firmware.
+- [config/](config/) contains Silicon Labs project configuration.
+
+## Build
+
+1. Open `Tarang_Core_Pipeline.slcp` in Simplicity Studio.
+2. Install or select the matching Simplicity SDK locally.
+3. Generate project files if Simplicity Studio prompts for regeneration.
+4. Build the project from Simplicity Studio.
+5. Flash the target board from Simplicity Studio.
+
+The local SDK folder, project checksum files, and build outputs are ignored by Git.
+
+## Notes
+
+Keep generated SDK content and build products out of commits. Commit only source files, project configuration, and documentation needed for another developer to rebuild the project.
