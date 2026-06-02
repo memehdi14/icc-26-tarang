@@ -22,6 +22,7 @@
 #include "em_wdog.h"
 #include "sl_core.h"
 #include "sl_bt_api.h"
+#include "app_assert.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -111,6 +112,7 @@ static volatile bool tarang_acquisition_paused = false;
 
 static bool tarang_hf_boosted = false;
 static bool tarang_imu_present = false;
+static uint8_t tarang_advertising_set_handle = 0xFFu;
 static I2C_Init_TypeDef tarang_i2c_saved;
 
 static tarang_diagnostics_t tarang_diag;
@@ -351,7 +353,77 @@ void app_process_action(void)
  * ═══════════════════════════════════════════════════════════════════════════ */
 void sl_bt_on_event(sl_bt_msg_t *evt)
 {
-    (void)evt;
+    sl_status_t sc;
+
+    switch (SL_BT_MSG_ID(evt->header)) {
+    case sl_bt_evt_system_boot_id:
+        sc = sl_bt_advertiser_create_set(&tarang_advertising_set_handle);
+        app_assert_status(sc);
+
+        sc = sl_bt_legacy_advertiser_generate_data(
+            tarang_advertising_set_handle,
+            sl_bt_advertiser_general_discoverable);
+        app_assert_status(sc);
+
+        sc = sl_bt_advertiser_set_timing(
+            tarang_advertising_set_handle,
+            160,
+            160,
+            0,
+            0);
+        app_assert_status(sc);
+
+        sc = sl_bt_legacy_advertiser_start(
+            tarang_advertising_set_handle,
+            sl_bt_legacy_advertiser_connectable);
+        app_assert_status(sc);
+        break;
+
+    case sl_bt_evt_connection_opened_id:
+        sc = sl_bt_connection_set_parameters(
+            evt->data.evt_connection_opened.connection,
+            16,
+            32,
+            0,
+            100,
+            0,
+            0);
+        app_assert_status(sc);
+        break;
+
+    case sl_bt_evt_connection_closed_id:
+        sc = sl_bt_legacy_advertiser_generate_data(
+            tarang_advertising_set_handle,
+            sl_bt_advertiser_general_discoverable);
+        app_assert_status(sc);
+
+        sc = sl_bt_legacy_advertiser_start(
+            tarang_advertising_set_handle,
+            sl_bt_legacy_advertiser_connectable);
+        app_assert_status(sc);
+        break;
+
+    case sl_bt_evt_gatt_server_characteristic_status_id:
+        if (evt->data.evt_gatt_server_characteristic_status.status_flags
+            == sl_bt_gatt_server_client_config) {
+            if (evt->data.evt_gatt_server_characteristic_status.client_config_flags
+                == sl_bt_gatt_notification) {
+                sc = sl_bt_connection_set_parameters(
+                    evt->data.evt_gatt_server_characteristic_status.connection,
+                    16,
+                    32,
+                    0,
+                    100,
+                    0,
+                    0);
+                app_assert_status(sc);
+            }
+        }
+        break;
+
+    default:
+        break;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

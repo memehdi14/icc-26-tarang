@@ -2,8 +2,8 @@
 project_name: Tarang_Core_Pipeline
 label: Tarang_Core_Pipeline
 description: |
-  A minimal project structure, that serves as a starting point for custom Bluetooth applications. The application starts advertising after boot and restarts advertising after a connection is closed.
-category: Bluetooth Examples
+  Tarang clinical IoT wearable firmware pipeline for synchronized ECG, IMU, PPG, DSP, AI, and BLE telemetry work.
+category: IoT Challenge 2026
 filter:
 - name: Device Type
   value:
@@ -17,7 +17,7 @@ filter:
 package: bluetooth_le_app
 quality: production
 readme:
-- path: readme.md
+- path: README.md
 source:
 - path: app.c
 tag:
@@ -63,6 +63,9 @@ component:
   id: bluetooth_feature_legacy_scanner
 - package: simplicity_sdk
   vendor: silabs
+  id: bluetooth_feature_radio_watchdog
+- package: simplicity_sdk
+  vendor: silabs
   id: bluetooth_feature_sm
 - package: simplicity_sdk
   vendor: silabs
@@ -81,6 +84,15 @@ component:
   id: device_init
 - package: simplicity_sdk
   vendor: silabs
+  id: emlib_i2c
+- package: simplicity_sdk
+  vendor: silabs
+  id: emlib_iadc
+- package: simplicity_sdk
+  vendor: silabs
+  id: emlib_letimer
+- package: simplicity_sdk
+  vendor: silabs
   id: gatt_configuration
 - package: simplicity_sdk
   vendor: silabs
@@ -94,12 +106,6 @@ component:
 - package: simplicity_sdk
   vendor: silabs
   id: sl_main
-other_file:
-- path: image/readme_img0.png
-- path: image/readme_img1.png
-- path: image/readme_img2.png
-- path: image/readme_img3.png
-- path: image/readme_img4.png
 configuration:
 - name: SL_STACK_SIZE
   value: '2752'
@@ -110,6 +116,10 @@ configuration:
 ui_hints:
   highlight:
   - path: config/btconf/gatt_configuration.btconf
-  - path: readme.md
+  - path: README.md
     focus: true
+sdk_extension:
+- vendor: silabs
+  id: wiseconnect3_sdk
+  version: 4.0.2
 

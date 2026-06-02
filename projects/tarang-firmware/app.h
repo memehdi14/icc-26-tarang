@@ -68,6 +68,16 @@ bool app_mutex_acquire(void);
 void app_mutex_release(void);
 
 /**************************************************************************//**
+ * Initialize the Tarang application.
+ *****************************************************************************/
+void app_init(void);
+
+/**************************************************************************//**
+ * Run one Tarang application processing step.
+ *****************************************************************************/
+void app_process_action(void);
+
+/**************************************************************************//**
  * Initialize the application.
  *
  * This function initializes the application components.

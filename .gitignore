@@ -17,6 +17,13 @@ dataset/
 projects/tarang-firmware/simplicity_sdk_2025.12.3/
 projects/tarang-firmware/.projectchecksums
 projects/tarang-firmware/.projectlinkstore
+projects/tarang-firmware/.vscode/
+projects/tarang-firmware/AGENTS.md
+projects/tarang-firmware/autogen/
+projects/tarang-firmware/cmake_gcc/
+projects/tarang-firmware/Tarang_Core_Pipeline.pintool
+projects/tarang-firmware/Tarang_Core_Pipeline_project.pdf
+projects/tarang-firmware/vscode.conf
 
 # Simplicity Studio build artifacts
 *.axf
