@@ -15,7 +15,7 @@ projects/
 Supporting repository files remain at the root:
 
 - [.github/](.github/) contains pull request, issue, ruleset, and workflow configuration.
-- [agent_guidelines/](agent_guidelines/) contains team workflow guidance.
+- [agent_guidelines/](agent_guidelines/) contains team workflow guidance, including the team Git workflow.
 - [LICENSE.md](LICENSE.md) contains the Apache 2.0 license.
 
 ## Hardware requirements
