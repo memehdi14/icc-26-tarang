@@ -9,8 +9,9 @@ on:
 
 # ─── SDK version is the single source of truth ────────────────────────────────
 env:
-  SDK_VERSION: "2025.12.3"
-  SDK_TAG: "v2025.12.3"
+  # Changed from 2025.12.3 to 2024.12.3 since 2025.12.3 does not exist on the remote yet
+  SDK_VERSION: "2024.12.3"
+  SDK_TAG: "v2024.12.3"
   SDK_PATH: /opt/simplicity_sdk
   SLC_PATH: /opt/slc_cli
 
@@ -66,7 +67,7 @@ jobs:
         if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 --branch ${{ env.SDK_TAG }} \
-            https://github.com/SiliconLabs/gecko_sdk.git ${{ env.SDK_PATH }}
+            https://github.com/SiliconLabs/simplicity_sdk.git ${{ env.SDK_PATH }}
 
       # ── Cache the SLC-CLI binary (platform-pinned, changes rarely) ──────────
       # The SiLabs download portal requires a login, so we source SLC-CLI from
