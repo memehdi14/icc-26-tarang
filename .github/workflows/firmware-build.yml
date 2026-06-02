@@ -1,0 +1,139 @@
+name: Firmware Build Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/*'
+  pull_request:
+
+# ─── SDK version is the single source of truth ────────────────────────────────
+env:
+  SDK_VERSION: "2025.12.3"
+  SDK_TAG: "v2025.12.3"
+  SDK_PATH: /opt/simplicity_sdk
+  SLC_PATH: /opt/slc_cli
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  static-analysis:
+    name: Cppcheck Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Run Static Analysis
+        run: |
+          # Scan the firmware source directory; suppress SDK missing-include noise.
+          # --error-exitcode=1 means any finding fails the job.
+          cppcheck --enable=warning,style,performance,portability \
+            --inconclusive \
+            --error-exitcode=1 \
+            --suppress=missingIncludeSystem \
+            projects/tarang-firmware/
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  firmware-build:
+    name: Firmware Compile Check
+    runs-on: ubuntu-latest
+    needs: static-analysis
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Toolchain & system deps ─────────────────────────────────────────────
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi make default-jre wget unzip
+
+      # ── Cache the Simplicity SDK (large, changes rarely) ────────────────────
+      - name: Cache Simplicity SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SDK_PATH }}
+          # Key includes the exact SDK version — cache is busted on any version bump.
+          key: simplicity-sdk-${{ env.SDK_VERSION }}
+
+      - name: Download Simplicity SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch ${{ env.SDK_TAG }} \
+            https://github.com/SiliconLabs/gecko_sdk.git ${{ env.SDK_PATH }}
+
+      # ── Cache the SLC-CLI binary (platform-pinned, changes rarely) ──────────
+      # The SiLabs download portal requires a login, so we source SLC-CLI from
+      # the official GitHub release assets instead.
+      - name: Cache SLC-CLI
+        id: cache-slc
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SLC_PATH }}
+          # Pin to a specific release so the cache is deterministic.
+          key: slc-cli-linux-5.9.2
+
+      - name: Download and Install SLC-CLI
+        if: steps.cache-slc.outputs.cache-hit != 'true'
+        run: |
+          # SLC-CLI releases are published as GitHub release assets.
+          # Check https://github.com/SiliconLabs/simplicity_sdk/releases for the
+          # latest version and update the URL + cache key above to match.
+          SLC_RELEASE_URL="https://github.com/SiliconLabs/simplicity_sdk/releases/download/v2024.6.2/slc_cli_linux.zip"
+
+          wget --no-verbose "$SLC_RELEASE_URL" -O /tmp/slc_cli.zip
+          unzip /tmp/slc_cli.zip -d ${{ env.SLC_PATH }}
+          chmod +x ${{ env.SLC_PATH }}/slc
+
+      - name: Add SLC-CLI to PATH
+        run: echo "${{ env.SLC_PATH }}" >> $GITHUB_PATH
+
+      # ── Configure SLC for this SDK + toolchain ──────────────────────────────
+      - name: Configure SLC-CLI
+        run: |
+          slc configuration --sdk=${{ env.SDK_PATH }}
+          slc signature trust --sdk=${{ env.SDK_PATH }}
+          # ARM GNU toolchain installs to /usr/bin as arm-none-eabi-gcc etc.
+          slc configuration --gcc-toolchain=/usr/bin
+
+      # ── Generate project build files from the .slcp ─────────────────────────
+      - name: Generate Build Files
+        run: |
+          cd projects/tarang-firmware
+          # -p  = generate project files
+          # -np = do not open/prompt
+          # Produces a Makefile inside the build/ subdirectory.
+          slc generate Tarang_Core_Pipeline.slcp \
+            -p -np \
+            --toolchain=gcc \
+            --output-type=makefile \
+            -d build
+
+      # ── Compile ─────────────────────────────────────────────────────────────
+      - name: Compile Firmware
+        run: |
+          cd projects/tarang-firmware/build
+          # Tee output to both the terminal (visible in Actions log) and build.log.
+          # The pipeline will fail on any non-zero make exit code.
+          make -j$(nproc) 2>&1 | tee build.log
+          # Explicitly propagate the make exit code even through the pipe.
+          exit ${PIPESTATUS[0]}
+
+      # ── Upload artifacts (always, so logs survive failed builds) ────────────
+      - name: Upload Build Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-artifacts
+          # Retain for 90 days (Actions default); lower if storage is a concern.
+          retention-days: 90
+          path: |
+            projects/tarang-firmware/build/**/*.bin
+            projects/tarang-firmware/build/**/*.hex
+            projects/tarang-firmware/build/**/*.elf
+            projects/tarang-firmware/build/**/*.log
