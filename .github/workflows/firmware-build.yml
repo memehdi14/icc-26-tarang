@@ -69,7 +69,7 @@ jobs:
         run: |
           # Dynamically find installed paths using SLT's 'where' command to guarantee accuracy
           SLC_CLI_DIR=$(./slt-cli/slt where slc-cli)
-          JAVA_DIR=$(./slt-cli/slt where java21)/bin
+          JAVA_DIR=$(./slt-cli/slt where java21)
           COMMANDER_DIR=$(./slt-cli/slt where commander)
           GCC_DIR=$(./slt-cli/slt where gcc-arm-none-eabi)/bin
           NINJA_DIR=$(./slt-cli/slt where ninja)
@@ -77,14 +77,14 @@ jobs:
           
           echo "Adding tool paths to GITHUB_PATH..."
           echo "$SLC_CLI_DIR" >> $GITHUB_PATH
-          echo "$JAVA_DIR" >> $GITHUB_PATH
+          echo "$JAVA_DIR/bin" >> $GITHUB_PATH
           echo "$COMMANDER_DIR" >> $GITHUB_PATH
           echo "$GCC_DIR" >> $GITHUB_PATH
           echo "$NINJA_DIR" >> $GITHUB_PATH
           echo "$CMAKE_DIR" >> $GITHUB_PATH
           
-          # Ensure Java 21 is used instead of system default
-          echo "JAVA_HOME=$(dirname $JAVA_DIR)" >> $GITHUB_ENV
+          # Set JAVA_HOME to the Java 21 installation root
+          echo "JAVA_HOME=$JAVA_DIR" >> $GITHUB_ENV
 
       - name: Generate Project (slc generate)
         run: |
