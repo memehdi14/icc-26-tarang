@@ -82,6 +82,9 @@ jobs:
           echo "$GCC_DIR" >> $GITHUB_PATH
           echo "$NINJA_DIR" >> $GITHUB_PATH
           echo "$CMAKE_DIR" >> $GITHUB_PATH
+          
+          # Ensure Java 21 is used instead of system default
+          echo "JAVA_HOME=$(dirname $JAVA_DIR)" >> $GITHUB_ENV
 
       - name: Generate Project (slc generate)
         run: |
