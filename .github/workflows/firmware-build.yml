@@ -75,9 +75,19 @@ jobs:
           NINJA_DIR=$(./slt-cli/slt where ninja)
           CMAKE_DIR=$(./slt-cli/slt where cmake)/bin
           
-          echo "Adding tool paths to GITHUB_PATH..."
+          # Find the actual java binary location — handle jre/bin vs bin layout
+          if [ -f "$JAVA_DIR/bin/java" ]; then
+            JAVA_BIN_DIR="$JAVA_DIR/bin"
+          elif [ -f "$JAVA_DIR/jre/bin/java" ]; then
+            JAVA_BIN_DIR="$JAVA_DIR/jre/bin"
+          else
+            JAVA_BIN_DIR=$(find "$JAVA_DIR" -name "java" -type f -executable -printf '%h\n' | head -n 1)
+          fi
+          echo "Java binary found at: $JAVA_BIN_DIR/java"
+          
+          # CRITICAL: Prepend Java 21 FIRST so it overrides system Java 17
+          echo "$JAVA_BIN_DIR" >> $GITHUB_PATH
           echo "$SLC_CLI_DIR" >> $GITHUB_PATH
-          echo "$JAVA_DIR/bin" >> $GITHUB_PATH
           echo "$COMMANDER_DIR" >> $GITHUB_PATH
           echo "$GCC_DIR" >> $GITHUB_PATH
           echo "$NINJA_DIR" >> $GITHUB_PATH
@@ -85,6 +95,13 @@ jobs:
           
           # Set JAVA_HOME to the Java 21 installation root
           echo "JAVA_HOME=$JAVA_DIR" >> $GITHUB_ENV
+
+      - name: Verify Java 21
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "which java: $(which java)"
+          java -version 2>&1
+          java -version 2>&1 | grep -i "21\." || { echo "ERROR: Java 21 not active! System Java is overriding."; exit 1; }
 
       - name: Generate Project (slc generate)
         run: |
