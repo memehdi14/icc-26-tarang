@@ -148,6 +148,6 @@ jobs:
             projects/tarang-firmware/build/**/*.hex
             projects/tarang-firmware/build/**/*.bin
             projects/tarang-firmware/build/**/*.map
-          retention-days: 90
+          retention-days: 10
 
 
