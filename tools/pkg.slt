@@ -1,0 +1,16 @@
+version = "0"
+
+[dependency]
+# SDKs
+simplicity-sdk="~"
+wiseconnect="~"
+
+# Tools
+cmake = "~"
+commander = "~"
+exx32 = "~"
+gcc-arm-none-eabi = "~"
+ninja = "~"
+sdm = "~"
+slc-cli = "~"
+zap = "~"
