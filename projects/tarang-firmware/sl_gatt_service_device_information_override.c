@@ -143,7 +143,7 @@ void sl_gatt_service_device_information_override_on_event(sl_bt_msg_t *evt)
 #if defined(gattdb_system_id) && defined(gattdb_system_id_len)
       bd_addr address;
       uint8_t address_type;
-      uint8_t system_id[gattdb_system_id_len];
+      uint8_t system_id[8];
       // Extract unique ID from BT Address.
       sc = sl_bt_gap_get_identity_address(&address, &address_type);
       app_assert_status(sc);
