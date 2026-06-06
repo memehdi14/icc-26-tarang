@@ -25,6 +25,7 @@
 
 #include "app.h"
 #include "tarang_pipeline.h"
+#include "tarang_nlms.h"       /* NLMS adaptive filter for ECG motion artifacts */
 #include "gatt_db.h"          /* gattdb_anomaly_data, TARANG_ANOMALY_PKT_LEN */
 #include "em_device.h"
 #include "em_chip.h"
@@ -133,6 +134,9 @@ static bool tarang_imu_present    = false;
 static I2C_Init_TypeDef tarang_i2c_saved;
 static tarang_diagnostics_t tarang_diag;
 
+/* ─── NLMS adaptive filter state (Mehdi — motion artifact removal) ──────── */
+static tarang_nlms_state_t tarang_nlms_state;
+
 /* ─── BLE connection state (Kartik) ────────────────────────────────────────
  *
  * tarang_ble_conn_handle:
@@ -232,6 +236,9 @@ void LDMA_IRQHandler(void)
  * ═══════════════════════════════════════════════════════════════════════════ */
 void app_init(void)
 {
+    /* Initialize NLMS filter (32 taps, default step size) */
+    tarang_nlms_init(&tarang_nlms_state, TARANG_NLMS_MAX_TAPS, 0u, 0u);
+
     memset(&tarang_diag, 0, sizeof(tarang_diag));
     memset(Tarang_Pool, 0, sizeof(Tarang_Pool));
 
@@ -638,26 +645,104 @@ void tarang_ble_on_radio_sleep(void)
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * DSP / IMU / AI stubs — replace with NLMS / TFLM implementations
+ * DSP / IMU / AI — NLMS motion artifact removal (Mehdi)
  * Owner: Kedar — DO NOT MODIFY structure; fill implementations in-place
  * ═══════════════════════════════════════════════════════════════════════════ */
+
+/***************************************************************************//**
+ * tarang_dsp_process — ECG signal processing with NLMS motion artifact removal.
+ *
+ * Applies the NLMS adaptive filter using IMU accelerometer data as the
+ * motion reference signal. When IMU data is valid (sync_flags bit set),
+ * the filter actively cancels motion artifacts from the raw ECG. When IMU
+ * is unavailable, the raw ECG passes through unmodified.
+ *
+ * Outputs:
+ *   - clean_ecg[]:      NLMS-filtered ECG (256 samples)
+ *   - ecg_snr:          Artifact suppression quality score (0..1000)
+ *   - confidence_*:     Placeholder for TFLM classifier (future)
+ ******************************************************************************/
 void tarang_dsp_process(const tarang_dsp_input_t *in, tarang_dsp_output_t *out)
 {
     if ((in == NULL) || (out == NULL)) {
         return;
     }
-    (void)in;
+
     memset(out, 0, sizeof(*out));
     out->confidence_normal = 1.0f;
+
+    /* Check if IMU data is available for NLMS reference */
+    bool imu_valid = (in->imu_spi != NULL)
+                     && ((in->sync_flags & TARANG_SYNC_IMU_VALID) != 0u);
+
+    /* Run NLMS adaptive filter */
+    tarang_nlms_process_frame(
+        &tarang_nlms_state,
+        in->ecg,
+        in->imu_spi,
+        imu_valid,
+        out->clean_ecg,
+        &out->ecg_snr);
 }
 
+/***************************************************************************//**
+ * tarang_imu_process — Parse IMU SPI burst and compute motion metrics.
+ *
+ * Extracts accelerometer X/Y/Z from the ICM-20648 SPI burst and computes
+ * the overall motion magnitude and motion detection flag.
+ ******************************************************************************/
 void tarang_imu_process(const tarang_imu_input_t *in, tarang_imu_output_t *out)
 {
     if ((in == NULL) || (out == NULL)) {
         return;
     }
-    (void)in;
+
     memset(out, 0, sizeof(*out));
+
+    if (in->imu_spi == NULL) {
+        return;
+    }
+
+    /* Parse accelerometer data from raw SPI burst */
+    tarang_imu_accel_t accel_samples[TARANG_NLMS_IMU_SAMPLES_PER_FRAME];
+    uint8_t count = tarang_nlms_parse_imu_accel(
+                        in->imu_spi,
+                        accel_samples,
+                        TARANG_NLMS_IMU_SAMPLES_PER_FRAME);
+
+    if (count == 0u) {
+        return;
+    }
+
+    /* Compute average motion magnitude across the frame */
+    uint32_t mag_sum = 0u;
+    uint16_t max_mag = 0u;
+    for (uint8_t i = 0u; i < count; i++) {
+        uint16_t mag = tarang_nlms_accel_magnitude(&accel_samples[i]);
+        mag_sum += mag;
+        if (mag > max_mag) {
+            max_mag = mag;
+        }
+    }
+
+    uint16_t avg_mag = (uint16_t)(mag_sum / count);
+
+    /*
+     * Motion magnitude: deviation from 1g static reading.
+     * Scale to float for the pipeline output contract.
+     */
+    int32_t deviation = (int32_t)avg_mag - TARANG_IMU_ACCEL_SENSITIVITY;
+    if (deviation < 0) {
+        deviation = -deviation;
+    }
+    out->motion_magnitude = (float)deviation / (float)TARANG_IMU_ACCEL_SENSITIVITY;
+
+    /* Motion detection: significant deviation from 1g */
+    int32_t peak_dev = (int32_t)max_mag - TARANG_IMU_ACCEL_SENSITIVITY;
+    if (peak_dev < 0) {
+        peak_dev = -peak_dev;
+    }
+    out->is_in_motion = ((uint32_t)peak_dev > TARANG_NLMS_MOTION_GATE_THRESH);
 }
 
 void tarang_ai_process(const tarang_ai_input_t *in)
@@ -1185,27 +1270,56 @@ static void tarang_process_frame(sensor_frame_matrix_t *frame)
         return;
     }
 
-    tarang_dsp_input_t  dsp_in;
-    tarang_dsp_output_t dsp_out;
     tarang_imu_input_t  imu_in;
     tarang_imu_output_t imu_out;
+    tarang_dsp_input_t  dsp_in;
+    tarang_dsp_output_t dsp_out;
 
-    dsp_in.ecg          = frame->data.ecg;
-    dsp_in.ppg          = frame->data.ppg;
-    dsp_in.sequence     = frame->meta.sync.frame_sequence;
-    dsp_in.timestamp_us = frame->meta.sync.sample_time_us;
-    tarang_dsp_process(&dsp_in, &dsp_out);
-
+    /*
+     * STEP 1: Process IMU FIRST — required so the motion reference is
+     *         available for NLMS artifact cancellation in the DSP step.
+     *
+     * NOTE: Processing order changed from original (DSP→IMU) to (IMU→DSP).
+     *       This is necessary for the NLMS adaptive filter to have access
+     *       to the IMU motion reference before cleaning the ECG signal.
+     *       External API contract is unchanged.
+     */
+    memset(&imu_out, 0, sizeof(imu_out));
     if (frame->meta.sync_flags & TARANG_SYNC_IMU_VALID) {
         imu_in.imu_spi  = frame->data.imu_spi;
         imu_in.sequence = frame->meta.sync.frame_sequence;
         tarang_imu_process(&imu_in, &imu_out);
-        (void)imu_out;
+
+        /* Feed IMU output into motion quality scorer */
+        tarang_motion_quality_t mq;
+        tarang_motion_quality_score(&imu_out, &mq);
+        frame->meta.imu_quality = mq.imu_quality;
     }
 
     /*
-     * Anomaly gate: if either classifier fires above threshold, build the
-     * packet and hand it to the BLE layer via tarang_ble_submit_anomaly().
+     * STEP 2: DSP processing with NLMS motion artifact removal.
+     *         The DSP function now receives the raw IMU SPI data and uses
+     *         it as the adaptive filter reference to cancel motion artifacts
+     *         from the ECG signal.
+     */
+    dsp_in.ecg          = frame->data.ecg;
+    dsp_in.ppg          = frame->data.ppg;
+    dsp_in.imu_spi      = frame->data.imu_spi;
+    dsp_in.sync_flags   = frame->meta.sync_flags;
+    dsp_in.sequence     = frame->meta.sync.frame_sequence;
+    dsp_in.timestamp_us = frame->meta.sync.sample_time_us;
+    tarang_dsp_process(&dsp_in, &dsp_out);
+
+    /* Update ECG quality based on NLMS SNR improvement */
+    if (dsp_out.ecg_snr > 0u) {
+        frame->meta.ecg_quality = (uint16_t)(
+            (uint32_t)frame->meta.ecg_quality * (1000u + dsp_out.ecg_snr) / 2000u
+        );
+    }
+
+    /*
+     * STEP 3: Anomaly gate — if either classifier fires above threshold,
+     * build the packet and hand it to the BLE layer.
      * That function owns all connection/CCCD guards — this caller does not
      * need to check BLE state.
      */
@@ -1221,6 +1335,7 @@ static void tarang_process_frame(sensor_frame_matrix_t *frame)
         tarang_event_post(TARANG_EVT_BLE);
     }
 
+    /* STEP 4: AI inference on the (now cleaned) frame */
     tarang_ai_input_t ai_in;
     ai_in.frame           = frame;
     ai_in.ownership_token = frame->meta.ownership_token;

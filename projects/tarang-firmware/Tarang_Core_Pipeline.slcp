@@ -20,6 +20,7 @@ readme:
 - path: README.md
 source:
 - path: app.c
+- path: tarang_nlms.c
 tag:
 - hwfilter:device:device_supports_bluetooth
 - hwfilter:device:device_series_2
@@ -27,6 +28,8 @@ include:
 - path: .
   file_list:
   - path: app.h
+  - path: tarang_pipeline.h
+  - path: tarang_nlms.h
 sdk:
   vendor: silabs
   id: simplicity_sdk
@@ -106,6 +109,19 @@ component:
 - package: simplicity_sdk
   vendor: silabs
   id: sl_main
+template_contribution:
+- name: memory_ram_start
+  priority: 0
+  value: 0
+- name: memory_ram_size
+  priority: 0
+  value: 0
+- name: memory_flash_start
+  priority: 0
+  value: 0
+- name: memory_flash_size
+  priority: 0
+  value: 0
 configuration:
 - name: SL_STACK_SIZE
   value: '2752'
