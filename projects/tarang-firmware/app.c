@@ -58,6 +58,11 @@
 #define ANOMALY_CONFIDENCE_THRESHOLD 0.85f
 #define PPG_BUFFER_SIZE              TARANG_PPG_SAMPLES_PER_FRAME
 
+/* BLE anomaly notification packet format (must match gatt_configuration) */
+#define TARANG_ANOMALY_PKT_LEN       20u
+#define TARANG_ANOMALY_FLAG_AFIB     (1u << 0)
+#define TARANG_ANOMALY_FLAG_PVC      (1u << 1)
+
 #define TARANG_FRAME_PERIOD_US       ((ECG_BUFFER_SIZE * 1000000u) / TARANG_ECG_SAMPLE_RATE_HZ)
 #define TARANG_LDMA_SPIN_LIMIT         2000000u
 #define TARANG_I2C_SPIN_LIMIT          500000u
@@ -153,7 +158,9 @@ static tarang_nlms_state_t tarang_nlms_state;
  *   Allocated by sl_bt_advertiser_create_set() on boot.
  *   Kept at 0xFF until assigned (SiLabs convention).
  * ──────────────────────────────────────────────────────────────────────── */
+#ifndef SL_BT_INVALID_CONNECTION_HANDLE
 #define SL_BT_INVALID_CONNECTION_HANDLE  0xFFu
+#endif
 
 static uint8_t tarang_advertising_set_handle         = 0xFFu;
 static uint8_t tarang_ble_conn_handle                 = SL_BT_INVALID_CONNECTION_HANDLE;

@@ -186,6 +186,15 @@ static int16_t nlms_update_sample(tarang_nlms_state_t *state,
     int32_t ecg_signed = (int32_t)ecg_in - 2048;  /* Center around 0 (12-bit ADC mid-range) */
     int32_t error = ecg_signed - y_est;
 
+    /*
+     * True passthrough when not adapting: bypass the filter estimate
+     * entirely so previously learned weights don't distort the ECG
+     * during rest or when IMU data is invalid.
+     */
+    if (!adapt) {
+        error = ecg_signed;
+    }
+
     /* Clamp to int16 range */
     if (error > 32767) {
         error = 32767;
@@ -226,11 +235,11 @@ static int16_t nlms_update_sample(tarang_nlms_state_t *state,
 
                 state->weights[k] += (int32_t)delta;
 
-                /* Clamp weights to prevent overflow */
-                if (state->weights[k] > 0x7FFFFF) {
-                    state->weights[k] = 0x7FFFFF;
-                } else if (state->weights[k] < -0x7FFFFF) {
-                    state->weights[k] = -0x7FFFFF;
+                /* Clamp weights to Q15 range to prevent overflow */
+                if (state->weights[k] > 32767) {
+                    state->weights[k] = 32767;
+                } else if (state->weights[k] < -32768) {
+                    state->weights[k] = -32768;
                 }
             }
         }
