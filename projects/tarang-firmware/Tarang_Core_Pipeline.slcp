@@ -109,6 +109,19 @@ component:
 - package: simplicity_sdk
   vendor: silabs
   id: sl_main
+template_contribution:
+- name: memory_ram_start
+  priority: 0
+  value: 536870912
+- name: memory_ram_size
+  priority: 0
+  value: 524288
+- name: memory_flash_start
+  priority: 0
+  value: 134217728
+- name: memory_flash_size
+  priority: 0
+  value: 3268608
 
 configuration:
 - name: SL_STACK_SIZE
