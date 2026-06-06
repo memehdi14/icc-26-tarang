@@ -1280,7 +1280,7 @@ static void tarang_process_frame(sensor_frame_matrix_t *frame)
     tarang_imu_input_t  imu_in;
     tarang_imu_output_t imu_out;
     tarang_dsp_input_t  dsp_in;
-    tarang_dsp_output_t dsp_out;
+    static tarang_dsp_output_t dsp_out;
 
     /*
      * STEP 1: Process IMU FIRST — required so the motion reference is
@@ -1319,9 +1319,7 @@ static void tarang_process_frame(sensor_frame_matrix_t *frame)
 
     /* Update ECG quality based on NLMS SNR improvement */
     if (dsp_out.ecg_snr > 0u) {
-        frame->meta.ecg_quality = (uint16_t)(
-            (uint32_t)frame->meta.ecg_quality * (1000u + dsp_out.ecg_snr) / 2000u
-        );
+        frame->meta.ecg_quality = dsp_out.ecg_snr;
     }
 
     /*

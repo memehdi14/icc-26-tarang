@@ -255,7 +255,7 @@ static int16_t nlms_update_sample(tarang_nlms_state_t *state,
     int32_t err_sq = (int32_t)(((int64_t)error * error) >> 8);
     state->error_power_avg = state->error_power_avg
                              - (state->error_power_avg >> 8)
-                             + (err_sq >> 8);
+                             + err_sq;
 
     /* Mark converged after sufficient samples with low error */
     if ((state->samples_processed > 512u) && (state->error_power_avg < 1000)) {
@@ -342,7 +342,13 @@ void tarang_nlms_process_frame(tarang_nlms_state_t *state,
              * Subtract static gravity component so the reference only
              * contains motion-induced acceleration.
              */
-            ref = (int16_t)((int32_t)accel_mag[imu_idx] - TARANG_IMU_ACCEL_SENSITIVITY);
+            int32_t ref32 = (int32_t)accel_mag[imu_idx] - TARANG_IMU_ACCEL_SENSITIVITY;
+            if (ref32 > 32767) {
+                ref32 = 32767;
+            } else if (ref32 < -32768) {
+                ref32 = -32768;
+            }
+            ref = (int16_t)ref32;
         }
 
         /* Apply NLMS — adapt only when motion is detected */
