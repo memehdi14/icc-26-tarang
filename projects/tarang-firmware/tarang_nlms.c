@@ -95,7 +95,7 @@ void tarang_nlms_reset(tarang_nlms_state_t *state)
  *   Byte10: GY_H   Byte11: GY_L
  *   Byte12: GZ_H   Byte13: GZ_L
  *
- * First byte of the SPI burst is the command byte (0xBB) — skip it.
+ * First byte of the SPI RX frame is the dummy byte received while the host transmits the read command — skip it.
  * ═══════════════════════════════════════════════════════════════════════════ */
 uint8_t tarang_nlms_parse_imu_accel(const uint8_t *imu_spi,
                                     tarang_imu_accel_t *accel_out,
@@ -105,7 +105,7 @@ uint8_t tarang_nlms_parse_imu_accel(const uint8_t *imu_spi,
         return 0u;
     }
 
-    /* First byte is the SPI command byte (0xBB = 0x3B | 0x80) — skip */
+    /* First RX byte is dummy (received during command phase) — skip */
     const uint8_t *data = &imu_spi[1];
     const uint16_t payload_len = TARANG_IMU_SPI_FRAME_BYTES - 1u;  /* 511 bytes */
     const uint8_t bytes_per_sample = 14u;

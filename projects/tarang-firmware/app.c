@@ -1340,7 +1340,7 @@ static void tarang_process_frame(sensor_frame_matrix_t *frame)
         tarang_event_post(TARANG_EVT_BLE);
     }
 
-    /* STEP 4: AI inference on the (now cleaned) frame */
+    /* STEP 4: AI inference on the frame (NLMS output is not yet wired into the AI path) */
     tarang_ai_input_t ai_in;
     ai_in.frame           = frame;
     ai_in.ownership_token = frame->meta.ownership_token;

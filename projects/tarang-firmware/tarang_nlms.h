@@ -3,7 +3,7 @@
  * @brief TARANG IMU-assisted NLMS adaptive filter for ECG motion artifact
  *        removal.
  *
- * Target: EFR32MG26B210F1024IM48 (Cortex-M33). Static allocation only.
+ * Target: EFR32MG26 (Cortex-M33). Static allocation only.
  *
  * Algorithm:
  *   Reference signal  x[n] = accel_magnitude (from IMU)
