@@ -1,5 +1,9 @@
 # Tarang Firmware
 
+> [!WARNING]
+> **READ BEFORE TOUCHING ANY FILES**
+> If you are working on this project, you **MUST** read the [Tarang Firmware Build System Survival Guide](SIMPLICITY_STUDIO_AI_GUIDE.md) first. Simplicity Studio will silently overwrite files and destroy your build if you do not follow the strict source ownership and regeneration rules outlined in the guide.
+
 This project contains the embedded firmware for Tarang, Team Ocelleon's IoT Challenge 2026 wearable pipeline.
 
 ## Target
