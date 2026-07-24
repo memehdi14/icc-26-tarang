@@ -120,8 +120,10 @@ typedef struct {
 typedef struct {
   const uint16_t *ecg;
   const uint32_t *ppg;
-  uint32_t          sequence;
-  uint32_t          timestamp_us;
+  const uint8_t  *imu_spi;       /**< Raw IMU SPI burst for NLMS reference */
+  uint32_t        sync_flags;     /**< Sync flags to check IMU validity */
+  uint32_t        sequence;
+  uint32_t        timestamp_us;
 } tarang_dsp_input_t;
 
 typedef struct {
@@ -130,6 +132,8 @@ typedef struct {
   float confidence_normal;
   float spo2_percent;
   float heart_rate_bpm;
+  int16_t clean_ecg[TARANG_ECG_SAMPLES_PER_FRAME]; /**< NLMS-cleaned ECG */
+  uint16_t ecg_snr;              /**< Motion artifact suppression score 0..1000 */
 } tarang_dsp_output_t;
 
 void tarang_dsp_process(const tarang_dsp_input_t *in, tarang_dsp_output_t *out);

@@ -24,7 +24,6 @@ projects/tarang-firmware/autogen/
 projects/tarang-firmware/cmake_gcc/
 projects/tarang-firmware/config/
 projects/tarang-firmware/Tarang_Core_Pipeline.pintool
-projects/tarang-firmware/Tarang_Core_Pipeline_project.pdf
 
 # Build and Target Output
 build/
