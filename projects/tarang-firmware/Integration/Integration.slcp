@@ -1,0 +1,106 @@
+# Silicon Labs Project Configuration Tools: slcp, v0, Component selection file.
+project_name: Integration
+label: Integration
+description: |
+  This example project shows an empty configuration that can be used as a starting point to add components and functionality.
+category: Example|Platform
+filter:
+- name: Device Type
+  value:
+  - SoC
+- name: MCU
+  value:
+  - 32-bit MCU
+- name: Project Difficulty
+  value:
+  - Beginner
+package: platform
+quality: production
+readme:
+- path: readme.md
+source:
+- path: app.c
+include:
+- path: .
+  file_list:
+  - path: app.h
+sdk:
+  vendor: silabs
+  id: simplicity_sdk
+  version: 2025.12.3
+toolchain_settings: [
+  ]
+component:
+- package: simplicity_sdk
+  vendor: silabs
+  id: EFR32MG26B510F3200IM48
+- package: simplicity_sdk
+  vendor: silabs
+  id: brd2709a
+- package: simplicity_sdk
+  vendor: silabs
+  id: clock_manager
+- package: simplicity_sdk
+  vendor: silabs
+  id: device_init
+- package: simplicity_sdk
+  vendor: silabs
+  id: dmadrv
+- package: simplicity_sdk
+  vendor: silabs
+  id: emlib_iadc
+- package: simplicity_sdk
+  vendor: silabs
+  id: emlib_letimer
+- package: simplicity_sdk
+  vendor: silabs
+  id: emlib_prs
+- package: simplicity_sdk
+  vendor: silabs
+  id: gpiointerrupt
+- package: simplicity_sdk
+  instance:
+  - mikroe
+  vendor: silabs
+  id: i2cspm
+- package: simplicity_sdk
+  vendor: silabs
+  id: iostream
+- package: simplicity_sdk
+  vendor: silabs
+  id: iostream_recommended_console
+- package: simplicity_sdk
+  vendor: silabs
+  id: iostream_recommended_debug
+- package: simplicity_sdk
+  vendor: silabs
+  id: iostream_retarget_stdio
+- package: simplicity_sdk
+  vendor: silabs
+  id: iostream_stdlib_config
+- package: simplicity_sdk
+  vendor: silabs
+  id: power_manager
+- package: simplicity_sdk
+  vendor: silabs
+  id: sl_main
+define:
+- name: DEBUG_EFM
+template_contribution:
+- name: memory_ram_start
+  priority: 0
+  value: 536870912
+- name: memory_ram_size
+  priority: 0
+  value: 524288
+- name: memory_flash_start
+  priority: 0
+  value: 134217728
+- name: memory_flash_size
+  priority: 0
+  value: 3276800
+ui_hints:
+  highlight:
+  - path: readme.md
+    focus: true
+
