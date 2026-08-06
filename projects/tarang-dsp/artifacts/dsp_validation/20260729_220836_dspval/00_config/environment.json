@@ -1,0 +1,9 @@
+{
+  "python": "3.10.20 | packaged by Anaconda, Inc. | (main, Jun 11 2026, 15:13:20) [MSC v.1942 64 bit (AMD64)]",
+  "numpy": "1.23.5",
+  "scipy": "1.10.1",
+  "matplotlib": "3.7.2",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "seed": 42,
+  "run_id": "20260729_220836_dspval"
+}

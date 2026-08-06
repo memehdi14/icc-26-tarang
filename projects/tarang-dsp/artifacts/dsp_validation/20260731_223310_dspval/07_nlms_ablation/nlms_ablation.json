@@ -1,0 +1,5 @@
+{
+  "status": "skipped",
+  "reason": "no synchronized IMU data available",
+  "nlms_mode": "bypass"
+}

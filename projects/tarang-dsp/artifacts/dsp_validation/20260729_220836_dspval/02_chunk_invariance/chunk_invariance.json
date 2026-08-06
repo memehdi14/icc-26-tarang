@@ -1,0 +1,22 @@
+{
+  "one_shot": {
+    "n_beats": 24,
+    "max_peak_diff": 0,
+    "count_match": true
+  },
+  "1_sample": {
+    "n_beats": 26,
+    "max_peak_diff": Infinity,
+    "count_match": false
+  },
+  "256_sample": {
+    "n_beats": 26,
+    "max_peak_diff": Infinity,
+    "count_match": false
+  },
+  "random": {
+    "n_beats": 26,
+    "max_peak_diff": Infinity,
+    "count_match": false
+  }
+}

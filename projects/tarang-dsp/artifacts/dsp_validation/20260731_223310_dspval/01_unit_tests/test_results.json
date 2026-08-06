@@ -1,0 +1,74 @@
+{
+  "250 Hz identity resampling": {
+    "status": "PASS",
+    "details": ""
+  },
+  "annotation rescaling": {
+    "status": "PASS",
+    "details": ""
+  },
+  "filter impulse response": {
+    "status": "PASS",
+    "details": ""
+  },
+  "filter step response": {
+    "status": "PASS",
+    "details": ""
+  },
+  "chunk invariance (1-sample)": {
+    "status": "PASS",
+    "details": ""
+  },
+  "chunk invariance (random)": {
+    "status": "FAIL",
+    "details": ""
+  },
+  "chunk invariance (256-sample)": {
+    "status": "PASS",
+    "details": ""
+  },
+  "causality": {
+    "status": "PASS",
+    "details": ""
+  },
+  "normalization startup (no NaN/Inf)": {
+    "status": "PASS",
+    "details": ""
+  },
+  "no NaN/Inf in pipeline": {
+    "status": "PASS",
+    "details": ""
+  },
+  "detector on synthetic QRS (80% threshold)": {
+    "status": "PASS",
+    "details": "matched=10/10"
+  },
+  "refractory duplicate-rejection": {
+    "status": "PASS",
+    "details": ""
+  },
+  "RR feature arithmetic": {
+    "status": "PASS",
+    "details": ""
+  },
+  "130-sample window indexing": {
+    "status": "PASS",
+    "details": ""
+  },
+  "annotation matching": {
+    "status": "PASS",
+    "details": ""
+  },
+  "NLMS zero-reference (zero IMU -> zero correction)": {
+    "status": "PASS",
+    "details": ""
+  },
+  "NLMS bypass mode (output = input)": {
+    "status": "PASS",
+    "details": ""
+  },
+  "NLMS bounded-weight": {
+    "status": "PASS",
+    "details": ""
+  }
+}

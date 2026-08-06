@@ -1,0 +1,6 @@
+{
+  "no_future_leakage": true,
+  "no_frame_reset": true,
+  "finite_at_startup": true,
+  "valid_count_ramp": true
+}

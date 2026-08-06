@@ -1,0 +1,20 @@
+{
+  "target_fs": 250,
+  "morphology_low_hz": 0.5,
+  "morphology_high_hz": 40.0,
+  "morphology_order": 4,
+  "notch_enabled": false,
+  "notch_hz": 50.0,
+  "normalization_window_sec": 30.0,
+  "detector_low_hz": 5.0,
+  "detector_high_hz": 15.0,
+  "detector_mwi_sec": 0.15,
+  "refractory_sec": 0.2,
+  "recenter_ms": 60.0,
+  "pre_r": 65,
+  "post_r": 65,
+  "nlms_mode": "bypass",
+  "nlms_order": 16,
+  "nlms_mu": 0.01,
+  "nlms_delta": 1e-06
+}
