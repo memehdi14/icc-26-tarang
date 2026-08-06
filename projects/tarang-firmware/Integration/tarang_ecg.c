@@ -20,6 +20,7 @@
 
 #include "tarang_ecg.h"
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -55,6 +56,8 @@ static volatile bool      half1Ready        = false;
 static volatile uint32_t  ecg_overrun_count = 0;
 static volatile uint32_t  halves_completed  = 0;
 static volatile bool      first_half_seen   = false;
+static volatile uint32_t  half0Pending      = 0;
+static volatile uint32_t  half1Pending      = 0;
 
 /***************************************************************************//**
  * LETIMER Interrupt — sample_count bookkeeping only.
@@ -85,13 +88,15 @@ static bool ecgDmaCallback(unsigned int channel, unsigned int sequenceNo, void *
 
   if ((sequenceNo & 1U) == 0U)
   {
-    if (half0Ready) { ecg_overrun_count++; }
+    if (half0Pending > 0U) { ecg_overrun_count++; }
     half0Ready = true;
+    half0Pending++;
   }
   else
   {
-    if (half1Ready) { ecg_overrun_count++; }
+    if (half1Pending > 0U) { ecg_overrun_count++; }
     half1Ready = true;
+    half1Pending++;
   }
 
   return true;   // keep streaming forever
@@ -215,29 +220,38 @@ void tarang_ecg_init(void)
 
 /***************************************************************************//**
  * ECG process action — check ping-pong halves.
- * NOTE: EMU_EnterEM2 removed — orchestrator (app.c) decides when to sleep.
+ * Outputs compact telemetry stream for plotting without blocking CPU.
  ******************************************************************************/
 void tarang_ecg_process(void)
 {
-  if (half0Ready)
-  {
-    half0Ready = false;
-
-    if (!first_half_seen)
-    {
-      first_half_seen = true;
-      // First half may contain spurious IADC_E307 sample — skip processing
-    }
-
-    // Consumer: ecg_buffer[0 .. ECG_HALF_SAMPLES-1] is ready
-    // Hardware is now filling half 1 in parallel
+  static uint32_t last_output = 0;
+  
+  /*
+   * ECG hardware pipeline is fully autonomous:
+   *   LETIMER0 -> PRS ch2 -> IADC0 -> DMADRV ping-pong -> ecg_buffer RAM
+   * Runs in background with 0% CPU intervention.
+   */
+  
+  /* Clear half-ready flags */
+  if (half0Ready) { 
+    half0Ready = false; 
+    half0Pending = 0;
   }
-
-  if (half1Ready)
-  {
+  if (half1Ready) { 
     half1Ready = false;
-    // Consumer: ecg_buffer[ECG_HALF_SAMPLES .. ECG_BUFFER_SIZE-1] is ready
-    // Hardware is now filling half 0 in parallel
+    half1Pending = 0;
+  }
+  
+  /* Lightweight telemetry: output one sample every 10 samples (~25 Hz stream from 250 Hz data)
+   * This gives the plotter smooth data without overwhelming serial port */
+  if (sample_count > 0 && (sample_count - last_output >= 10)) {
+    last_output = sample_count;
+    
+    /* Output most recent sample from the active half-buffer */
+    uint32_t idx = (halves_completed & 1U) ? 0 : ECG_HALF_SAMPLES;
+    uint32_t raw_val = ecg_buffer[idx] & 0x00FFFFFFu;
+    
+    printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
   }
 }
 

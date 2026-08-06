@@ -53,6 +53,7 @@
 #define MAX30102_MULTI_LED_CTRL2   0x12
 
 #define MAX30102_MODE_SPO2         0x03u
+#define MAX30102_MODE_RESET        0x40u
 
 #define MAX30102_INT_ENABLE1_PPG_RDY    0x40u
 #define MAX30102_INT_ENABLE1_A_FULL     0x80u
@@ -104,9 +105,61 @@ static bool max30102_read_reg(uint8_t reg, uint8_t *value);
 static bool max30102_write_reg(uint8_t reg, uint8_t value);
 static bool max30102_read_fifo_one(uint8_t *data);
 
+/* Simple busy-wait delay */
+static void ppg_delay_ms(uint32_t ms)
+{
+    for (volatile uint32_t i = 0; i < ms * 4000u; i++) { }
+}
+
+/* 9-pulse I2C bus clear procedure to release any stuck I2C slave holding SDA low */
+static void i2c_bus_clear(void)
+{
+    printf("[PPG] I2C bus clear: checking SDA/SCL state...\r\n");
+    
+    CMU_ClockEnable(cmuClock_GPIO, true);
+
+    // Read initial state
+    uint8_t scl_state = GPIO_PinInGet(gpioPortC, 5);
+    uint8_t sda_state = GPIO_PinInGet(gpioPortC, 7);
+    printf("[PPG] Before clear: SCL=%d SDA=%d\r\n", scl_state, sda_state);
+
+    // PC05 = SCL, PC07 = SDA
+    GPIO_PinModeSet(gpioPortC, 5, gpioModeWiredAndPullUp, 1);
+    GPIO_PinModeSet(gpioPortC, 7, gpioModeWiredAndPullUp, 1);
+
+    for (int i = 0; i < 9; i++) {
+        GPIO_PinOutClear(gpioPortC, 5);
+        ppg_delay_ms(1);
+        GPIO_PinOutSet(gpioPortC, 5);
+        ppg_delay_ms(1);
+    }
+
+    // Generate STOP
+    GPIO_PinOutClear(gpioPortC, 7);
+    ppg_delay_ms(1);
+    GPIO_PinOutSet(gpioPortC, 5);
+    ppg_delay_ms(1);
+    GPIO_PinOutSet(gpioPortC, 7);
+    ppg_delay_ms(1);
+
+    // Check final state
+    scl_state = GPIO_PinInGet(gpioPortC, 5);
+    sda_state = GPIO_PinInGet(gpioPortC, 7);
+    printf("[PPG] After clear: SCL=%d SDA=%d\r\n", scl_state, sda_state);
+
+    // Re-init I2CSPM peripheral
+    sl_i2cspm_init_instances();
+    ppg_delay_ms(10);
+    printf("[PPG] I2CSPM re-initialized\r\n");
+}
+
 static bool max30102_configure_sensor(void)
 {
     bool ok = true;
+
+    // Reset register first
+    max30102_write_reg(MAX30102_MODE_CONFIG, MAX30102_MODE_RESET);
+    ppg_delay_ms(50);
 
     ok &= max30102_write_reg(MAX30102_FIFO_WR_PTR,  0x00u);
     ok &= max30102_write_reg(MAX30102_OVF_COUNTER,  0x00u);
@@ -230,16 +283,34 @@ void tarang_ppg_init(void)
     printf("MAX30102 INTERRUPT-DRIVEN TARANG PPG\r\n");
     printf("====================================\r\n");
 
-    /* ── Step 1: Configure MAX30102 sensor registers ─────────────────── */
+    /* ── Step 0: Clear I2C bus (in case slave was holding SDA low) ────── */
+    i2c_bus_clear();
 
-    if (!max30102_configure_sensor()) {
+    /* ── Step 1: Configure MAX30102 sensor registers with retry ──────── */
+    bool config_ok = false;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        printf("[PPG] Config attempt %d/3...\r\n", attempt);
+        
+        if (max30102_configure_sensor()) {
+            config_ok = true;
+            printf("[PPG] Sensor config OK\r\n");
+            break;
+        }
+        
         write_failures++;
-        printf("[PPG] SENSOR CONFIG FAILED (i2c_ret=%d)\r\n",
-               (int)last_ppg_i2c_ret);
-        return;
+        printf("[PPG] Config failed (i2c_ret=%d)\r\n", (int)last_ppg_i2c_ret);
+        
+        if (attempt < 3) {
+            printf("[PPG] Retrying after delay...\r\n");
+            ppg_delay_ms(100);
+            i2c_bus_clear();  // Try clearing bus again
+        }
     }
 
-    printf("[PPG] Sensor config OK\r\n");
+    if (!config_ok) {
+        printf("[PPG] SENSOR CONFIG FAILED after 3 attempts\r\n");
+        return;
+    }
 
     /* Clear pending interrupt status after sensor config, before GPIO service. */
     max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
@@ -256,12 +327,8 @@ void tarang_ppg_init(void)
                     gpioModeInputPull,
                     1u);              /* 1 = pull-UP (idle HIGH) */
 
-    /* ── Step 3: Register GPIO callback ──────────────────────────────── */
-    GPIOINT_Init();
-
+    /* ── Step 3: Register GPIO callback & arm external interrupt ─────── */
     GPIOINT_CallbackRegister(MAX30102_INT_PIN, max30102_gpio_callback);
-
-    /* ── Step 4: Configure the external interrupt for PC06 ───────────── */
 
     GPIO_ExtIntConfig(MAX30102_INT_PORT,
                       MAX30102_INT_PIN,
@@ -269,6 +336,11 @@ void tarang_ppg_init(void)
                       false,   /* no rising edge  */
                       true,    /* YES falling edge */
                       true);   /* enable now       */
+
+    /* Prime ppg_data_ready if INT pin is already held low by MAX30102 */
+    if (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u) {
+        ppg_data_ready = true;
+    }
 
     max30102_found = true;
 
