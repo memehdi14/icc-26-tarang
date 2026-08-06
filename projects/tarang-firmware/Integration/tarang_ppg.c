@@ -21,7 +21,6 @@
 
 #include "sl_i2cspm.h"
 #include "sl_i2cspm_instances.h"
-#include "sl_iostream.h"
 
 #include "em_gpio.h"
 #include "em_cmu.h"
@@ -53,10 +52,15 @@
 #define MAX30102_MULTI_LED_CTRL1   0x11
 #define MAX30102_MULTI_LED_CTRL2   0x12
 
-#define MAX30102_PART_ID_REG       0xFF
+#define MAX30102_MODE_SPO2         0x03u
 
 #define MAX30102_INT_ENABLE1_PPG_RDY    0x40u
 #define MAX30102_INT_ENABLE1_A_FULL     0x80u
+
+#define MAX30102_INT_STATUS1_PPG_RDY    0x40u
+
+#define MAX30102_MAX_DRAIN_PER_SERVICE  8u
+#define MAX30102_RECOVERY_THRESHOLD     4u
 
 /*******************************************************************************
  * Hardware Pin Definition — MAX30102 INT connected to PC06
@@ -84,17 +88,72 @@ static volatile uint32_t read_failures    = 0u;
 static volatile uint32_t write_failures   = 0u;
 static volatile uint32_t fifo_poll_count  = 0u;
 static volatile uint32_t sample_reads     = 0u;
-static volatile uint32_t fifo_overflow_total = 0u;
 
-static volatile uint8_t  fifo_wr_ptr      = 0u;
-static volatile uint8_t  fifo_rd_ptr      = 0u;
-static volatile uint8_t  fifo_ovf         = 0u;
 static volatile uint32_t red_sample       = 0u;
 static volatile uint32_t ir_sample        = 0u;
 static volatile uint8_t  int_status1      = 0u;
 static volatile uint8_t  int_status2      = 0u;
 
 static volatile bool     max30102_found   = false;
+static volatile uint32_t consecutive_i2c_failures = 0u;
+static volatile uint32_t recovery_attempts = 0u;
+
+static volatile I2C_TransferReturn_TypeDef last_ppg_i2c_ret = i2cTransferDone;
+
+static bool max30102_read_reg(uint8_t reg, uint8_t *value);
+static bool max30102_write_reg(uint8_t reg, uint8_t value);
+static bool max30102_read_fifo_one(uint8_t *data);
+
+static bool max30102_configure_sensor(void)
+{
+    bool ok = true;
+
+    ok &= max30102_write_reg(MAX30102_FIFO_WR_PTR,  0x00u);
+    ok &= max30102_write_reg(MAX30102_OVF_COUNTER,  0x00u);
+    ok &= max30102_write_reg(MAX30102_FIFO_RD_PTR,  0x00u);
+
+    ok &= max30102_write_reg(MAX30102_FIFO_CONFIG_REG, 0x0Fu);
+
+    ok &= max30102_write_reg(MAX30102_INT_ENABLE1, MAX30102_INT_ENABLE1_PPG_RDY);
+    ok &= max30102_write_reg(MAX30102_INT_ENABLE2, 0x00u);
+
+    ok &= max30102_write_reg(MAX30102_MODE_CONFIG, MAX30102_MODE_SPO2);
+    ok &= max30102_write_reg(MAX30102_SPO2_CONFIG, 0x27u);
+
+    ok &= max30102_write_reg(MAX30102_LED1_PA,         0x24u);
+    ok &= max30102_write_reg(MAX30102_LED2_PA,         0x24u);
+    ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL1, 0x21u);
+    ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL2, 0x00u);
+
+    return ok;
+}
+
+static void max30102_recover(void)
+{
+    recovery_attempts++;
+    sl_i2cspm_init_instances();
+
+    if (max30102_configure_sensor()) {
+        consecutive_i2c_failures = 0u;
+        max30102_found = true;
+        ppg_data_ready = false;
+        max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
+        max30102_read_reg(MAX30102_INT_STATUS2, (uint8_t *)&int_status2);
+
+        if (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u) {
+            ppg_data_ready = true;
+        }
+
+        printf("[PPG] RECOVERED bus after %lu failures (attempt=%lu)\r\n",
+               (unsigned long)MAX30102_RECOVERY_THRESHOLD,
+               (unsigned long)recovery_attempts);
+    } else {
+        max30102_found = false;
+        printf("[PPG] RECOVERY FAILED ret=%d attempt=%lu\r\n",
+               (int)last_ppg_i2c_ret,
+               (unsigned long)recovery_attempts);
+    }
+}
 
 /*******************************************************************************
  * Private: I2C read/write helpers (proven working from test project)
@@ -113,6 +172,7 @@ static bool max30102_read_reg(uint8_t reg, uint8_t *value)
     seq.buf[1].len  = 1u;
 
     ret = I2CSPM_Transfer(sl_i2cspm_mikroe, &seq);
+    last_ppg_i2c_ret = ret;
     return (ret == i2cTransferDone);
 }
 
@@ -128,6 +188,7 @@ static bool max30102_write_reg(uint8_t reg, uint8_t value)
     seq.buf[0].len  = 2u;
 
     ret = I2CSPM_Transfer(sl_i2cspm_mikroe, &seq);
+    last_ppg_i2c_ret = ret;
     return (ret == i2cTransferDone);
 }
 
@@ -145,6 +206,7 @@ static bool max30102_read_fifo_one(uint8_t *data)
     seq.buf[1].len  = 6u;   /* 3 bytes RED + 3 bytes IR = 1 sample */
 
     ret = I2CSPM_Transfer(sl_i2cspm_mikroe, &seq);
+    last_ppg_i2c_ret = ret;
     return (ret == i2cTransferDone);
 }
 
@@ -168,37 +230,18 @@ void tarang_ppg_init(void)
     printf("MAX30102 INTERRUPT-DRIVEN TARANG PPG\r\n");
     printf("====================================\r\n");
 
-    bool ok = true;
-
     /* ── Step 1: Configure MAX30102 sensor registers ─────────────────── */
 
-    ok &= max30102_write_reg(MAX30102_FIFO_WR_PTR,  0x00u);
-    ok &= max30102_write_reg(MAX30102_OVF_COUNTER,  0x00u);
-    ok &= max30102_write_reg(MAX30102_FIFO_RD_PTR,  0x00u);
-
-    ok &= max30102_write_reg(MAX30102_FIFO_CONFIG_REG, 0x0Fu);
-
-    ok &= max30102_write_reg(MAX30102_INT_ENABLE1, MAX30102_INT_ENABLE1_PPG_RDY);
-    ok &= max30102_write_reg(MAX30102_INT_ENABLE2, 0x00u);
-
-    ok &= max30102_write_reg(MAX30102_MODE_CONFIG, 0x03u);
-
-    ok &= max30102_write_reg(MAX30102_SPO2_CONFIG, 0x27u);
-
-    ok &= max30102_write_reg(MAX30102_LED1_PA,         0x24u);
-    ok &= max30102_write_reg(MAX30102_LED2_PA,         0x24u);
-    ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL1, 0x21u);
-    ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL2, 0x00u);
-
-    if (!ok) {
+    if (!max30102_configure_sensor()) {
         write_failures++;
-        printf("[PPG] SENSOR CONFIG FAILED\r\n");
+        printf("[PPG] SENSOR CONFIG FAILED (i2c_ret=%d)\r\n",
+               (int)last_ppg_i2c_ret);
         return;
     }
 
     printf("[PPG] Sensor config OK\r\n");
 
-    /* Clear pending interrupt status */
+    /* Clear pending interrupt status after sensor config, before GPIO service. */
     max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
     max30102_read_reg(MAX30102_INT_STATUS2, (uint8_t *)&int_status2);
     printf("[PPG] INT_STATUS1=0x%02X INT_STATUS2=0x%02X (cleared)\r\n",
@@ -206,13 +249,15 @@ void tarang_ppg_init(void)
 
     /* ── Step 2: Configure PC06 as interrupt input ───────────────────── */
 
+    CMU_ClockEnable(cmuClock_GPIO, true);
+
     GPIO_PinModeSet(MAX30102_INT_PORT,
                     MAX30102_INT_PIN,
                     gpioModeInputPull,
                     1u);              /* 1 = pull-UP (idle HIGH) */
 
     /* ── Step 3: Register GPIO callback ──────────────────────────────── */
-    /* NOTE: GPIOINT_Init() is called once by app.c before sensor inits */
+    GPIOINT_Init();
 
     GPIOINT_CallbackRegister(MAX30102_INT_PIN, max30102_gpio_callback);
 
@@ -237,49 +282,68 @@ void tarang_ppg_init(void)
 void tarang_ppg_process(void)
 {
     uint8_t fifo_data[6];
-
-    if (!ppg_data_ready) {
-        return;
-    }
+    bool service_sensor = false;
+    uint8_t drained = 0u;
+    bool line_low = false;
+    bool status_has_data = false;
 
     CORE_DECLARE_IRQ_STATE;
     CORE_ENTER_ATOMIC();
-    ppg_data_ready = false;
+    if (ppg_data_ready) {
+        ppg_data_ready = false;
+        service_sensor = true;
+    }
     CORE_EXIT_ATOMIC();
+
+    if (!service_sensor) {
+        return;
+    }
 
     read_attempts++;
 
     /* Read and clear MAX30102 interrupt status */
-    max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
-    max30102_read_reg(MAX30102_INT_STATUS2, (uint8_t *)&int_status2);
+    bool ok1 = max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
+    bool ok2 = max30102_read_reg(MAX30102_INT_STATUS2, (uint8_t *)&int_status2);
 
-    /* Read FIFO pointers and overflow counter */
-    bool ok1 = max30102_read_reg(MAX30102_FIFO_WR_PTR,
-                                  (uint8_t *)&fifo_wr_ptr);
-    bool ok2 = max30102_read_reg(MAX30102_FIFO_RD_PTR,
-                                  (uint8_t *)&fifo_rd_ptr);
-    bool ok3 = max30102_read_reg(MAX30102_OVF_COUNTER,
-                                  (uint8_t *)&fifo_ovf);
+    if (!(ok1 && ok2)) {
+        read_failures++;
+        consecutive_i2c_failures++;
+        printf("[PPG] I2C FAIL status1=%d status2=%d ret=%d fail=%lu\r\n",
+               ok1, ok2, (int)last_ppg_i2c_ret,
+               (unsigned long)consecutive_i2c_failures);
 
-    /* Read one sample from FIFO (6 bytes = RED + IR) */
-    bool ok4 = max30102_read_fifo_one(fifo_data);
-
-    if (ok1 && ok2 && ok3 && ok4) {
-        read_success++;
-        fifo_poll_count++;
-        max30102_found = true;
-
-        if (fifo_ovf != 0u) {
-            fifo_overflow_total += fifo_ovf;
-            printf("[PPG] FIFO OVERFLOW: %u samples lost (total=%lu)\r\n",
-                   (unsigned int)fifo_ovf,
-                   (unsigned long)fifo_overflow_total);
+        if (consecutive_i2c_failures >= MAX30102_RECOVERY_THRESHOLD) {
+            max30102_recover();
         }
+        return;
+    }
 
-        uint8_t fifo_depth = (uint8_t)((fifo_wr_ptr - fifo_rd_ptr) & 0x1Fu);
-        if (fifo_depth > 3u) {
-            printf("[PPG] WARN: FIFO depth=%u — consider burst read\r\n",
-                   (unsigned int)fifo_depth);
+    consecutive_i2c_failures = 0u;
+    max30102_found = true;
+    fifo_poll_count++;
+    status_has_data = ((int_status1 & MAX30102_INT_STATUS1_PPG_RDY) != 0u);
+    line_low = (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u);
+
+    if (!(status_has_data || line_low)) {
+        return;
+    }
+
+    while ((drained < MAX30102_MAX_DRAIN_PER_SERVICE)
+           && (status_has_data || (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u))) {
+        bool ok4 = max30102_read_fifo_one(fifo_data);
+        if (!ok4) {
+            read_failures++;
+            consecutive_i2c_failures++;
+            printf("[PPG] I2C FAIL fifo=%d drained=%u ret=%d fail=%lu\r\n",
+                   ok4,
+                   (unsigned int)drained,
+                   (int)last_ppg_i2c_ret,
+                   (unsigned long)consecutive_i2c_failures);
+
+            if (consecutive_i2c_failures >= MAX30102_RECOVERY_THRESHOLD) {
+                max30102_recover();
+            }
+            return;
         }
 
         /* Unpack 3-byte big-endian RED sample */
@@ -292,13 +356,12 @@ void tarang_ppg_process(void)
                    | ((uint32_t)fifo_data[4] <<  8u)
                    |  (uint32_t)fifo_data[5];
 
-        /* Mask to 18-bit ADC resolution */
         red_sample &= 0x0003FFFFu;
         ir_sample  &= 0x0003FFFFu;
 
         sample_reads++;
+        read_success++;
 
-        /* Store into circular buffers */
         ppg_red_buffer[ppg_index] = red_sample;
         ppg_ir_buffer[ppg_index]  = ir_sample;
 
@@ -308,20 +371,24 @@ void tarang_ppg_process(void)
         }
 
         ppg_sample_count++;
+        drained++;
+        status_has_data = false;
+    }
 
-        /* Print every 100 samples (every 1 second at 100Hz) */
-        if ((ppg_sample_count % 100u) == 0u) {
-            printf("[PPG] cnt=%lu int=%lu RED=%lu IR=%lu\r\n",
-                   (unsigned long)ppg_sample_count,
-                   (unsigned long)interrupt_count,
-                   (unsigned long)red_sample,
-                   (unsigned long)ir_sample);
-        }
-    } else {
-        read_failures++;
-        max30102_found = false;
-        printf("[PPG] I2C FAIL ok1=%d ok2=%d ok3=%d ok4=%d\r\n",
-               ok1, ok2, ok3, ok4);
+    consecutive_i2c_failures = 0u;
+
+    if ((drained == MAX30102_MAX_DRAIN_PER_SERVICE)
+        && (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u)) {
+        ppg_data_ready = true;
+    }
+
+    if ((drained > 1u) || ((ppg_sample_count != 0u) && ((ppg_sample_count % 100u) == 0u))) {
+        printf("[PPG] cnt=%lu int=%lu RED=%lu IR=%lu drained=%u\r\n",
+               (unsigned long)ppg_sample_count,
+               (unsigned long)interrupt_count,
+               (unsigned long)red_sample,
+               (unsigned long)ir_sample,
+               (unsigned int)drained);
     }
 }
 
