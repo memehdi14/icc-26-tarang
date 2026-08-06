@@ -1,0 +1,1026 @@
+================================================================================
+TARANG DSP — ROOT-CAUSE DIAGNOSTIC FOR WHOLESALE DETECTOR FAILURES
+================================================================================
+
+Records: 75
+Hypotheses being tested:
+  2a. Channel/lead index, sample rate, silently swallowed exceptions
+  2b. Adaptive threshold drift over 30-minute records
+  2c. Amplitude/gain consistency (recall vs raw signal std)
+
+--- I01 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=2.3757 range=16.5458 sat_frac=0.000013
+  Detector: 2367 detected, 2757 true, recall=0.8585
+  N_rec=0.981 S_rec=0.000 V_rec=0.000
+  Final: SPKI=338.59 NPKI=132.23 TH1=183.82
+  Recall per 5-min chunk: [0.73 0.96 0.86 0.86 0.91 0.82]
+  Drift: early=0.845 late=0.866 delta=+0.020
+  SPKI/TH1 over time: 1min:SPKI=240.7/TH1=132.5 5min:SPKI=271.3/TH1=162.3 10min:SPKI=224.6/TH1=124.9 20min:SPKI=284.9/TH1=153.7
+
+--- I02 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.8203 range=14.1111 sat_frac=0.000006
+  Detector: 2408 detected, 2674 true, recall=0.9005
+  N_rec=0.984 S_rec=0.000 V_rec=0.013
+  Final: SPKI=295.17 NPKI=113.08 TH1=158.60
+  Recall per 5-min chunk: [0.83 0.97 0.86 0.85 0.92 0.99]
+  Drift: early=0.899 late=0.955 delta=+0.056
+  SPKI/TH1 over time: 1min:SPKI=203.2/TH1=116.9 5min:SPKI=196.4/TH1=110.6 10min:SPKI=204.8/TH1=103.3 20min:SPKI=240.0/TH1=133.8
+
+--- I03 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=2.3919 range=8.8261 sat_frac=0.000041
+  Detector: 2442 detected, 2452 true, recall=0.9812
+  N_rec=0.980 S_rec=1.000 V_rec=1.000
+  Final: SPKI=48.85 NPKI=15.19 TH1=23.60
+  Recall per 5-min chunk: [0.90 1.00 1.00 1.00 1.00 1.00]
+  Drift: early=0.949 late=1.000 delta=+0.051
+  SPKI/TH1 over time: 1min:SPKI=50.0/TH1=25.8 5min:SPKI=46.1/TH1=22.1 10min:SPKI=41.8/TH1=21.1 20min:SPKI=41.5/TH1=21.3
+
+--- I04 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.5155 range=8.2824 sat_frac=0.000004
+  Detector: 2432 detected, 2407 true, recall=0.9805
+  N_rec=0.981 S_rec=1.000 V_rec=0.975
+  Final: SPKI=38.70 NPKI=14.88 TH1=20.84
+  Recall per 5-min chunk: [0.87 1.00 1.00 1.00 1.00 0.97]
+  Drift: early=0.933 late=0.986 delta=+0.052
+  SPKI/TH1 over time: 1min:SPKI=27.9/TH1=13.4 5min:SPKI=35.2/TH1=16.9 10min:SPKI=30.3/TH1=14.6 20min:SPKI=48.0/TH1=24.4
+
+--- I05 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.2474 range=4.8434 sat_frac=0.000004
+  Detector: 1694 detected, 1767 true, recall=0.9479
+  N_rec=0.963 S_rec=0.000 V_rec=0.858
+  Final: SPKI=32.45 NPKI=18.37 TH1=21.89
+  Recall per 5-min chunk: [0.81 0.97 0.98 0.96 0.98 1.00]
+  Drift: early=0.888 late=0.989 delta=+0.101
+  SPKI/TH1 over time: 1min:SPKI=31.4/TH1=21.0 5min:SPKI=22.6/TH1=12.3 10min:SPKI=23.7/TH1=12.8 20min:SPKI=26.2/TH1=13.7
+
+--- I06 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.2478 range=15.3500 sat_frac=0.000006
+  Detector: 2452 detected, 2493 true, recall=0.9836
+  N_rec=0.984 S_rec=0.958 V_rec=1.000
+  Final: SPKI=241.88 NPKI=87.18 TH1=125.85
+  Recall per 5-min chunk: [0.90 1.00 1.00 1.00 1.00 1.00]
+  Drift: early=0.950 late=0.999 delta=+0.049
+  SPKI/TH1 over time: 1min:SPKI=180.1/TH1=94.8 5min:SPKI=184.8/TH1=97.4 10min:SPKI=179.1/TH1=90.7 20min:SPKI=206.3/TH1=112.4
+
+--- I07 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.6982 range=13.8125 sat_frac=0.000017
+  Detector: 2663 detected, 2706 true, recall=0.9837
+  N_rec=0.983 S_rec=1.000 V_rec=1.000
+  Final: SPKI=133.63 NPKI=49.98 TH1=70.89
+  Recall per 5-min chunk: [0.90 1.00 1.00 1.00 1.00 1.00]
+  Drift: early=0.951 late=0.998 delta=+0.047
+  SPKI/TH1 over time: 1min:SPKI=208.2/TH1=104.8 5min:SPKI=202.3/TH1=100.7 10min:SPKI=160.3/TH1=79.8 20min:SPKI=172.1/TH1=89.0
+
+--- I08 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.7201 range=16.0112 sat_frac=0.000011
+  Detector: 2445 detected, 2130 true, recall=0.8066
+  N_rec=0.781 S_rec=1.000 V_rec=0.934
+  Final: SPKI=20.38 NPKI=5.96 TH1=9.57
+  Recall per 5-min chunk: [0.88 0.83 0.71 0.92 0.71 0.83]
+  Drift: early=0.854 late=0.771 delta=-0.083
+  SPKI/TH1 over time: 1min:SPKI=22.7/TH1=11.1 5min:SPKI=49.7/TH1=25.1 10min:SPKI=96.4/TH1=41.9 20min:SPKI=48.9/TH1=25.3
+
+--- I09 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.4523 range=19.5276 sat_frac=0.000006
+  Detector: 2907 detected, 2989 true, recall=0.9699
+  N_rec=0.974 S_rec=0.000 V_rec=0.659
+  Final: SPKI=310.83 NPKI=109.14 TH1=159.56
+  Recall per 5-min chunk: [0.90 0.98 0.98 0.99 0.98 0.99]
+  Drift: early=0.939 late=0.982 delta=+0.043
+  SPKI/TH1 over time: 1min:SPKI=435.6/TH1=242.2 5min:SPKI=300.2/TH1=152.6 10min:SPKI=255.9/TH1=125.5 20min:SPKI=333.6/TH1=200.3
+
+--- I10 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.2956 range=13.2953 sat_frac=0.000019
+  Detector: 3491 detected, 3682 true, recall=0.9481
+  N_rec=0.962 S_rec=0.000 V_rec=0.349
+  Final: SPKI=198.49 NPKI=61.43 TH1=95.70
+  Recall per 5-min chunk: [0.88 0.96 0.96 0.96 0.97 0.96]
+  Drift: early=0.920 late=0.967 delta=+0.047
+  SPKI/TH1 over time: 1min:SPKI=297.7/TH1=141.3 5min:SPKI=229.9/TH1=114.0 10min:SPKI=346.1/TH1=168.6 20min:SPKI=333.9/TH1=168.0
+
+--- I11 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.8035 range=7.6535 sat_frac=0.000089
+  Detector: 2061 detected, 2082 true, recall=0.9784
+  N_rec=0.979 S_rec=0.000 V_rec=0.750
+  Final: SPKI=159.63 NPKI=63.23 TH1=87.33
+  Recall per 5-min chunk: [0.86 0.99 1.00 1.00 1.00 1.00]
+  Drift: early=0.924 late=0.999 delta=+0.074
+  SPKI/TH1 over time: 1min:SPKI=164.2/TH1=88.0 5min:SPKI=110.8/TH1=64.7 10min:SPKI=151.4/TH1=84.0 20min:SPKI=135.0/TH1=71.0
+
+--- I12 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.5783 range=7.1750 sat_frac=0.000004
+  Detector: 3107 detected, 2807 true, recall=0.7959
+  N_rec=0.796 S_rec=1.000 V_rec=0.667
+  Final: SPKI=35.16 NPKI=11.69 TH1=17.56
+  Recall per 5-min chunk: [0.87 0.99 0.98 0.58 0.67 0.82]
+  Drift: early=0.934 late=0.743 delta=-0.191
+  SPKI/TH1 over time: 1min:SPKI=20.7/TH1=10.9 5min:SPKI=17.3/TH1=8.1 10min:SPKI=20.0/TH1=10.6 20min:SPKI=19.2/TH1=11.5
+
+--- I13 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.2747 range=3.3258 sat_frac=0.000061
+  Detector: 1951 detected, 2023 true, recall=0.9609
+  N_rec=0.960 S_rec=0.000 V_rec=0.970
+  Final: SPKI=10.71 NPKI=3.59 TH1=5.37
+  Recall per 5-min chunk: [0.79 1.00 1.00 1.00 1.00 0.97]
+  Drift: early=0.895 late=0.985 delta=+0.090
+  SPKI/TH1 over time: 1min:SPKI=9.6/TH1=5.1 5min:SPKI=5.5/TH1=2.9 10min:SPKI=5.1/TH1=2.8 20min:SPKI=5.7/TH1=3.0
+
+--- I14 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.7832 range=10.9822 sat_frac=0.000227
+  Detector: 493 detected, 1866 true, recall=0.2519
+  N_rec=0.255 S_rec=0.000 V_rec=0.156
+  Final: SPKI=7.62 NPKI=2.81 TH1=4.02
+  Recall per 5-min chunk: [0.00 0.00 0.00 0.00 0.53 0.97]
+  Drift: early=0.000 late=0.750 delta=+0.750
+  SPKI/TH1 over time: 1min:SPKI=5.5/TH1=51.3 5min:SPKI=3.2/TH1=50.7 10min:SPKI=4.6/TH1=51.1 20min:SPKI=4.7/TH1=51.1
+
+--- I15 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.3847 range=11.4254 sat_frac=0.000006
+  Detector: 1373 detected, 2635 true, recall=0.5059
+  N_rec=0.506 S_rec=0.000 V_rec=0.000
+  Final: SPKI=68.41 NPKI=988.24 TH1=758.28
+  Recall per 5-min chunk: [0.89 0.97 0.99 0.11 0.00 0.00]
+  Drift: early=0.934 late=0.000 delta=-0.934
+  *** SIGNIFICANT DRIFT DETECTED (recall drops >0.20 from early to late) ***
+  SPKI/TH1 over time: 1min:SPKI=62.5/TH1=30.9 5min:SPKI=83.1/TH1=43.5 10min:SPKI=38.8/TH1=20.0 20min:SPKI=52.9/TH1=754.4
+
+--- I16 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.6170 range=10.9528 sat_frac=0.000028
+  Detector: 1510 detected, 1522 true, recall=0.9750
+  N_rec=0.975 S_rec=0.000 V_rec=1.000
+  Final: SPKI=120.85 NPKI=57.65 TH1=73.45
+  Recall per 5-min chunk: [0.89 0.98 1.00 0.99 0.99 1.00]
+  Drift: early=0.936 late=0.994 delta=+0.058
+  SPKI/TH1 over time: 1min:SPKI=73.2/TH1=42.0 5min:SPKI=74.0/TH1=42.5 10min:SPKI=130.6/TH1=79.0 20min:SPKI=105.5/TH1=65.0
+
+--- I17 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.3677 range=4.5276 sat_frac=0.000004
+  Detector: 1832 detected, 1673 true, recall=0.9504
+  N_rec=0.961 S_rec=0.000 V_rec=0.296
+  Final: SPKI=22.49 NPKI=10.80 TH1=13.72
+  Recall per 5-min chunk: [0.90 0.97 0.95 0.96 0.96 0.97]
+  Drift: early=0.935 late=0.964 delta=+0.029
+  SPKI/TH1 over time: 1min:SPKI=42.2/TH1=26.0 5min:SPKI=42.0/TH1=25.1 10min:SPKI=37.8/TH1=19.8 20min:SPKI=37.2/TH1=22.4
+
+--- I18 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.0455 range=13.1569 sat_frac=0.000006
+  Detector: 2529 detected, 3028 true, recall=0.7087
+  N_rec=0.678 S_rec=0.000 V_rec=0.934
+  Final: SPKI=43.07 NPKI=16.10 TH1=22.84
+  Recall per 5-min chunk: [0.50 0.59 0.58 0.86 0.78 0.98]
+  Drift: early=0.546 late=0.881 delta=+0.335
+  SPKI/TH1 over time: 1min:SPKI=104.9/TH1=53.9 5min:SPKI=92.1/TH1=72.0 10min:SPKI=102.0/TH1=50.4 20min:SPKI=57.4/TH1=30.3
+
+--- I19 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.5883 range=13.7141 sat_frac=0.000303
+  Detector: 2016 detected, 2062 true, recall=0.9699
+  N_rec=0.963 S_rec=0.000 V_rec=0.980
+  Final: SPKI=24.78 NPKI=10.28 TH1=13.90
+  Recall per 5-min chunk: [0.89 1.00 0.98 0.99 0.99 0.98]
+  Drift: early=0.941 late=0.986 delta=+0.045
+  SPKI/TH1 over time: 1min:SPKI=15.1/TH1=8.3 5min:SPKI=16.9/TH1=9.5 10min:SPKI=16.6/TH1=9.5 20min:SPKI=17.4/TH1=10.7
+
+--- I20 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.2612 range=10.4833 sat_frac=0.000017
+  Detector: 2753 detected, 2651 true, recall=0.8748
+  N_rec=0.890 S_rec=0.804 V_rec=0.667
+  Final: SPKI=25.07 NPKI=7.99 TH1=12.26
+  Recall per 5-min chunk: [0.89 0.93 0.97 0.77 0.83 0.87]
+  Drift: early=0.911 late=0.850 delta=-0.061
+  SPKI/TH1 over time: 1min:SPKI=59.0/TH1=31.5 5min:SPKI=59.9/TH1=32.2 10min:SPKI=26.4/TH1=16.0 20min:SPKI=38.2/TH1=21.4
+
+--- I21 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.1906 range=7.7042 sat_frac=0.000019
+  Detector: 2326 detected, 2184 true, recall=0.9533
+  N_rec=0.956 S_rec=0.923 V_rec=0.750
+  Final: SPKI=27.79 NPKI=10.00 TH1=14.45
+  Recall per 5-min chunk: [0.87 0.98 0.96 0.98 0.97 0.95]
+  Drift: early=0.924 late=0.961 delta=+0.037
+  SPKI/TH1 over time: 1min:SPKI=13.8/TH1=7.7 5min:SPKI=16.5/TH1=8.0 10min:SPKI=18.0/TH1=9.7 20min:SPKI=49.4/TH1=25.3
+
+--- I22 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.3403 range=3.6833 sat_frac=0.000009
+  Detector: 3115 detected, 3125 true, recall=0.9229
+  N_rec=0.943 S_rec=0.927 V_rec=0.616
+  Final: SPKI=54.83 NPKI=16.51 TH1=26.09
+  Recall per 5-min chunk: [0.85 0.94 0.94 0.95 0.92 0.93]
+  Drift: early=0.891 late=0.927 delta=+0.035
+  SPKI/TH1 over time: 1min:SPKI=82.4/TH1=38.9 5min:SPKI=74.7/TH1=40.0 10min:SPKI=71.0/TH1=37.3 20min:SPKI=66.0/TH1=31.8
+
+--- I23 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.7394 range=9.6081 sat_frac=0.000030
+  Detector: 2174 detected, 2205 true, recall=0.9855
+  N_rec=0.985 S_rec=0.000 V_rec=1.000
+  Final: SPKI=44.26 NPKI=16.39 TH1=23.36
+  Recall per 5-min chunk: [0.91 1.00 1.00 1.00 1.00 1.00]
+  Drift: early=0.953 late=0.999 delta=+0.045
+  SPKI/TH1 over time: 1min:SPKI=37.9/TH1=20.0 5min:SPKI=23.0/TH1=12.1 10min:SPKI=30.2/TH1=16.9 20min:SPKI=28.6/TH1=15.7
+
+--- I24 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=2.3287 range=12.3622 sat_frac=0.000013
+  Detector: 2527 detected, 2571 true, recall=0.9763
+  N_rec=0.976 S_rec=0.000 V_rec=1.000
+  Final: SPKI=31.35 NPKI=12.65 TH1=17.32
+  Recall per 5-min chunk: [0.88 1.00 1.00 1.00 1.00 1.00]
+  Drift: early=0.941 late=0.998 delta=+0.056
+  SPKI/TH1 over time: 1min:SPKI=18.7/TH1=10.7 5min:SPKI=15.1/TH1=8.5 10min:SPKI=36.2/TH1=19.1 20min:SPKI=17.0/TH1=8.7
+
+--- I25 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=2.7922 range=20.8447 sat_frac=0.000938
+  Detector: 1803 detected, 1712 true, recall=0.9790
+  N_rec=0.979 S_rec=1.000 V_rec=1.000
+  Final: SPKI=75.61 NPKI=27.72 TH1=39.69
+  Recall per 5-min chunk: [0.89 1.00 0.99 1.00 1.00 1.00]
+  Drift: early=0.943 late=1.000 delta=+0.057
+  SPKI/TH1 over time: 1min:SPKI=59.9/TH1=31.8 5min:SPKI=48.4/TH1=23.9 10min:SPKI=98.8/TH1=49.9 20min:SPKI=84.1/TH1=40.9
+
+--- I26 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.2086 range=5.6447 sat_frac=0.000024
+  Detector: 1573 detected, 1509 true, recall=0.9708
+  N_rec=0.971 S_rec=0.857 V_rec=1.000
+  Final: SPKI=37.22 NPKI=16.22 TH1=21.47
+  Recall per 5-min chunk: [0.91 0.95 0.99 0.98 1.00 1.00]
+  Drift: early=0.935 late=1.000 delta=+0.065
+  SPKI/TH1 over time: 1min:SPKI=40.7/TH1=20.5 5min:SPKI=55.9/TH1=25.1 10min:SPKI=30.2/TH1=14.6 20min:SPKI=34.5/TH1=19.3
+
+--- I27 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.9928 range=16.7961 sat_frac=0.000089
+  Detector: 1821 detected, 2605 true, recall=0.6833
+  N_rec=0.607 S_rec=0.000 V_rec=0.882
+  Final: SPKI=19.53 NPKI=7.05 TH1=10.17
+  Recall per 5-min chunk: [0.72 0.70 0.32 0.39 1.00 1.00]
+  Drift: early=0.710 late=1.000 delta=+0.290
+  SPKI/TH1 over time: 1min:SPKI=42.8/TH1=23.9 5min:SPKI=28.5/TH1=13.7 10min:SPKI=46.3/TH1=27.5 20min:SPKI=17.0/TH1=8.3
+
+--- I28 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.9959 range=6.0498 sat_frac=0.000125
+  Detector: 1575 detected, 1717 true, recall=0.8969
+  N_rec=0.898 S_rec=0.000 V_rec=0.500
+  Final: SPKI=6.48 NPKI=2.51 TH1=3.50
+  Recall per 5-min chunk: [0.51 0.99 1.00 0.96 0.99 0.95]
+  Drift: early=0.751 late=0.968 delta=+0.217
+  SPKI/TH1 over time: 1min:SPKI=4.4/TH1=2.3 5min:SPKI=30.4/TH1=17.0 10min:SPKI=15.8/TH1=7.2 20min:SPKI=19.5/TH1=9.4
+
+--- I29 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.8312 range=11.5867 sat_frac=0.000011
+  Detector: 2546 detected, 2620 true, recall=0.6282
+  N_rec=0.511 S_rec=0.000 V_rec=0.904
+  Final: SPKI=33.77 NPKI=15.33 TH1=19.94
+  Recall per 5-min chunk: [0.62 0.76 0.63 0.55 0.65 0.55]
+  Drift: early=0.693 late=0.597 delta=-0.095
+  SPKI/TH1 over time: 1min:SPKI=22.7/TH1=11.3 5min:SPKI=34.3/TH1=17.1 10min:SPKI=30.9/TH1=15.8 20min:SPKI=19.8/TH1=11.2
+
+--- I30 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.3621 range=9.3177 sat_frac=0.000013
+  Detector: 1947 detected, 2462 true, recall=0.6056
+  N_rec=0.453 S_rec=0.000 V_rec=0.951
+  Final: SPKI=34.12 NPKI=28.40 TH1=29.83
+  Recall per 5-min chunk: [0.49 0.77 0.55 0.66 0.60 0.53]
+  Drift: early=0.627 late=0.562 delta=-0.065
+  SPKI/TH1 over time: 1min:SPKI=43.4/TH1=20.2 5min:SPKI=21.5/TH1=12.1 10min:SPKI=17.6/TH1=9.4 20min:SPKI=15.7/TH1=8.1
+
+--- I31 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=5.0035 range=30.1118 sat_frac=0.000032
+  Detector: 2618 detected, 3209 true, recall=0.5862
+  N_rec=0.350 S_rec=0.000 V_rec=0.905
+  Final: SPKI=43.18 NPKI=15.23 TH1=22.22
+  Recall per 5-min chunk: [0.40 0.53 0.78 0.65 0.66 0.51]
+  Drift: early=0.468 late=0.588 delta=+0.120
+  SPKI/TH1 over time: 1min:SPKI=82.7/TH1=39.4 5min:SPKI=35.5/TH1=17.5 10min:SPKI=53.4/TH1=28.4 20min:SPKI=34.5/TH1=18.9
+
+--- I32 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.2802 range=7.6613 sat_frac=0.000009
+  Detector: 1287 detected, 1619 true, recall=0.7795
+  N_rec=0.771 S_rec=0.000 V_rec=1.000
+  Final: SPKI=7.95 NPKI=3.13 TH1=4.34
+  Recall per 5-min chunk: [0.02 0.84 1.00 0.85 0.96 0.96]
+  Drift: early=0.428 late=0.959 delta=+0.531
+  SPKI/TH1 over time: 1min:SPKI=2.3/TH1=12.4 5min:SPKI=1.9/TH1=5.4 10min:SPKI=14.0/TH1=7.4 20min:SPKI=8.8/TH1=5.0
+
+--- I33 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.2086 range=3.8801 sat_frac=0.000006
+  Detector: 1786 detected, 1837 true, recall=0.9711
+  N_rec=0.971 S_rec=0.971 V_rec=1.000
+  Final: SPKI=46.78 NPKI=15.56 TH1=23.36
+  Recall per 5-min chunk: [0.90 0.99 0.97 1.00 0.98 0.98]
+  Drift: early=0.946 late=0.983 delta=+0.037
+  SPKI/TH1 over time: 1min:SPKI=39.0/TH1=21.0 5min:SPKI=28.9/TH1=15.3 10min:SPKI=56.7/TH1=29.0 20min:SPKI=103.1/TH1=57.1
+
+--- I34 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.4066 range=2.9173 sat_frac=0.000032
+  Detector: 1900 detected, 1965 true, recall=0.9664
+  N_rec=0.968 S_rec=0.963 V_rec=0.000
+  Final: SPKI=58.79 NPKI=23.21 TH1=32.11
+  Recall per 5-min chunk: [0.87 0.96 1.00 0.99 1.00 0.98]
+  Drift: early=0.916 late=0.988 delta=+0.073
+  SPKI/TH1 over time: 1min:SPKI=22.9/TH1=13.3 5min:SPKI=33.8/TH1=16.0 10min:SPKI=104.9/TH1=55.0 20min:SPKI=64.4/TH1=34.2
+
+--- I35 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.3705 range=10.9183 sat_frac=0.000009
+  Detector: 3517 detected, 3658 true, recall=0.9363
+  N_rec=0.947 S_rec=0.000 V_rec=0.862
+  Final: SPKI=170.40 NPKI=60.30 TH1=87.82
+  Recall per 5-min chunk: [0.88 0.94 0.94 0.99 0.95 0.93]
+  Drift: early=0.909 late=0.940 delta=+0.032
+  SPKI/TH1 over time: 1min:SPKI=141.8/TH1=66.8 5min:SPKI=117.3/TH1=59.1 10min:SPKI=133.0/TH1=67.1 20min:SPKI=181.1/TH1=96.3
+
+--- I36 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.7876 range=23.9722 sat_frac=0.000022
+  Detector: 3557 detected, 3899 true, recall=0.9033
+  N_rec=0.904 S_rec=0.000 V_rec=0.896
+  Final: SPKI=380.97 NPKI=126.29 TH1=189.96
+  Recall per 5-min chunk: [0.78 0.86 0.95 0.94 0.98 0.98]
+  Drift: early=0.819 late=0.981 delta=+0.162
+  SPKI/TH1 over time: 1min:SPKI=96.9/TH1=66.1 5min:SPKI=120.3/TH1=109.4 10min:SPKI=135.8/TH1=67.5 20min:SPKI=151.7/TH1=83.8
+
+--- I37 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.7998 range=11.8170 sat_frac=0.000019
+  Detector: 2397 detected, 2461 true, recall=0.9740
+  N_rec=0.984 S_rec=0.000 V_rec=0.929
+  Final: SPKI=106.23 NPKI=38.28 TH1=55.27
+  Recall per 5-min chunk: [0.90 1.00 0.98 1.00 1.00 0.98]
+  Drift: early=0.945 late=0.986 delta=+0.041
+  SPKI/TH1 over time: 1min:SPKI=195.7/TH1=110.4 5min:SPKI=202.6/TH1=107.5 10min:SPKI=186.9/TH1=105.4 20min:SPKI=165.3/TH1=88.3
+
+--- I38 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.4483 range=22.8093 sat_frac=0.000028
+  Detector: 2491 detected, 2698 true, recall=0.8988
+  N_rec=0.878 S_rec=0.000 V_rec=0.980
+  Final: SPKI=133.61 NPKI=37.30 TH1=61.38
+  Recall per 5-min chunk: [0.79 0.94 0.91 0.92 0.92 0.92]
+  Drift: early=0.866 late=0.920 delta=+0.054
+  SPKI/TH1 over time: 1min:SPKI=56.1/TH1=32.9 5min:SPKI=58.1/TH1=33.6 10min:SPKI=66.7/TH1=36.1 20min:SPKI=68.7/TH1=34.2
+
+--- I39 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.0877 range=20.5798 sat_frac=0.000030
+  Detector: 1771 detected, 1775 true, recall=0.9685
+  N_rec=0.964 S_rec=0.000 V_rec=0.990
+  Final: SPKI=45.47 NPKI=13.17 TH1=21.25
+  Recall per 5-min chunk: [0.86 0.99 1.00 1.00 1.00 1.00]
+  Drift: early=0.929 late=1.000 delta=+0.071
+  SPKI/TH1 over time: 1min:SPKI=73.4/TH1=36.4 5min:SPKI=67.8/TH1=37.1 10min:SPKI=56.1/TH1=26.8 20min:SPKI=47.6/TH1=25.6
+
+--- I40 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=2.1036 range=13.1605 sat_frac=0.000039
+  Detector: 2643 detected, 2666 true, recall=0.9839
+  N_rec=0.983 S_rec=1.000 V_rec=1.000
+  Final: SPKI=66.93 NPKI=27.28 TH1=37.19
+  Recall per 5-min chunk: [0.90 1.00 1.00 1.00 1.00 0.99]
+  Drift: early=0.951 late=0.996 delta=+0.045
+  SPKI/TH1 over time: 1min:SPKI=90.0/TH1=50.3 5min:SPKI=67.3/TH1=37.3 10min:SPKI=70.9/TH1=35.8 20min:SPKI=57.9/TH1=31.7
+
+--- I41 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.4655 range=4.6806 sat_frac=0.000004
+  Detector: 1608 detected, 1630 true, recall=0.9810
+  N_rec=0.982 S_rec=0.800 V_rec=1.000
+  Final: SPKI=29.13 NPKI=11.46 TH1=15.88
+  Recall per 5-min chunk: [0.90 0.99 1.00 1.00 1.00 1.00]
+  Drift: early=0.944 late=0.996 delta=+0.052
+  SPKI/TH1 over time: 1min:SPKI=26.5/TH1=14.1 5min:SPKI=42.5/TH1=24.4 10min:SPKI=28.3/TH1=15.6 20min:SPKI=27.9/TH1=15.5
+
+--- I42 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.7992 range=5.2755 sat_frac=0.000009
+  Detector: 1867 detected, 3100 true, recall=0.5945
+  N_rec=0.968 S_rec=0.000 V_rec=0.223
+  Final: SPKI=48.19 NPKI=16.06 TH1=24.09
+  Recall per 5-min chunk: [0.55 0.71 0.64 0.59 0.53 0.53]
+  Drift: early=0.631 late=0.526 delta=-0.105
+  SPKI/TH1 over time: 1min:SPKI=30.2/TH1=17.2 5min:SPKI=37.5/TH1=18.4 10min:SPKI=27.4/TH1=14.4 20min:SPKI=43.5/TH1=23.8
+
+--- I43 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.9797 range=8.2707 sat_frac=0.000026
+  Detector: 1101 detected, 2207 true, recall=0.4980
+  N_rec=0.982 S_rec=0.000 V_rec=0.029
+  Final: SPKI=28.86 NPKI=12.62 TH1=16.68
+  Recall per 5-min chunk: [0.46 0.50 0.51 0.50 0.51 0.50]
+  Drift: early=0.482 late=0.506 delta=+0.023
+  SPKI/TH1 over time: 1min:SPKI=38.5/TH1=18.8 5min:SPKI=41.6/TH1=19.5 10min:SPKI=33.2/TH1=16.4 20min:SPKI=29.3/TH1=15.9
+
+--- I44 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.0682 range=9.7451 sat_frac=0.000022
+  Detector: 2445 detected, 2495 true, recall=0.9800
+  N_rec=0.981 S_rec=1.000 V_rec=0.977
+  Final: SPKI=100.35 NPKI=37.80 TH1=53.44
+  Recall per 5-min chunk: [0.90 1.00 0.99 1.00 1.00 1.00]
+  Drift: early=0.948 late=0.999 delta=+0.051
+  SPKI/TH1 over time: 1min:SPKI=134.1/TH1=76.2 5min:SPKI=167.6/TH1=94.6 10min:SPKI=146.8/TH1=78.0 20min:SPKI=97.9/TH1=55.1
+
+--- I45 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.9105 range=5.8971 sat_frac=0.000017
+  Detector: 1569 detected, 1928 true, recall=0.8102
+  N_rec=0.983 S_rec=0.000 V_rec=0.305
+  Final: SPKI=42.20 NPKI=13.11 TH1=20.38
+  Recall per 5-min chunk: [0.89 0.92 0.75 0.79 0.82 0.69]
+  Drift: early=0.905 late=0.754 delta=-0.151
+  SPKI/TH1 over time: 1min:SPKI=67.7/TH1=37.2 5min:SPKI=72.1/TH1=40.1 10min:SPKI=43.0/TH1=21.2 20min:SPKI=44.9/TH1=22.6
+
+--- I46 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.4208 range=20.2941 sat_frac=0.000045
+  Detector: 2713 detected, 2655 true, recall=0.9597
+  N_rec=0.958 S_rec=1.000 V_rec=0.967
+  Final: SPKI=163.07 NPKI=47.25 TH1=76.20
+  Recall per 5-min chunk: [0.90 0.98 0.98 0.99 0.95 0.94]
+  Drift: early=0.943 late=0.949 delta=+0.006
+  SPKI/TH1 over time: 1min:SPKI=76.6/TH1=45.8 5min:SPKI=71.0/TH1=39.0 10min:SPKI=69.7/TH1=39.2 20min:SPKI=70.5/TH1=38.7
+
+--- I47 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.0765 range=11.7502 sat_frac=0.000006
+  Detector: 1919 detected, 1953 true, recall=0.9652
+  N_rec=0.980 S_rec=1.000 V_rec=0.667
+  Final: SPKI=97.67 NPKI=30.94 TH1=47.62
+  Recall per 5-min chunk: [0.84 0.99 0.98 1.00 0.99 0.99]
+  Drift: early=0.913 late=0.991 delta=+0.078
+  SPKI/TH1 over time: 1min:SPKI=111.2/TH1=62.7 5min:SPKI=111.9/TH1=53.4 10min:SPKI=101.6/TH1=50.5 20min:SPKI=84.4/TH1=41.6
+
+--- I48 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.3202 range=4.8626 sat_frac=0.000004
+  Detector: 2334 detected, 2356 true, recall=0.9720
+  N_rec=0.983 S_rec=1.000 V_rec=0.877
+  Final: SPKI=197.45 NPKI=71.73 TH1=103.16
+  Recall per 5-min chunk: [0.90 0.98 0.99 0.99 0.98 0.99]
+  Drift: early=0.941 late=0.988 delta=+0.047
+  SPKI/TH1 over time: 1min:SPKI=126.8/TH1=67.2 5min:SPKI=91.8/TH1=43.3 10min:SPKI=110.9/TH1=53.8 20min:SPKI=155.6/TH1=73.6
+
+--- I49 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.9743 range=6.1379 sat_frac=0.000048
+  Detector: 2098 detected, 2147 true, recall=0.9772
+  N_rec=0.983 S_rec=0.000 V_rec=0.481
+  Final: SPKI=74.77 NPKI=26.23 TH1=38.37
+  Recall per 5-min chunk: [0.90 1.00 0.99 1.00 0.99 0.99]
+  Drift: early=0.951 late=0.989 delta=+0.038
+  SPKI/TH1 over time: 1min:SPKI=87.1/TH1=45.5 5min:SPKI=88.6/TH1=49.9 10min:SPKI=71.1/TH1=41.6 20min:SPKI=86.1/TH1=42.4
+
+--- I50 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.0960 range=8.7049 sat_frac=0.000011
+  Detector: 2962 detected, 2998 true, recall=0.9870
+  N_rec=0.987 S_rec=0.000 V_rec=1.000
+  Final: SPKI=227.44 NPKI=80.64 TH1=117.34
+  Recall per 5-min chunk: [0.92 1.00 1.00 1.00 1.00 1.00]
+  Drift: early=0.961 late=0.999 delta=+0.038
+  SPKI/TH1 over time: 1min:SPKI=162.7/TH1=87.5 5min:SPKI=82.5/TH1=44.6 10min:SPKI=83.8/TH1=41.7 20min:SPKI=106.9/TH1=56.9
+
+--- I51 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.4699 range=10.3144 sat_frac=0.000015
+  Detector: 2050 detected, 2776 true, recall=0.6862
+  N_rec=0.939 S_rec=0.667 V_rec=0.067
+  Final: SPKI=146.66 NPKI=62.82 TH1=83.78
+  Recall per 5-min chunk: [0.48 0.55 0.63 0.91 0.90 0.55]
+  Drift: early=0.518 late=0.725 delta=+0.207
+  SPKI/TH1 over time: 1min:SPKI=109.7/TH1=55.8 5min:SPKI=103.8/TH1=62.4 10min:SPKI=159.4/TH1=111.9 20min:SPKI=97.7/TH1=48.0
+
+--- I52 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.1736 range=1.6499 sat_frac=0.000006
+  Detector: 1583 detected, 1747 true, recall=0.9061
+  N_rec=0.983 S_rec=0.000 V_rec=0.000
+  Final: SPKI=86.25 NPKI=32.45 TH1=45.90
+  Recall per 5-min chunk: [0.70 0.78 0.97 1.00 1.00 1.00]
+  Drift: early=0.741 late=0.998 delta=+0.257
+  SPKI/TH1 over time: 1min:SPKI=80.2/TH1=42.9 5min:SPKI=77.9/TH1=41.0 10min:SPKI=76.7/TH1=41.3 20min:SPKI=79.9/TH1=43.8
+
+--- I53 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.6477 range=4.9498 sat_frac=0.000006
+  Detector: 1589 detected, 2262 true, recall=0.5402
+  N_rec=0.941 S_rec=0.000 V_rec=0.125
+  Final: SPKI=103.84 NPKI=95.85 TH1=97.84
+  Recall per 5-min chunk: [0.45 0.54 0.51 0.53 0.57 0.63]
+  Drift: early=0.496 late=0.599 delta=+0.103
+  SPKI/TH1 over time: 1min:SPKI=91.9/TH1=285.7 5min:SPKI=89.1/TH1=49.0 10min:SPKI=115.2/TH1=59.6 20min:SPKI=99.3/TH1=54.2
+
+--- I54 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.7308 range=11.8889 sat_frac=0.000009
+  Detector: 2572 detected, 2363 true, recall=0.9429
+  N_rec=0.944 S_rec=1.000 V_rec=0.864
+  Final: SPKI=239.43 NPKI=139.10 TH1=164.18
+  Recall per 5-min chunk: [0.89 0.99 0.94 0.98 0.91 0.95]
+  Drift: early=0.936 late=0.931 delta=-0.005
+  SPKI/TH1 over time: 1min:SPKI=212.4/TH1=106.8 5min:SPKI=645.4/TH1=343.5 10min:SPKI=718.1/TH1=445.7 20min:SPKI=287.7/TH1=210.4
+
+--- I55 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.4035 range=10.1928 sat_frac=0.000019
+  Detector: 2142 detected, 2166 true, recall=0.9760
+  N_rec=0.979 S_rec=0.000 V_rec=0.647
+  Final: SPKI=167.59 NPKI=56.42 TH1=84.22
+  Recall per 5-min chunk: [0.90 1.00 1.00 0.98 0.99 0.99]
+  Drift: early=0.949 late=0.993 delta=+0.044
+  SPKI/TH1 over time: 1min:SPKI=199.7/TH1=110.3 5min:SPKI=236.5/TH1=124.6 10min:SPKI=262.9/TH1=135.8 20min:SPKI=182.6/TH1=96.7
+
+--- I56 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=2.4495 range=13.2925 sat_frac=0.000121
+  Detector: 1666 detected, 1705 true, recall=0.9748
+  N_rec=0.977 S_rec=1.000 V_rec=0.286
+  Final: SPKI=77.11 NPKI=24.33 TH1=37.52
+  Recall per 5-min chunk: [0.90 0.98 0.99 1.00 1.00 1.00]
+  Drift: early=0.940 late=1.000 delta=+0.060
+  SPKI/TH1 over time: 1min:SPKI=61.7/TH1=30.5 5min:SPKI=58.7/TH1=28.9 10min:SPKI=67.8/TH1=43.4 20min:SPKI=74.6/TH1=36.2
+
+--- I57 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=2.6885 range=22.2843 sat_frac=0.000043
+  Detector: 2803 detected, 2866 true, recall=0.9721
+  N_rec=0.974 S_rec=1.000 V_rec=0.762
+  Final: SPKI=76.65 NPKI=32.73 TH1=43.71
+  Recall per 5-min chunk: [0.89 0.98 1.00 0.99 0.98 1.00]
+  Drift: early=0.935 late=0.989 delta=+0.055
+  SPKI/TH1 over time: 1min:SPKI=61.9/TH1=32.1 5min:SPKI=56.1/TH1=29.3 10min:SPKI=69.7/TH1=32.5 20min:SPKI=72.9/TH1=37.3
+
+--- I58 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.9191 range=15.8165 sat_frac=0.000019
+  Detector: 2282 detected, 2325 true, recall=0.9794
+  N_rec=0.981 S_rec=0.000 V_rec=0.667
+  Final: SPKI=97.47 NPKI=32.71 TH1=48.90
+  Recall per 5-min chunk: [0.89 1.00 1.00 1.00 1.00 0.99]
+  Drift: early=0.945 late=0.994 delta=+0.049
+  SPKI/TH1 over time: 1min:SPKI=93.6/TH1=51.5 5min:SPKI=77.1/TH1=42.8 10min:SPKI=67.2/TH1=40.6 20min:SPKI=73.2/TH1=40.5
+
+--- I59 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.7110 range=5.7310 sat_frac=0.000006
+  Detector: 2207 detected, 2148 true, recall=0.9711
+  N_rec=0.975 S_rec=0.000 V_rec=0.864
+  Final: SPKI=130.23 NPKI=50.54 TH1=70.46
+  Recall per 5-min chunk: [0.90 1.00 0.99 0.96 0.99 0.99]
+  Drift: early=0.950 late=0.987 delta=+0.037
+  SPKI/TH1 over time: 1min:SPKI=58.2/TH1=27.8 5min:SPKI=58.7/TH1=30.3 10min:SPKI=55.2/TH1=27.2 20min:SPKI=153.5/TH1=83.4
+
+--- I60 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=5.6565 range=21.0502 sat_frac=0.000015
+  Detector: 2473 detected, 2475 true, recall=0.9762
+  N_rec=0.976 S_rec=0.000 V_rec=0.000
+  Final: SPKI=294.55 NPKI=105.32 TH1=152.63
+  Recall per 5-min chunk: [0.88 1.00 1.00 0.99 0.98 0.99]
+  Drift: early=0.937 late=0.988 delta=+0.051
+  SPKI/TH1 over time: 1min:SPKI=147.5/TH1=86.2 5min:SPKI=175.5/TH1=95.5 10min:SPKI=191.7/TH1=102.8 20min:SPKI=150.0/TH1=82.3
+
+--- I61 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.4698 range=2.7229 sat_frac=0.000006
+  Detector: 1433 detected, 1454 true, recall=0.9828
+  N_rec=0.983 S_rec=1.000 V_rec=0.000
+  Final: SPKI=29.21 NPKI=9.19 TH1=14.20
+  Recall per 5-min chunk: [0.90 1.00 1.00 1.00 1.00 1.00]
+  Drift: early=0.949 late=1.000 delta=+0.051
+  SPKI/TH1 over time: 1min:SPKI=26.6/TH1=15.3 5min:SPKI=25.9/TH1=13.7 10min:SPKI=25.2/TH1=13.1 20min:SPKI=32.7/TH1=16.9
+
+--- I62 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.8396 range=4.9844 sat_frac=0.000035
+  Detector: 2192 detected, 2257 true, recall=0.9650
+  N_rec=0.955 S_rec=1.000 V_rec=0.982
+  Final: SPKI=16.15 NPKI=6.60 TH1=8.98
+  Recall per 5-min chunk: [0.88 0.95 0.97 0.99 1.00 0.99]
+  Drift: early=0.915 late=0.992 delta=+0.077
+  SPKI/TH1 over time: 1min:SPKI=31.1/TH1=17.5 5min:SPKI=25.4/TH1=15.0 10min:SPKI=42.6/TH1=23.8 20min:SPKI=13.3/TH1=7.7
+
+--- I63 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.2147 range=2.7412 sat_frac=0.000009
+  Detector: 1788 detected, 1986 true, recall=0.8318
+  N_rec=0.823 S_rec=0.000 V_rec=0.949
+  Final: SPKI=21.62 NPKI=5.61 TH1=9.61
+  Recall per 5-min chunk: [0.82 0.97 0.89 0.72 0.88 0.72]
+  Drift: early=0.894 late=0.797 delta=-0.097
+  SPKI/TH1 over time: 1min:SPKI=7.1/TH1=3.3 5min:SPKI=4.7/TH1=2.4 10min:SPKI=6.0/TH1=3.0 20min:SPKI=10.4/TH1=5.4
+
+--- I64 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.1723 range=4.6498 sat_frac=0.000006
+  Detector: 1839 detected, 1910 true, recall=0.8393
+  N_rec=0.838 S_rec=0.000 V_rec=0.913
+  Final: SPKI=9.59 NPKI=3.09 TH1=4.71
+  Recall per 5-min chunk: [0.86 0.89 0.98 0.51 0.95 0.85]
+  Drift: early=0.872 late=0.900 delta=+0.028
+  SPKI/TH1 over time: 1min:SPKI=9.2/TH1=10.0 5min:SPKI=24.1/TH1=12.7 10min:SPKI=5.6/TH1=2.8 20min:SPKI=12.9/TH1=11.3
+
+--- I65 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.7070 range=9.8266 sat_frac=0.000006
+  Detector: 2543 detected, 2660 true, recall=0.9026
+  N_rec=0.959 S_rec=1.000 V_rec=0.568
+  Final: SPKI=53.87 NPKI=14.65 TH1=24.46
+  Recall per 5-min chunk: [0.80 0.83 0.96 0.97 0.93 0.97]
+  Drift: early=0.812 late=0.951 delta=+0.138
+  SPKI/TH1 over time: 1min:SPKI=44.4/TH1=21.6 5min:SPKI=59.1/TH1=38.9 10min:SPKI=52.0/TH1=27.0 20min:SPKI=47.2/TH1=23.4
+
+--- I66 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.8848 range=18.0963 sat_frac=0.000411
+  Detector: 2291 detected, 2340 true, recall=0.9410
+  N_rec=0.977 S_rec=1.000 V_rec=0.555
+  Final: SPKI=43.67 NPKI=14.23 TH1=21.59
+  Recall per 5-min chunk: [0.80 0.99 0.99 0.99 1.00 0.88]
+  Drift: early=0.893 late=0.942 delta=+0.049
+  SPKI/TH1 over time: 1min:SPKI=42.5/TH1=24.5 5min:SPKI=52.5/TH1=28.7 10min:SPKI=58.5/TH1=29.5 20min:SPKI=78.0/TH1=35.5
+
+--- I67 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.5547 range=12.5104 sat_frac=0.000015
+  Detector: 3023 detected, 2974 true, recall=0.8863
+  N_rec=0.953 S_rec=1.000 V_rec=0.578
+  Final: SPKI=42.66 NPKI=20.71 TH1=26.20
+  Recall per 5-min chunk: [0.83 0.85 0.91 0.93 0.89 0.91]
+  Drift: early=0.839 late=0.903 delta=+0.064
+  SPKI/TH1 over time: 1min:SPKI=48.0/TH1=25.6 5min:SPKI=44.1/TH1=26.7 10min:SPKI=64.3/TH1=35.0 20min:SPKI=51.8/TH1=27.2
+
+--- I68 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.6349 range=6.9787 sat_frac=0.000006
+  Detector: 2600 detected, 2644 true, recall=0.9750
+  N_rec=0.982 S_rec=1.000 V_rec=0.870
+  Final: SPKI=175.58 NPKI=62.12 TH1=90.49
+  Recall per 5-min chunk: [0.90 0.99 0.99 0.99 0.99 0.99]
+  Drift: early=0.944 late=0.990 delta=+0.046
+  SPKI/TH1 over time: 1min:SPKI=230.6/TH1=122.5 5min:SPKI=264.6/TH1=143.2 10min:SPKI=191.2/TH1=90.0 20min:SPKI=232.2/TH1=121.9
+
+--- I69 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.5884 range=4.9050 sat_frac=0.000004
+  Detector: 2034 detected, 2168 true, recall=0.9313
+  N_rec=0.983 S_rec=0.000 V_rec=0.323
+  Final: SPKI=93.30 NPKI=33.03 TH1=48.10
+  Recall per 5-min chunk: [0.85 0.98 0.93 0.94 0.94 0.95]
+  Drift: early=0.912 late=0.949 delta=+0.037
+  SPKI/TH1 over time: 1min:SPKI=61.8/TH1=32.5 5min:SPKI=66.5/TH1=36.0 10min:SPKI=91.6/TH1=49.4 20min:SPKI=93.7/TH1=49.4
+
+--- I70 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.2489 range=5.7379 sat_frac=0.000043
+  Detector: 1559 detected, 1666 true, recall=0.9154
+  N_rec=0.983 S_rec=0.087 V_rec=0.000
+  Final: SPKI=128.49 NPKI=48.92 TH1=68.81
+  Recall per 5-min chunk: [0.74 0.98 0.87 1.00 1.00 0.91]
+  Drift: early=0.858 late=0.954 delta=+0.096
+  SPKI/TH1 over time: 1min:SPKI=95.8/TH1=52.2 5min:SPKI=95.6/TH1=49.3 10min:SPKI=77.9/TH1=41.5 20min:SPKI=95.1/TH1=51.1
+
+--- I71 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.1949 range=1.8911 sat_frac=0.000009
+  Detector: 1637 detected, 1670 true, recall=0.9790
+  N_rec=0.982 S_rec=0.829 V_rec=0.000
+  Final: SPKI=58.73 NPKI=25.59 TH1=33.88
+  Recall per 5-min chunk: [0.89 1.00 1.00 1.00 0.99 0.99]
+  Drift: early=0.944 late=0.993 delta=+0.049
+  SPKI/TH1 over time: 1min:SPKI=72.0/TH1=39.7 5min:SPKI=74.4/TH1=40.9 10min:SPKI=74.6/TH1=41.3 20min:SPKI=55.0/TH1=32.0
+
+--- I72 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.6441 range=12.0160 sat_frac=0.000006
+  Detector: 2208 detected, 2270 true, recall=0.9722
+  N_rec=0.982 S_rec=1.000 V_rec=0.925
+  Final: SPKI=35.34 NPKI=11.08 TH1=17.15
+  Recall per 5-min chunk: [0.90 0.98 0.98 0.99 1.00 0.99]
+  Drift: early=0.940 late=0.994 delta=+0.054
+  SPKI/TH1 over time: 1min:SPKI=111.5/TH1=52.6 5min:SPKI=104.4/TH1=49.6 10min:SPKI=109.3/TH1=51.6 20min:SPKI=28.2/TH1=14.7
+
+--- I73 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=0.8433 range=7.5428 sat_frac=0.000013
+  Detector: 1936 detected, 1992 true, recall=0.9719
+  N_rec=0.976 S_rec=1.000 V_rec=0.843
+  Final: SPKI=42.10 NPKI=12.10 TH1=19.60
+  Recall per 5-min chunk: [0.85 0.99 1.00 0.99 1.00 1.00]
+  Drift: early=0.922 late=0.998 delta=+0.076
+  SPKI/TH1 over time: 1min:SPKI=32.7/TH1=17.5 5min:SPKI=36.8/TH1=19.0 10min:SPKI=39.5/TH1=18.5 20min:SPKI=41.2/TH1=19.3
+
+--- I74 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.2588 range=8.7990 sat_frac=0.000009
+  Detector: 2326 detected, 2357 true, recall=0.9678
+  N_rec=0.967 S_rec=0.000 V_rec=0.974
+  Final: SPKI=240.99 NPKI=101.38 TH1=136.28
+  Recall per 5-min chunk: [0.90 1.00 0.94 0.99 0.99 1.00]
+  Drift: early=0.949 late=0.995 delta=+0.046
+  SPKI/TH1 over time: 1min:SPKI=140.6/TH1=81.9 5min:SPKI=168.9/TH1=82.1 10min:SPKI=154.0/TH1=80.9 20min:SPKI=237.4/TH1=136.8
+
+--- I75 ---
+  fs=257 Hz, sig_len=462600, duration=1800.0s
+  sig_name=['I', 'II', 'III', 'AVR', 'AVL', 'AVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+  n_sig=12, units=['mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV', 'mV']
+  Lead I at index 0
+  Raw ch0: std=1.1679 range=5.8693 sat_frac=0.000028
+  Detector: 2062 detected, 2096 true, recall=0.9823
+  N_rec=0.981 S_rec=0.000 V_rec=0.985
+  Final: SPKI=76.59 NPKI=27.37 TH1=39.68
+  Recall per 5-min chunk: [0.90 1.00 1.00 1.00 1.00 1.00]
+  Drift: early=0.949 late=1.000 delta=+0.051
+  SPKI/TH1 over time: 1min:SPKI=33.3/TH1=16.5 5min:SPKI=32.4/TH1=16.4 10min:SPKI=32.6/TH1=16.5 20min:SPKI=82.7/TH1=42.4
+
+================================================================================
+SECTION 2c: AMPLITUDE/GAIN CORRELATION ANALYSIS
+================================================================================
+
+Correlation (recall vs raw_std):     -0.0338
+Correlation (recall vs raw_range):   -0.0574
+Correlation (recall vs SPKI_final):  +0.2376
+Correlation (recall vs TH1_final):   -0.1697
+
+
+Top 5 (best recall):
+  rec     recall  raw_std     SPKI      TH1   drift
+  I50     0.9870   1.0960    227.4    117.3  +0.038
+  I23     0.9855   0.7394     44.3     23.4  +0.045
+  I40     0.9839   2.1036     66.9     37.2  +0.045
+  I07     0.9837   1.6982    133.6     70.9  +0.047
+  I06     0.9836   1.2478    241.9    125.9  +0.049
+
+Bottom 5 (worst recall):
+  rec     recall  raw_std     SPKI      TH1   drift
+  I31     0.5862   5.0035     43.2     22.2  +0.120
+  I53     0.5402   0.6477    103.8     97.8  +0.103
+  I15     0.5059   0.3847     68.4    758.3  -0.934
+  I43     0.4980   1.9797     28.9     16.7  +0.023
+  I14     0.2519   0.7832      7.6      4.0  +0.750
+
+Drift analysis (recall drops from early to late in record):
+  Records with significant drift (early-late > 0.20): 1
+    I15: drift=-0.934, chunks=[0.89 0.97 0.99 0.11 0.00 0.00]
+
+================================================================================
+DIAGNOSTIC SUMMARY
+================================================================================
+
+Total records: 75
+  Valid (no error): 75
+  Broken (recall < 0.10): 0
+  Partial (0.10 <= recall < 0.50): 2
+  Working (recall >= 0.50): 73
+

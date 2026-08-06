@@ -1,0 +1,10 @@
+{
+  "n_missed_v": 2701,
+  "n_detected_v": 2484,
+  "bucket_under_200ms": 0,
+  "bucket_200_250ms": 0,
+  "bucket_over_250ms": 2701,
+  "pct_under_250ms": 0.0,
+  "gate_decision": "BUG (misses spread across RR intervals - investigate)",
+  "n_records_excluded": 48
+}

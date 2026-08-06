@@ -45,6 +45,7 @@ build/
 out/
 generated/
 *.o
+*.obj
 *.elf
 *.bin
 *.hex

@@ -1,0 +1,6 @@
+{
+  "status": "skipped",
+  "reason": "no synchronized IMU data available",
+  "nlms_mode": "bypass",
+  "note": "Public ECG datasets (INCART, PTB-XL, CPSC) do not include synchronized IMU. NLMS runs in bypass mode. Ablation requires real hardware ECG+IMU captures from Team Ocelleon bring-up, which are not available at this stage."
+}

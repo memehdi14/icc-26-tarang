@@ -1,0 +1,1889 @@
+{
+  "n_records": 75,
+  "n_available": 75,
+  "n_total": 75,
+  "aggregate": {
+    "precision": 0.9385347444417097,
+    "recall": 0.3256437554440959,
+    "f1": 0.4835202921460392,
+    "timing_mean_ms": 5.11946013042186,
+    "timing_std_ms": 24.45428614491409
+  },
+  "per_record": {
+    "I01": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2757,
+      "per_class": {
+        "N": {
+          "total": 2413,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 344,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I02": {
+      "precision": 1.0,
+      "recall": 0.8915482423335827,
+      "f1": 0.9426650850138394,
+      "tp": 2384,
+      "fp": 0,
+      "fn": 290,
+      "per_class": {
+        "N": {
+          "total": 2445,
+          "detected": 2381,
+          "recall": 0.9738241308793456
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 229,
+          "detected": 3,
+          "recall": 0.013100436681222707
+        }
+      }
+    },
+    "I03": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2452,
+      "per_class": {
+        "N": {
+          "total": 2325,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 2,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 125,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I04": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2407,
+      "per_class": {
+        "N": {
+          "total": 2270,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 16,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 121,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I05": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1767,
+      "per_class": {
+        "N": {
+          "total": 1520,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 247,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I06": {
+      "precision": 1.0,
+      "recall": 0.9835539510629764,
+      "f1": 0.9917087967644085,
+      "tp": 2452,
+      "fp": 0,
+      "fn": 41,
+      "per_class": {
+        "N": {
+          "total": 2436,
+          "detected": 2397,
+          "recall": 0.9839901477832512
+        },
+        "S": {
+          "total": 48,
+          "detected": 46,
+          "recall": 0.9583333333333334
+        },
+        "V": {
+          "total": 9,
+          "detected": 9,
+          "recall": 1.0
+        }
+      }
+    },
+    "I07": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2706,
+      "per_class": {
+        "N": {
+          "total": 2640,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 65,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 1,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I08": {
+      "precision": 0.5,
+      "recall": 0.0018779342723004694,
+      "f1": 0.0037418147801683817,
+      "tp": 4,
+      "fp": 4,
+      "fn": 2126,
+      "per_class": {
+        "N": {
+          "total": 1777,
+          "detected": 4,
+          "recall": 0.0022509848058525606
+        },
+        "S": {
+          "total": 2,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 351,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I09": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2989,
+      "per_class": {
+        "N": {
+          "total": 2948,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 41,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I10": {
+      "precision": 1.0,
+      "recall": 0.5988593155893536,
+      "f1": 0.7491082045184304,
+      "tp": 2205,
+      "fp": 0,
+      "fn": 1477,
+      "per_class": {
+        "N": {
+          "total": 3599,
+          "detected": 2182,
+          "recall": 0.6062795220894693
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 83,
+          "detected": 23,
+          "recall": 0.27710843373493976
+        }
+      }
+    },
+    "I11": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2082,
+      "per_class": {
+        "N": {
+          "total": 2078,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 4,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I12": {
+      "precision": 0.6042128603104213,
+      "recall": 0.19415746348414678,
+      "f1": 0.2938797519547048,
+      "tp": 545,
+      "fp": 357,
+      "fn": 2262,
+      "per_class": {
+        "N": {
+          "total": 2800,
+          "detected": 540,
+          "recall": 0.19285714285714287
+        },
+        "S": {
+          "total": 1,
+          "detected": 1,
+          "recall": 1.0
+        },
+        "V": {
+          "total": 6,
+          "detected": 4,
+          "recall": 0.6666666666666666
+        }
+      }
+    },
+    "I13": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2023,
+      "per_class": {
+        "N": {
+          "total": 1793,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 230,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I14": {
+      "precision": 1.0,
+      "recall": 0.0005359056806002144,
+      "f1": 0.0010712372790573112,
+      "tp": 1,
+      "fp": 0,
+      "fn": 1865,
+      "per_class": {
+        "N": {
+          "total": 1802,
+          "detected": 1,
+          "recall": 0.0005549389567147614
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 64,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I15": {
+      "precision": 0.9708454810495627,
+      "recall": 0.5055028462998102,
+      "f1": 0.6648365360618916,
+      "tp": 1332,
+      "fp": 40,
+      "fn": 1303,
+      "per_class": {
+        "N": {
+          "total": 2632,
+          "detected": 1332,
+          "recall": 0.506079027355623
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 3,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I16": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1522,
+      "per_class": {
+        "N": {
+          "total": 1520,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 2,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I17": {
+      "precision": 0.857830037413148,
+      "recall": 0.9593544530783025,
+      "f1": 0.9057562076749435,
+      "tp": 1605,
+      "fp": 266,
+      "fn": 68,
+      "per_class": {
+        "N": {
+          "total": 1646,
+          "detected": 1597,
+          "recall": 0.9702308626974484
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 27,
+          "detected": 8,
+          "recall": 0.2962962962962963
+        }
+      }
+    },
+    "I18": {
+      "precision": 0.7042735042735043,
+      "recall": 0.13606340819022458,
+      "f1": 0.2280653196789372,
+      "tp": 412,
+      "fp": 173,
+      "fn": 2616,
+      "per_class": {
+        "N": {
+          "total": 2662,
+          "detected": 318,
+          "recall": 0.11945905334335086
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 366,
+          "detected": 94,
+          "recall": 0.2568306010928962
+        }
+      }
+    },
+    "I19": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2062,
+      "per_class": {
+        "N": {
+          "total": 1212,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 850,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I20": {
+      "precision": 0.8142458100558659,
+      "recall": 0.21991701244813278,
+      "f1": 0.3463023463023463,
+      "tp": 583,
+      "fp": 133,
+      "fn": 2068,
+      "per_class": {
+        "N": {
+          "total": 2361,
+          "detected": 526,
+          "recall": 0.22278695468022025
+        },
+        "S": {
+          "total": 179,
+          "detected": 30,
+          "recall": 0.16759776536312848
+        },
+        "V": {
+          "total": 111,
+          "detected": 27,
+          "recall": 0.24324324324324326
+        }
+      }
+    },
+    "I21": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 1,
+      "fn": 2184,
+      "per_class": {
+        "N": {
+          "total": 2072,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 104,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 8,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I22": {
+      "precision": 0.925783749200256,
+      "recall": 0.92608,
+      "f1": 0.9259318509038555,
+      "tp": 2894,
+      "fp": 232,
+      "fn": 231,
+      "per_class": {
+        "N": {
+          "total": 2816,
+          "detected": 2663,
+          "recall": 0.9456676136363636
+        },
+        "S": {
+          "total": 124,
+          "detected": 115,
+          "recall": 0.9274193548387096
+        },
+        "V": {
+          "total": 185,
+          "detected": 116,
+          "recall": 0.6270270270270271
+        }
+      }
+    },
+    "I23": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2205,
+      "per_class": {
+        "N": {
+          "total": 2192,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 13,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I24": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2571,
+      "per_class": {
+        "N": {
+          "total": 2565,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 6,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I25": {
+      "precision": 0.9260077305356157,
+      "recall": 0.9795560747663551,
+      "f1": 0.9520295202952029,
+      "tp": 1677,
+      "fp": 134,
+      "fn": 35,
+      "per_class": {
+        "N": {
+          "total": 1705,
+          "detected": 1670,
+          "recall": 0.9794721407624634
+        },
+        "S": {
+          "total": 2,
+          "detected": 2,
+          "recall": 1.0
+        },
+        "V": {
+          "total": 5,
+          "detected": 5,
+          "recall": 1.0
+        }
+      }
+    },
+    "I26": {
+      "precision": 0.9234234234234234,
+      "recall": 0.950960901259112,
+      "f1": 0.9369898792033954,
+      "tp": 1435,
+      "fp": 119,
+      "fn": 74,
+      "per_class": {
+        "N": {
+          "total": 1498,
+          "detected": 1425,
+          "recall": 0.9512683578104139
+        },
+        "S": {
+          "total": 7,
+          "detected": 6,
+          "recall": 0.8571428571428571
+        },
+        "V": {
+          "total": 4,
+          "detected": 4,
+          "recall": 1.0
+        }
+      }
+    },
+    "I27": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2605,
+      "per_class": {
+        "N": {
+          "total": 1885,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 720,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I28": {
+      "precision": 0.4,
+      "recall": 0.0023296447291788003,
+      "f1": 0.004632310364794442,
+      "tp": 4,
+      "fp": 6,
+      "fn": 1713,
+      "per_class": {
+        "N": {
+          "total": 1713,
+          "detected": 4,
+          "recall": 0.002335084646818447
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 4,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I29": {
+      "precision": 0.6134577603143418,
+      "recall": 0.4767175572519084,
+      "f1": 0.5365120274914089,
+      "tp": 1249,
+      "fp": 787,
+      "fn": 1371,
+      "per_class": {
+        "N": {
+          "total": 1837,
+          "detected": 653,
+          "recall": 0.35547087642896025
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 783,
+          "detected": 596,
+          "recall": 0.7611749680715197
+        }
+      }
+    },
+    "I30": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2462,
+      "per_class": {
+        "N": {
+          "total": 1706,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 756,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I31": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 3209,
+      "per_class": {
+        "N": {
+          "total": 1844,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 1365,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I32": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 1,
+      "fn": 1619,
+      "per_class": {
+        "N": {
+          "total": 1562,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 57,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I33": {
+      "precision": 0.9988770353733858,
+      "recall": 0.9684267827980403,
+      "f1": 0.9834162520729686,
+      "tp": 1779,
+      "fp": 2,
+      "fn": 58,
+      "per_class": {
+        "N": {
+          "total": 1245,
+          "detected": 1205,
+          "recall": 0.9678714859437751
+        },
+        "S": {
+          "total": 591,
+          "detected": 573,
+          "recall": 0.9695431472081218
+        },
+        "V": {
+          "total": 1,
+          "detected": 1,
+          "recall": 1.0
+        }
+      }
+    },
+    "I34": {
+      "precision": 1.0,
+      "recall": 0.6575063613231552,
+      "f1": 0.7933681301811484,
+      "tp": 1292,
+      "fp": 0,
+      "fn": 673,
+      "per_class": {
+        "N": {
+          "total": 1429,
+          "detected": 860,
+          "recall": 0.6018194541637508
+        },
+        "S": {
+          "total": 536,
+          "detected": 432,
+          "recall": 0.8059701492537313
+        },
+        "V": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I35": {
+      "precision": 0.9731663685152058,
+      "recall": 0.5948605795516676,
+      "f1": 0.7383780115371564,
+      "tp": 2176,
+      "fp": 60,
+      "fn": 1482,
+      "per_class": {
+        "N": {
+          "total": 3200,
+          "detected": 1897,
+          "recall": 0.5928125
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 458,
+          "detected": 279,
+          "recall": 0.6091703056768559
+        }
+      }
+    },
+    "I36": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 3899,
+      "per_class": {
+        "N": {
+          "total": 3449,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 450,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I37": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2461,
+      "per_class": {
+        "N": {
+          "total": 2009,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 452,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I38": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 1,
+      "fn": 2698,
+      "per_class": {
+        "N": {
+          "total": 2153,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 545,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I39": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1775,
+      "per_class": {
+        "N": {
+          "total": 1462,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 313,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I40": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2666,
+      "per_class": {
+        "N": {
+          "total": 2568,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 6,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 92,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I41": {
+      "precision": 0.9924892703862661,
+      "recall": 0.5674846625766872,
+      "f1": 0.7220921155347385,
+      "tp": 925,
+      "fp": 7,
+      "fn": 705,
+      "per_class": {
+        "N": {
+          "total": 1624,
+          "detected": 923,
+          "recall": 0.5683497536945813
+        },
+        "S": {
+          "total": 5,
+          "detected": 1,
+          "recall": 0.2
+        },
+        "V": {
+          "total": 1,
+          "detected": 1,
+          "recall": 1.0
+        }
+      }
+    },
+    "I42": {
+      "precision": 0.9944620253164557,
+      "recall": 0.4054838709677419,
+      "f1": 0.576076993583868,
+      "tp": 1257,
+      "fp": 7,
+      "fn": 1843,
+      "per_class": {
+        "N": {
+          "total": 1546,
+          "detected": 1125,
+          "recall": 0.7276843467011643
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 1554,
+          "detected": 132,
+          "recall": 0.08494208494208494
+        }
+      }
+    },
+    "I43": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2207,
+      "per_class": {
+        "N": {
+          "total": 1087,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 1120,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I44": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2495,
+      "per_class": {
+        "N": {
+          "total": 1803,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 8,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 684,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I45": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1928,
+      "per_class": {
+        "N": {
+          "total": 1437,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 491,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I46": {
+      "precision": 0.9280730005367687,
+      "recall": 0.6512241054613936,
+      "f1": 0.7653829127932715,
+      "tp": 1729,
+      "fp": 134,
+      "fn": 926,
+      "per_class": {
+        "N": {
+          "total": 2232,
+          "detected": 1457,
+          "recall": 0.6527777777777778
+        },
+        "S": {
+          "total": 1,
+          "detected": 1,
+          "recall": 1.0
+        },
+        "V": {
+          "total": 422,
+          "detected": 271,
+          "recall": 0.6421800947867299
+        }
+      }
+    },
+    "I47": {
+      "precision": 0.9822732012513035,
+      "recall": 0.9646697388632872,
+      "f1": 0.97339188840093,
+      "tp": 1884,
+      "fp": 34,
+      "fn": 69,
+      "per_class": {
+        "N": {
+          "total": 1859,
+          "detected": 1821,
+          "recall": 0.9795589026358257
+        },
+        "S": {
+          "total": 1,
+          "detected": 1,
+          "recall": 1.0
+        },
+        "V": {
+          "total": 93,
+          "detected": 62,
+          "recall": 0.6666666666666666
+        }
+      }
+    },
+    "I48": {
+      "precision": 0.9811563169164882,
+      "recall": 0.9724108658743633,
+      "f1": 0.9767640162012364,
+      "tp": 2291,
+      "fp": 44,
+      "fn": 65,
+      "per_class": {
+        "N": {
+          "total": 2119,
+          "detected": 2082,
+          "recall": 0.9825389334591789
+        },
+        "S": {
+          "total": 2,
+          "detected": 2,
+          "recall": 1.0
+        },
+        "V": {
+          "total": 235,
+          "detected": 207,
+          "recall": 0.8808510638297873
+        }
+      }
+    },
+    "I49": {
+      "precision": 1.0,
+      "recall": 0.9771774569166278,
+      "f1": 0.988457008244994,
+      "tp": 2098,
+      "fp": 0,
+      "fn": 49,
+      "per_class": {
+        "N": {
+          "total": 2120,
+          "detected": 2085,
+          "recall": 0.9834905660377359
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 27,
+          "detected": 13,
+          "recall": 0.48148148148148145
+        }
+      }
+    },
+    "I50": {
+      "precision": 0.9989871708305199,
+      "recall": 0.9869913275517012,
+      "f1": 0.9929530201342281,
+      "tp": 2959,
+      "fp": 3,
+      "fn": 39,
+      "per_class": {
+        "N": {
+          "total": 2994,
+          "detected": 2955,
+          "recall": 0.9869739478957916
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 4,
+          "detected": 4,
+          "recall": 1.0
+        }
+      }
+    },
+    "I51": {
+      "precision": 0.9284678588690188,
+      "recall": 0.6920028818443804,
+      "f1": 0.7929824561403509,
+      "tp": 1921,
+      "fp": 148,
+      "fn": 855,
+      "per_class": {
+        "N": {
+          "total": 1970,
+          "detected": 1866,
+          "recall": 0.9472081218274112
+        },
+        "S": {
+          "total": 3,
+          "detected": 2,
+          "recall": 0.6666666666666666
+        },
+        "V": {
+          "total": 803,
+          "detected": 53,
+          "recall": 0.0660024906600249
+        }
+      }
+    },
+    "I52": {
+      "precision": 1.0,
+      "recall": 0.9061247853463079,
+      "f1": 0.9507507507507508,
+      "tp": 1583,
+      "fp": 0,
+      "fn": 164,
+      "per_class": {
+        "N": {
+          "total": 1610,
+          "detected": 1583,
+          "recall": 0.9832298136645963
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 137,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I53": {
+      "precision": 0.7535515750463249,
+      "recall": 0.5393457117595049,
+      "f1": 0.6287039422829167,
+      "tp": 1220,
+      "fp": 399,
+      "fn": 1042,
+      "per_class": {
+        "N": {
+          "total": 1151,
+          "detected": 1069,
+          "recall": 0.9287576020851434
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 1111,
+          "detected": 151,
+          "recall": 0.13591359135913592
+        }
+      }
+    },
+    "I54": {
+      "precision": 0.8322545846817692,
+      "recall": 0.6529834955564959,
+      "f1": 0.7317998577187573,
+      "tp": 1543,
+      "fp": 311,
+      "fn": 820,
+      "per_class": {
+        "N": {
+          "total": 2340,
+          "detected": 1526,
+          "recall": 0.6521367521367522
+        },
+        "S": {
+          "total": 1,
+          "detected": 1,
+          "recall": 1.0
+        },
+        "V": {
+          "total": 22,
+          "detected": 16,
+          "recall": 0.7272727272727273
+        }
+      }
+    },
+    "I55": {
+      "precision": 0.9869463869463869,
+      "recall": 0.9773776546629732,
+      "f1": 0.9821387149153329,
+      "tp": 2117,
+      "fp": 28,
+      "fn": 49,
+      "per_class": {
+        "N": {
+          "total": 2148,
+          "detected": 2106,
+          "recall": 0.9804469273743017
+        },
+        "S": {
+          "total": 1,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 17,
+          "detected": 11,
+          "recall": 0.6470588235294118
+        }
+      }
+    },
+    "I56": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1705,
+      "per_class": {
+        "N": {
+          "total": 1672,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 26,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 7,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I57": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 4,
+      "fn": 2866,
+      "per_class": {
+        "N": {
+          "total": 2842,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 3,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 21,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I58": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2325,
+      "per_class": {
+        "N": {
+          "total": 2313,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 12,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I59": {
+      "precision": 0.9443438914027149,
+      "recall": 0.9716014897579144,
+      "f1": 0.9577787976135842,
+      "tp": 2087,
+      "fp": 123,
+      "fn": 61,
+      "per_class": {
+        "N": {
+          "total": 2067,
+          "detected": 2017,
+          "recall": 0.9758103531688437
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 81,
+          "detected": 70,
+          "recall": 0.8641975308641975
+        }
+      }
+    },
+    "I60": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2475,
+      "per_class": {
+        "N": {
+          "total": 2475,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I61": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1454,
+      "per_class": {
+        "N": {
+          "total": 1453,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 1,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I62": {
+      "precision": 0.9935897435897436,
+      "recall": 0.9614532565352237,
+      "f1": 0.9772573744652105,
+      "tp": 2170,
+      "fp": 14,
+      "fn": 87,
+      "per_class": {
+        "N": {
+          "total": 1453,
+          "detected": 1380,
+          "recall": 0.9497591190640055
+        },
+        "S": {
+          "total": 9,
+          "detected": 9,
+          "recall": 1.0
+        },
+        "V": {
+          "total": 795,
+          "detected": 781,
+          "recall": 0.9823899371069182
+        }
+      }
+    },
+    "I63": {
+      "precision": 0.9279279279279279,
+      "recall": 0.051863041289023165,
+      "f1": 0.09823557463042441,
+      "tp": 103,
+      "fp": 8,
+      "fn": 1883,
+      "per_class": {
+        "N": {
+          "total": 1847,
+          "detected": 4,
+          "recall": 0.002165674066053059
+        },
+        "S": {
+          "total": 1,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 138,
+          "detected": 99,
+          "recall": 0.717391304347826
+        }
+      }
+    },
+    "I64": {
+      "precision": 0.8705463182897862,
+      "recall": 0.3837696335078534,
+      "f1": 0.532703488372093,
+      "tp": 733,
+      "fp": 109,
+      "fn": 1177,
+      "per_class": {
+        "N": {
+          "total": 1887,
+          "detected": 715,
+          "recall": 0.3789083200847907
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 23,
+          "detected": 18,
+          "recall": 0.782608695652174
+        }
+      }
+    },
+    "I65": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2660,
+      "per_class": {
+        "N": {
+          "total": 2273,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 5,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 382,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I66": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2340,
+      "per_class": {
+        "N": {
+          "total": 2139,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 1,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 200,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I67": {
+      "precision": 0.7777777777777778,
+      "recall": 0.0023537323470073975,
+      "f1": 0.004693261816962789,
+      "tp": 7,
+      "fp": 2,
+      "fn": 2967,
+      "per_class": {
+        "N": {
+          "total": 2438,
+          "detected": 5,
+          "recall": 0.002050861361771944
+        },
+        "S": {
+          "total": 5,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 531,
+          "detected": 2,
+          "recall": 0.003766478342749529
+        }
+      }
+    },
+    "I68": {
+      "precision": 0.9915384615384616,
+      "recall": 0.9750378214826021,
+      "f1": 0.9832189168573607,
+      "tp": 2578,
+      "fp": 22,
+      "fn": 66,
+      "per_class": {
+        "N": {
+          "total": 2481,
+          "detected": 2436,
+          "recall": 0.9818621523579202
+        },
+        "S": {
+          "total": 2,
+          "detected": 2,
+          "recall": 1.0
+        },
+        "V": {
+          "total": 161,
+          "detected": 140,
+          "recall": 0.8695652173913043
+        }
+      }
+    },
+    "I69": {
+      "precision": 1.0,
+      "recall": 0.3076568265682657,
+      "f1": 0.4705467372134039,
+      "tp": 667,
+      "fp": 0,
+      "fn": 1501,
+      "per_class": {
+        "N": {
+          "total": 2000,
+          "detected": 649,
+          "recall": 0.3245
+        },
+        "S": {
+          "total": 1,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 167,
+          "detected": 18,
+          "recall": 0.10778443113772455
+        }
+      }
+    },
+    "I70": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1666,
+      "per_class": {
+        "N": {
+          "total": 1540,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 126,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I71": {
+      "precision": 0.9987782529016493,
+      "recall": 0.9790419161676647,
+      "f1": 0.9888116117326883,
+      "tp": 1635,
+      "fp": 2,
+      "fn": 35,
+      "per_class": {
+        "N": {
+          "total": 1635,
+          "detected": 1606,
+          "recall": 0.982262996941896
+        },
+        "S": {
+          "total": 35,
+          "detected": 29,
+          "recall": 0.8285714285714286
+        },
+        "V": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I72": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2270,
+      "per_class": {
+        "N": {
+          "total": 1876,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 8,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 386,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I73": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 1992,
+      "per_class": {
+        "N": {
+          "total": 1890,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 32,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 70,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    },
+    "I74": {
+      "precision": 0.9817001180637545,
+      "recall": 0.7055579126007637,
+      "f1": 0.8210318439891385,
+      "tp": 1663,
+      "fp": 31,
+      "fn": 694,
+      "per_class": {
+        "N": {
+          "total": 2083,
+          "detected": 1407,
+          "recall": 0.6754680748919827
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 274,
+          "detected": 256,
+          "recall": 0.9343065693430657
+        }
+      }
+    },
+    "I75": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "tp": 0,
+      "fp": 0,
+      "fn": 2096,
+      "per_class": {
+        "N": {
+          "total": 1483,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "S": {
+          "total": 0,
+          "detected": 0,
+          "recall": 0.0
+        },
+        "V": {
+          "total": 613,
+          "detected": 0,
+          "recall": 0.0
+        }
+      }
+    }
+  }
+}

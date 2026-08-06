@@ -1,0 +1,29 @@
+{
+  "no_future_leakage": {
+    "max_diff": 0.0,
+    "pass": true
+  },
+  "no_frame_reset": {
+    "max_diff": 0.0,
+    "pass": true
+  },
+  "finite_at_startup": {
+    "first_output": 0.0,
+    "pass": true
+  },
+  "valid_count_ramp": {
+    "first_10": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "pass": true
+  }
+}

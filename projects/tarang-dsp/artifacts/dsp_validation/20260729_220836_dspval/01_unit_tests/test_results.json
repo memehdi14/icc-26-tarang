@@ -1,0 +1,74 @@
+{
+  "250 Hz identity resampling": {
+    "status": "PASS",
+    "details": "len_in=500, len_out=500, max_diff=0.00e+00"
+  },
+  "annotation index rescaling (257\u2192250 Hz)": {
+    "status": "PASS",
+    "details": "first 5: [ 97 195 292 389 486] (expected [ 97 195 292 389 486])"
+  },
+  "filter impulse response (bounded + decaying)": {
+    "status": "PASS",
+    "details": "peak=3.4560e-01, final_100_max=7.9042e-07, ratio=2.2871e-06"
+  },
+  "filter step response (converges to steady state)": {
+    "status": "PASS",
+    "details": "steady_state_mean=7.167411e-05 (bandpass removes DC, should be ~0)"
+  },
+  "one-shot vs 1-sample-chunk invariance": {
+    "status": "FAIL",
+    "details": "one_shot=9, 1-sample=14"
+  },
+  "one-shot vs random-chunk invariance": {
+    "status": "FAIL",
+    "details": "one_shot=9, random=14"
+  },
+  "one-shot vs 256-sample-chunk invariance": {
+    "status": "FAIL",
+    "details": "one_shot=9, 256-chunk=14"
+  },
+  "causality (perturbing future doesn't change past)": {
+    "status": "FAIL",
+    "details": "safe_beats_a=1, safe_beats_b=0"
+  },
+  "normalization startup (no NaN/Inf)": {
+    "status": "PASS",
+    "details": "violations=0 out of 8000 samples"
+  },
+  "no NaN/Inf in full pipeline output": {
+    "status": "PASS",
+    "details": "beats_with_NaN=0 out of 59"
+  },
+  "detector on synthetic QRS (finds >80%)": {
+    "status": "PASS",
+    "details": "matched=10/10 expected peaks"
+  },
+  "refractory duplicate-rejection": {
+    "status": "PASS",
+    "details": "duplicates=0 (within 50-sample refractory)"
+  },
+  "RR feature arithmetic (hand-computed)": {
+    "status": "PASS",
+    "details": "computed=[4.00000000e+02 4.00000000e+02 1.13686838e-13 1.50000000e+02], expected=[400. 400.   0. 150.]"
+  },
+  "130-sample window indexing (R-peak at index 65)": {
+    "status": "PASS",
+    "details": "waveform_len=130 (expected 130)"
+  },
+  "annotation one-to-one matching (no double-matching)": {
+    "status": "PASS",
+    "details": "tp=3, fp=1, fn=1"
+  },
+  "NLMS bypass mode (output equals band-pass-only)": {
+    "status": "PASS",
+    "details": "nlms_mode=bypass (bypass = no IMU, no NLMS processing)"
+  },
+  "NLMS bypass mode (nlms_active=False for all beats)": {
+    "status": "PASS",
+    "details": "all_nlms_inactive=True"
+  },
+  "NLMS bounded-weight (bypass mode = no weights allocated)": {
+    "status": "PASS",
+    "details": "weights=None (None in bypass)"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "v_recall_baseline": 0.17358716834057863,
+  "dsp_config": "DSPConfig(target_fs=250, morphology_low_hz=0.5, morphology_high_hz=40.0, morphology_order=4, notch_enabled=False, notch_hz=50.0, notch_r=0.95, normalization_window_sec=30.0, normalization_epsilon=1e-08, detector_low_hz=5.0, detector_high_hz=15.0, detector_order=2, detector_mwi_sec=0.15, refractory_sec=0.2, recenter_ms=60.0, pre_r=65, post_r=65, nlms_mode='bypass', nlms_order=16, nlms_mu=0.01, nlms_delta=1e-06, searchback_gamma=1.66, twave_alpha=0.5)",
+  "n_records": 75,
+  "run_id": "20260729_221332_dspval"
+}
