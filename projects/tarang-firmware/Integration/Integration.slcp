@@ -98,7 +98,7 @@ template_contribution:
   value: 134217728
 - name: memory_flash_size
   priority: 0
-  value: 3268608
+  value: 3276800
 ui_hints:
   highlight:
   - path: readme.md
