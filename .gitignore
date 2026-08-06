@@ -29,16 +29,17 @@ venv/
 dataset/
 
 # Silicon Labs SDK (installed separately, not committed)
-projects/tarang-firmware/simplicity_sdk_*/
-projects/tarang-firmware/.projectchecksums
-projects/tarang-firmware/.projectlinkstore
-projects/tarang-firmware/vscode.conf
+**/simplicity_sdk_*/
+**/.projectchecksums
+**/.projectlinkstore
+**/vscode.conf
 
 # Simplicity Studio Generated Configs and Output
-projects/tarang-firmware/autogen/
-projects/tarang-firmware/cmake_gcc/
-projects/tarang-firmware/config/
-projects/tarang-firmware/Tarang_Core_Pipeline.pintool
+**/autogen/
+**/cmake_gcc/
+**/config/
+**/*.pintool
+
 
 # Build and Target Output
 build/

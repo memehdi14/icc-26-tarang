@@ -32,7 +32,7 @@ jobs:
             --inconclusive \
             --suppress=missingIncludeSystem \
             --suppress=unknownMacro \
-            "projects/tarang-firmware/Initial Firmware/"
+            "projects/tarang-firmware/"
 
   # ─────────────────────────────────────────────────────────────────────────────
   firmware-build:
@@ -103,13 +103,21 @@ jobs:
 
       - name: Generate Project (slc generate)
         run: |
-          slc generate -p "projects/tarang-firmware/Initial Firmware/Tarang_Core_Pipeline.slcp" \
-            -d "projects/tarang-firmware/Initial Firmware/build" \
-            --slconf tools/autogen/pkg.slconf
+          SLCP_PATH=$(find projects/tarang-firmware -name "*.slcp" | head -n 1)
+          if [ -z "$SLCP_PATH" ]; then
+            echo "Error: No .slcp project file found in projects/tarang-firmware/"
+            exit 1
+          fi
+          BUILD_DIR="$(dirname "$SLCP_PATH")/build"
+          echo "Found firmware project: $SLCP_PATH"
+          echo "Output build directory: $BUILD_DIR"
+          
+          slc generate -p "$SLCP_PATH" -d "$BUILD_DIR" --slconf tools/autogen/pkg.slconf
+          echo "TARGET_BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
 
       - name: Build Firmware
         run: |
-          cd "projects/tarang-firmware/Initial Firmware/build"
+          cd "$TARGET_BUILD_DIR"
           
           if [ -d "cmake_gcc" ] && [ -f "cmake_gcc/CMakeLists.txt" ]; then
             echo "CMake project detected"
@@ -120,30 +128,29 @@ jobs:
             echo "Makefile project detected"
             make -j$(nproc) 2>&1 | tee build.log
           else
-            echo "Error: Neither CMakeLists.txt nor Makefile found!"
+            echo "Error: Neither CMakeLists.txt nor Makefile found in $TARGET_BUILD_DIR!"
             exit 1
           fi
 
       - name: Debug Output Artifacts
         run: |
-          echo "Finding generated firmware files:"
-          find "projects/tarang-firmware/Initial Firmware/build" -name "*.elf"
-          find "projects/tarang-firmware/Initial Firmware/build" -name "*.hex"
-          find "projects/tarang-firmware/Initial Firmware/build" -name "*.bin"
-          find "projects/tarang-firmware/Initial Firmware/build" -name "*.map"
+          echo "Finding generated firmware files in $TARGET_BUILD_DIR:"
+          find "$TARGET_BUILD_DIR" -name "*.elf"
+          find "$TARGET_BUILD_DIR" -name "*.hex"
+          find "$TARGET_BUILD_DIR" -name "*.bin"
+          find "$TARGET_BUILD_DIR" -name "*.map"
 
       - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: firmware-artifacts
-          if-no-files-found: warn
           path: |
-            projects/tarang-firmware/Initial Firmware/build/build.log
-            projects/tarang-firmware/Initial Firmware/build/**/*.elf
-            projects/tarang-firmware/Initial Firmware/build/**/*.hex
-            projects/tarang-firmware/Initial Firmware/build/**/*.bin
-            projects/tarang-firmware/Initial Firmware/build/**/*.map
+            projects/tarang-firmware/**/build/build.log
+            projects/tarang-firmware/**/build/**/*.elf
+            projects/tarang-firmware/**/build/**/*.hex
+            projects/tarang-firmware/**/build/**/*.bin
+            projects/tarang-firmware/**/build/**/*.map
           retention-days: 10
 
 
