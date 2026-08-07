@@ -173,8 +173,9 @@ static bool max30102_configure_sensor(void)
     ok &= max30102_write_reg(MAX30102_MODE_CONFIG, MAX30102_MODE_SPO2);
     ok &= max30102_write_reg(MAX30102_SPO2_CONFIG, 0x27u);
 
-    ok &= max30102_write_reg(MAX30102_LED1_PA,         0x24u);
-    ok &= max30102_write_reg(MAX30102_LED2_PA,         0x24u);
+    /* INCREASED LED CURRENT: 0x7F (~25mA) instead of 0x24 (7.2mA) to fix ZERO readings */
+    ok &= max30102_write_reg(MAX30102_LED1_PA,         0x7Fu);
+    ok &= max30102_write_reg(MAX30102_LED2_PA,         0x7Fu);
     ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL1, 0x21u);
     ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL2, 0x00u);
 
@@ -400,8 +401,16 @@ void tarang_ppg_process(void)
         return;
     }
 
-    while ((drained < MAX30102_MAX_DRAIN_PER_SERVICE)
-           && (status_has_data || (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u))) {
+    /* FIX: Calculate available samples using WR/RD pointers instead of GPIO pin */
+    uint8_t wr_ptr = 0, rd_ptr = 0;
+    max30102_read_reg(MAX30102_FIFO_WR_PTR, &wr_ptr);
+    max30102_read_reg(MAX30102_FIFO_RD_PTR, &rd_ptr);
+    uint8_t available = (wr_ptr - rd_ptr) & 0x1F;
+    if (available == 0 && status_has_data) {
+        available = 1; /* Fallback: if interrupt fired, assume at least 1 */
+    }
+
+    while ((drained < MAX30102_MAX_DRAIN_PER_SERVICE) && (drained < available)) {
         bool ok4 = max30102_read_fifo_one(fifo_data);
         if (!ok4) {
             read_failures++;
