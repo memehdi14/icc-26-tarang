@@ -103,7 +103,7 @@ jobs:
 
       - name: Generate Project (slc generate)
         run: |
-          SLCP_PATH=$(find projects/tarang-firmware -name "*.slcp" | head -n 1)
+          SLCP_PATH="projects/tarang-firmware/Integration/Integration.slcp"
           if [ -z "$SLCP_PATH" ]; then
             echo "Error: No .slcp project file found in projects/tarang-firmware/"
             exit 1

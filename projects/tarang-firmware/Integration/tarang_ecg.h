@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-#define ECG_HALF_SAMPLES     512
+#define ECG_HALF_SAMPLES     64
 #define ECG_BUFFER_SIZE      (ECG_HALF_SAMPLES * 2)
 
 /***************************************************************************//**

@@ -1,8 +1,8 @@
 # Global default owners for Team Ocelleon
-* @IoT-Challenge-2026/team-ocelleon @memehdi14 @PalPatel06 @kedarnayak07_ @kartik-gautam-eie
+* @memehdi14
 
 # Sub-system code owners
-/projects/tarang-firmware/ @IoT-Challenge-2026/team-ocelleon @memehdi14 @PalPatel06 @kedarnayak07_ @kartik-gautam-eie
-/projects/tarang-ml/       @IoT-Challenge-2026/team-ocelleon @memehdi14 @PalPatel06 @kedarnayak07_ @kartik-gautam-eie
-/projects/tarang-dsp/      @IoT-Challenge-2026/team-ocelleon @memehdi14 @PalPatel06 @kedarnayak07_ @kartik-gautam-eie
-/docs/architecture/        @IoT-Challenge-2026/team-ocelleon @memehdi14 @PalPatel06 @kedarnayak07_ @kartik-gautam-eie
+/projects/tarang-firmware/ @memehdi14
+/projects/tarang-ml/       @memehdi14
+/projects/tarang-dsp/      @memehdi14
+/docs/architecture/        @memehdi14

@@ -293,15 +293,38 @@ static void mpu6050_gpio_callback(uint8_t pin)
  ******************************************************************************/
 void tarang_imu_init(void)
 {
+  printf("[IMU] Starting MPU6050 initialization...\r\n");
+  
   uint8_t whoami = 0;
+  bool read_ok = false;
 
-  if (MPU6050_ReadRegister(MPU6050_WHO_AM_I, &whoami))
+  /* Retry WHO_AM_I read a few times */
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    printf("[IMU] WHO_AM_I attempt %d/3...\r\n", attempt);
+    
+    if (MPU6050_ReadRegister(MPU6050_WHO_AM_I, &whoami)) {
+      read_ok = true;
+      printf("[IMU] WHO_AM_I read OK: 0x%02X\r\n", whoami);
+      break;
+    }
+    
+    printf("[IMU] WHO_AM_I read failed\r\n");
+    if (attempt < 3) {
+      printf("[IMU] Retrying after delay...\r\n");
+      for (volatile uint32_t i = 0; i < 100 * 4000u; i++) { }  // 100ms delay
+    }
+  }
+
+  if (!read_ok) {
+    printf("[IMU] Failed to read WHO_AM_I after 3 attempts\r\n");
+    return;
+  }
+
+  mpu_whoami = whoami;
+
+  if ((whoami == 0x68) || (whoami == 0x70))
   {
-    mpu_whoami = whoami;
-
-    if ((whoami == 0x68) || (whoami == 0x70))
-    {
-      mpu_found = true;
+    mpu_found = true;
 
       /* Wake MPU6050 */
       if (MPU6050_WriteRegister(MPU6050_PWR_MGMT_1, 0x00))
@@ -419,16 +442,16 @@ void tarang_imu_init(void)
                         false,  /* falling edge */
                         true);  /* enable */
 
+      /* Prime imu_data_ready if INT pin is already active high */
+      if (GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN) != 0u) {
+          imu_data_ready = true;
+      }
+
       printf("[IMU] MPU6050 init complete. WHO_AM_I=0x%02X\r\n", mpu_whoami);
-    }
-    else
-    {
-      printf("[IMU] WHO_AM_I mismatch: got 0x%02X\r\n", whoami);
-    }
   }
   else
   {
-    printf("[IMU] I2C read WHO_AM_I failed\r\n");
+    printf("[IMU] WHO_AM_I mismatch: got 0x%02X (expected 0x68 or 0x70)\r\n", whoami);
   }
 }
 

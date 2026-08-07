@@ -35,6 +35,17 @@
 
 #include "em_cmu.h"
 #include "gpiointerrupt.h"
+#include "sl_i2cspm_instances.h"
+
+#if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
+#include "sl_power_manager.h"
+#endif
+
+/* Simple delay for sensor power-up stabilization */
+static void delay_ms(uint32_t ms)
+{
+  for (volatile uint32_t i = 0; i < ms * 4000u; i++) { }
+}
 
 /*******************************************************************************
  * TEST MODE — Change these to select which sensors are active.
@@ -50,6 +61,15 @@
  ******************************************************************************/
 void app_init(void)
 {
+  /*
+   * CRITICAL: Prevent the power manager from entering EM2/EM3.
+   * EM2 shuts down I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
+   * EM1 keeps all peripherals alive while still saving power.
+   */
+#if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
+  sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
+#endif
+
   printf("\r\n");
   printf("==========================================\r\n");
   printf("  TARANG INTEGRATION v1.0\r\n");
@@ -66,6 +86,17 @@ void app_init(void)
    */
   CMU_ClockEnable(cmuClock_GPIO, true);
   GPIOINT_Init();
+
+  /*
+   * CRITICAL: Give I2C sensors time to power up after flash/reset.
+   * MAX30102 and MPU6050 both need ~50-100ms for stable power-on.
+   * Re-initialize I2CSPM to ensure clean bus state.
+   */
+  printf("[INIT] Waiting for sensor power-up (100ms)...\r\n");
+  delay_ms(100);
+  printf("[INIT] Re-initializing I2C bus...\r\n");
+  sl_i2cspm_init_instances();
+  delay_ms(50);
 
 #if TARANG_ENABLE_ECG
   printf("[INIT] ECG: Starting LETIMER+PRS+IADC+DMADRV...\r\n");
