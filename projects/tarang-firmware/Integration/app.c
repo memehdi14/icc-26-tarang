@@ -41,9 +41,9 @@
  * For individual testing, enable only one at a time.
  * For full integration, enable all three.
  ******************************************************************************/
-#define TARANG_ENABLE_ECG   1
-#define TARANG_ENABLE_PPG   0
-#define TARANG_ENABLE_IMU   0
+#define TARANG_ENABLE_ECG   0
+#define TARANG_ENABLE_PPG   1
+#define TARANG_ENABLE_IMU   1
 
 /***************************************************************************//**
  * Initialize application.
@@ -159,7 +159,7 @@ void app_process_action(void)
 
     /* Show most recent raw ADC from each half-buffer slot 0 */
     uint32_t raw0 = (buf != NULL) ? (buf[0] & 0x00FFFFFFu) : 0;
-    uint32_t raw1 = (buf != NULL) ? (buf[512] & 0x00FFFFFFu) : 0;
+    uint32_t raw1 = (buf != NULL) ? (buf[ECG_HALF_SAMPLES] & 0x00FFFFFFu) : 0;
 
     printf("  [ECG] halves=%lu  total_samples=%lu  overruns=%lu\r\n",
            (unsigned long)halves,
