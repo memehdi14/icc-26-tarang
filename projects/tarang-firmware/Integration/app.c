@@ -53,7 +53,7 @@ static void delay_ms(uint32_t ms)
  * For full integration, enable all three.
  ******************************************************************************/
 #define TARANG_ENABLE_ECG   0
-#define TARANG_ENABLE_PPG   1
+#define TARANG_ENABLE_PPG   0
 #define TARANG_ENABLE_IMU   1
 
 /***************************************************************************//**

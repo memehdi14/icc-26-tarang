@@ -336,8 +336,3 @@ ui_hints:
   highlight:
   - path: readme.md
     focus: true
-sdk_extension:
-- vendor: silabs
-  id: wiseconnect3_sdk
-  version: 4.1.1
-
