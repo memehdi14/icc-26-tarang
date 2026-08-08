@@ -110,6 +110,13 @@ static volatile uint32_t read_attempts = 0;
 static volatile uint32_t read_success = 0;
 static volatile uint32_t read_failures = 0;
 
+static volatile uint32_t consecutive_i2c_failures = 0u;
+static volatile uint32_t imu_recovery_attempts     = 0u;
+static volatile bool     imu_disabled              = false;
+
+#define IMU_FAILURE_THRESHOLD       10u  /* consecutive fails before recovery */
+#define IMU_MAX_RECOVERY_ATTEMPTS   5u   /* stop trying after this many */
+
 static volatile uint8_t int_pin_cfg_reg = 0;
 static volatile bool int_pin_cfg_ok = false;
 
@@ -477,9 +484,44 @@ void tarang_imu_init(void)
 /*******************************************************************************
  * tarang_imu_process — interrupt-driven IMU sample collection
  ******************************************************************************/
+static void imu_try_recover(void)
+{
+  imu_recovery_attempts++;
+
+  if (imu_recovery_attempts >= IMU_MAX_RECOVERY_ATTEMPTS) {
+    imu_disabled = true;
+    mpu_found = false;
+    consecutive_i2c_failures = 0u;
+    printf("[IMU] *** PERMANENTLY DISABLED after %lu failed recoveries ***\r\n",
+           (unsigned long)imu_recovery_attempts);
+    printf("[IMU] *** ECG + PPG + Pipeline continue normally ***\r\n");
+    return;
+  }
+
+  /* Try to re-wake and reconfigure the MPU6050 */
+  if (MPU6050_WriteRegister(MPU6050_PWR_MGMT_1, 0x00) &&
+      MPU6050_WriteRegister(MPU6050_INT_ENABLE, 0x01)) {
+    consecutive_i2c_failures = 0u;
+    mpu_found = true;
+    printf("[IMU] RECOVERED (attempt=%lu/%lu)\r\n",
+           (unsigned long)imu_recovery_attempts,
+           (unsigned long)IMU_MAX_RECOVERY_ATTEMPTS);
+  } else {
+    mpu_found = false;
+    printf("[IMU] RECOVERY FAILED attempt=%lu/%lu\r\n",
+           (unsigned long)imu_recovery_attempts,
+           (unsigned long)IMU_MAX_RECOVERY_ATTEMPTS);
+  }
+}
+
 void tarang_imu_process(void)
 {
   uint8_t raw[14];
+
+  /* If sensor was permanently disabled after too many failures, skip entirely */
+  if (imu_disabled) {
+    return;
+  }
 
   if (!imu_data_ready)
   {
@@ -533,6 +575,7 @@ void tarang_imu_process(void)
     read14_ok = true;
     read14_fail = false;
     read_success++;
+    consecutive_i2c_failures = 0u;
 
     accel_x = (int16_t)((raw[0] << 8) | raw[1]);
     accel_y = (int16_t)((raw[2] << 8) | raw[3]);
@@ -560,6 +603,13 @@ void tarang_imu_process(void)
     read14_ok = false;
     read14_fail = true;
     read_failures++;
+    consecutive_i2c_failures++;
+
+    if (consecutive_i2c_failures >= IMU_FAILURE_THRESHOLD) {
+      printf("[IMU] %lu consecutive I2C failures — attempting recovery\r\n",
+             (unsigned long)consecutive_i2c_failures);
+      imu_try_recover();
+    }
   }
 #endif /* MPU6050_USE_COMBINED_BURST */
 

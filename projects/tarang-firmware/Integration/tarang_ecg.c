@@ -58,6 +58,9 @@ static volatile uint32_t  halves_completed  = 0;
 static volatile bool      first_half_seen   = false;
 static volatile uint32_t  half0Pending      = 0;
 static volatile uint32_t  half1Pending      = 0;
+static volatile bool      ecg_disabled      = false;  /* set if ECG hardware chain stalls */
+
+#define ECG_STALL_THRESHOLD  1250u  /* ~5 sec at 250 Hz with no new samples */
 
 /***************************************************************************//**
  * LETIMER Interrupt — sample_count bookkeeping only.
@@ -225,7 +228,14 @@ void tarang_ecg_init(void)
 void tarang_ecg_process(void)
 {
   static uint32_t last_output = 0;
-  
+  static uint32_t stall_check_count = 0;
+  static uint32_t stall_check_sample = 0;
+
+  /* If ECG hardware chain has stalled, skip processing */
+  if (ecg_disabled) {
+    return;
+  }
+
   /*
    * ECG hardware pipeline is fully autonomous:
    *   LETIMER0 -> PRS ch2 -> IADC0 -> DMADRV ping-pong -> ecg_buffer RAM
@@ -240,6 +250,19 @@ void tarang_ecg_process(void)
   if (half1Ready) { 
     half1Ready = false;
     half1Pending = 0;
+  }
+
+  /* Stall detection: if sample_count hasn't advanced, the hardware chain died */
+  stall_check_count++;
+  if (stall_check_count >= ECG_STALL_THRESHOLD) {
+    if (sample_count == stall_check_sample && sample_count > 0) {
+      ecg_disabled = true;
+      printf("[ECG] *** STALL DETECTED — no new samples for ~5s ***\r\n");
+      printf("[ECG] *** DISABLED. PPG + IMU + Pipeline continue ***\r\n");
+      return;
+    }
+    stall_check_sample = sample_count;
+    stall_check_count = 0;
   }
   
   /* Lightweight telemetry: output one sample every 10 samples (~25 Hz stream from 250 Hz data)

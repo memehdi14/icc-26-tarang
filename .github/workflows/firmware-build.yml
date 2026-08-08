@@ -112,7 +112,7 @@ jobs:
           echo "Found firmware project: $SLCP_PATH"
           echo "Output build directory: $BUILD_DIR"
           
-          slc generate -p "$SLCP_PATH" -d "$BUILD_DIR" --slconf tools/autogen/pkg.slconf
+          slc generate -p "$SLCP_PATH" -d "$BUILD_DIR" --slconf tools/autogen/pkg.slconf --force
           echo "TARGET_BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
 
       - name: Build Firmware

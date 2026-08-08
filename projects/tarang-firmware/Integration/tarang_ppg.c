@@ -62,6 +62,7 @@
 
 #define MAX30102_MAX_DRAIN_PER_SERVICE  8u
 #define MAX30102_RECOVERY_THRESHOLD     4u
+#define MAX30102_MAX_RECOVERY_ATTEMPTS  5u   /* stop trying after this many */
 
 /*******************************************************************************
  * Hardware Pin Definition — MAX30102 INT connected to PC06
@@ -98,6 +99,7 @@ static volatile uint8_t  int_status2      = 0u;
 static volatile bool     max30102_found   = false;
 static volatile uint32_t consecutive_i2c_failures = 0u;
 static volatile uint32_t recovery_attempts = 0u;
+static volatile bool     ppg_disabled      = false;  /* set true after max recovery attempts */
 
 static volatile I2C_TransferReturn_TypeDef last_ppg_i2c_ret = i2cTransferDone;
 
@@ -192,6 +194,17 @@ static void max30102_recover(void)
 {
     recovery_attempts++;
 
+    /* ── SAFETY CAP: If sensor is physically gone, stop trying ────────── */
+    if (recovery_attempts >= MAX30102_MAX_RECOVERY_ATTEMPTS) {
+        ppg_disabled = true;
+        max30102_found = false;
+        consecutive_i2c_failures = 0u;
+        printf("[PPG] *** PERMANENTLY DISABLED after %lu failed recoveries ***\r\n",
+               (unsigned long)recovery_attempts);
+        printf("[PPG] *** ECG + IMU + Pipeline continue normally ***\r\n");
+        return;
+    }
+
     /*
      * NOTE: Do NOT call sl_i2cspm_init_instances() here at runtime.
      * It reinitializes the entire I2C peripheral, which would corrupt
@@ -215,9 +228,10 @@ static void max30102_recover(void)
                (unsigned long)recovery_attempts);
     } else {
         max30102_found = false;
-        printf("[PPG] RECOVERY FAILED ret=%d attempt=%lu\r\n",
+        printf("[PPG] RECOVERY FAILED ret=%d attempt=%lu/%lu\r\n",
                (int)last_ppg_i2c_ret,
-               (unsigned long)recovery_attempts);
+               (unsigned long)recovery_attempts,
+               (unsigned long)MAX30102_MAX_RECOVERY_ATTEMPTS);
     }
 }
 
@@ -372,6 +386,11 @@ void tarang_ppg_init(void)
  ******************************************************************************/
 void tarang_ppg_process(void)
 {
+    /* If sensor was permanently disabled after too many failures, skip entirely */
+    if (ppg_disabled) {
+        return;
+    }
+
     uint8_t fifo_data[6];
     bool service_sensor = false;
     uint8_t drained = 0u;
