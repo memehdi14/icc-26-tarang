@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tarang Cardiac Monitoring</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "panel-padding": "16px",
+                "unit": "4px",
+                "margin": "24px",
+                "density-high": "4px",
+                "density-med": "8px",
+                "gutter": "12px"
+        },
+        "fontFamily": {
+                "display-lg": [
+                        "Geist"
+                ],
+                "body-md": [
+                        "JetBrains Mono"
+                ],
+                "headline-md": [
+                        "Geist"
+                ],
+                "data-lg": [
+                        "JetBrains Mono"
+                ],
+                "label-caps": [
+                        "JetBrains Mono"
+                ],
+                "label-sm": [
+                        "JetBrains Mono"
+                ]
+        },
+        "fontSize": {
+                "display-lg": [
+                        "48px",
+                        {
+                                "lineHeight": "1.1",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "1.5",
+                                "letterSpacing": "0em",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "data-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "1",
+                                "letterSpacing": "-0.04em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-caps": [
+                        "11px",
+                        {
+                                "lineHeight": "1",
+                                "letterSpacing": "0.08em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "label-sm": [
+                        "12px",
+                        {
+                                "lineHeight": "1",
+                                "letterSpacing": "0em",
+                                "fontWeight": "500"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        body { background-color: #000000; color: #ffffff; }
+        .ecg-grid {
+            background-size: 50px 50px, 10px 10px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+                linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        }
+        .waveform-path {
+            fill: none;
+            stroke: #ffffff;
+            stroke-width: 1.5;
+            stroke-linejoin: round;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-body-md font-body-md bg-black">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-margin bg-black border-b border-neutral-800 flat no shadows h-20">
+<div class="flex items-center gap-4">
+<img alt="Tarang Logo" class="h-16 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvVRfP6Y2M6cSy3lCe9IuTTV8FZnMkj4BS2gATLissGqtdoi0juVrfUtJfMPElXjQoWiJvXENqxiYWPPbU5OGDM9TrguGlCwKleAqCMHXh_lB3pQQn80lm7nakp4KlsAK5RmMV1ucL6I3GZYIhu_vK3PLCPeeLoW8IOI4_kgndvJfAZQJ4MBb5iUSnxxZ3X9r_wSl-inshVNfcxWXO2CJ8C10iCReORBp_IjEoued872AfJJ0Bhw_XG4iGhQ5-VFsibrI"/>
+<div class="h-6 w-px bg-neutral-800 mx-2"></div>
+<div class="flex items-center gap-6 text-label-caps font-label-caps text-neutral-400">
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">person</span> John Doe</span>
+<span class="flex items-center gap-2">ID: 4502931</span>
+<span class="flex items-center gap-2">DOB: 11/24/1985</span>
+<span class="flex items-center gap-2">Room: ICU-04</span>
+<span class="flex items-center gap-2 text-white font-bold"><span class="w-2 h-2 rounded-full bg-white animate-pulse"></span> Active</span>
+<span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">timer</span> 02:45:11</span>
+<span class="">Sess: #8821</span>
+</div>
+</div>
+<div class="flex flex-row items-center gap-4">
+<button class="p-2 rounded-full hover:bg-neutral-900 transition-colors text-neutral-400"><span class="material-symbols-outlined">settings_input_component</span></button>
+<button class="p-2 rounded-full hover:bg-neutral-900 transition-colors text-neutral-400"><span class="material-symbols-outlined">memory</span></button>
+<button class="p-2 rounded-full hover:bg-neutral-900 transition-colors text-neutral-400"><span class="material-symbols-outlined">psychology</span></button>
+<button class="p-2 rounded-full hover:bg-neutral-900 transition-colors text-neutral-400"><span class="material-symbols-outlined">biotech</span></button>
+<button class="p-2 rounded-full hover:bg-neutral-900 transition-colors text-neutral-400 flex items-center gap-1"><span class="material-symbols-outlined">battery_charging_full</span> <span class="text-label-sm font-label-sm text-white">84%</span></button>
+<button class="p-2 rounded-full hover:bg-neutral-900 transition-colors text-neutral-400"><span class="material-symbols-outlined">schedule</span></button>
+</div>
+</header>
+<div class="flex flex-1 pt-20 bg-black">
+<!-- SideNavBar -->
+<nav class="fixed left-0 h-[calc(100vh-64px)] w-64 flex flex-col py-gutter bg-black border-r border-neutral-800 flat no shadows z-40 transition-all top-20">
+<div class="px-6 mb-8 flex items-center gap-3"><button class="p-1 -ml-2 mr-1 rounded hover:bg-neutral-800 text-neutral-400 transition-colors" onclick="document.querySelector('nav').classList.toggle('w-64'); document.querySelector('nav').classList.toggle('w-20'); document.querySelector('main').classList.toggle('ml-64'); document.querySelector('main').classList.toggle('ml-20'); document.querySelectorAll('nav span:not(.material-symbols-outlined), nav div &gt; div').forEach(el =&gt; el.classList.toggle('hidden'))"><span class="material-symbols-outlined">menu_open</span></button>
+<div class="w-10 h-10 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center overflow-hidden">
+<span class="material-symbols-outlined text-neutral-400">account_circle</span>
+</div>
+<div>
+<div class="text-label-sm font-label-sm font-bold text-white">Clinical Lead</div>
+<div class="text-label-caps font-label-caps text-neutral-400">Tarang Edge AI</div>
+</div>
+</div>
+<ul class="flex flex-col gap-2 px-4 flex-1">
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 text-black bg-white rounded font-bold text-label-sm font-label-sm Active: scale-95 transition-transform hover:bg-neutral-200 transition-all duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                        Dashboard
+                    </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 text-neutral-400 hover:text-white text-label-sm font-label-sm hover:bg-neutral-900 transition-all duration-150 rounded" href="#">
+<span class="material-symbols-outlined">history</span>
+                        Session History
+                    </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 text-neutral-400 hover:text-white text-label-sm font-label-sm hover:bg-neutral-900 transition-all duration-150 rounded" href="#">
+<span class="material-symbols-outlined">developer_board</span>
+                        Device Info
+                    </a>
+</li>
+<li class="">
+<a class="flex items-center gap-3 px-4 py-3 text-neutral-400 hover:text-white text-label-sm font-label-sm hover:bg-neutral-900 transition-all duration-150 rounded" href="#">
+<span class="material-symbols-outlined">settings</span>
+                        Settings
+                    </a>
+</li>
+</ul>
+<div class="px-6 mt-auto pt-4 border-t border-neutral-800 flex flex-col gap-2">
+<div class="flex items-center gap-2 text-label-caps font-label-caps text-neutral-400"><span class="material-symbols-outlined text-[16px]">bluetooth</span> BLE Active</div>
+<div class="flex items-center gap-2 text-label-caps font-label-caps text-neutral-400"><span class="material-symbols-outlined text-[16px]">battery_full</span> 98% Battery</div>
+<div class="flex items-center gap-2 text-label-caps font-label-caps text-neutral-400"><span class="material-symbols-outlined text-[16px]">sensors</span> Connected</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="ml-64 flex-1 flex flex-col p-gutter gap-gutter bg-black overflow-hidden h-full transition-all">
+<div class="flex flex-1 gap-gutter h-[calc(100%-80px)]">
+<!-- Center Panes (70%) -->
+<div class="w-[70%] flex flex-col gap-gutter">
+<!-- Raw ECG -->
+<div class="flex-1 bg-black border border-neutral-800 rounded relative overflow-hidden flex flex-col">
+<div class="px-4 py-2 border-b border-neutral-800 flex justify-between items-center bg-black">
+<span class="text-label-caps font-label-caps text-white">Lead I (Raw)</span>
+<div class="flex gap-4 text-label-caps font-label-caps text-neutral-400">
+<span class="">10mm/mV</span>
+<span class="">25mm/s</span>
+</div>
+</div>
+<div class="flex-1 ecg-grid relative w-full overflow-hidden">
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 1000 100">
+<path class="waveform-path" d="M0,50 L50,50 L60,40 L70,50 L90,50 L95,60 L100,20 L110,80 L115,50 L140,50 L150,45 L170,45 L180,50 L200,50 
+                                         L250,50 L260,40 L270,50 L290,50 L295,60 L300,20 L310,80 L315,50 L340,50 L350,45 L370,45 L380,50 L400,50
+                                         L450,50 L460,40 L470,50 L490,50 L495,60 L500,20 L510,80 L515,50 L540,50 L550,45 L570,45 L580,50 L600,50
+                                         L650,50 L660,40 L670,50 L690,50 L695,60 L700,20 L710,80 L715,50 L740,50 L750,45 L770,45 L780,50 L800,50
+                                         L850,50 L860,40 L870,50 L890,50 L895,60 L900,20 L910,80 L915,50 L940,50 L950,45 L970,45 L980,50 L1000,50"></path>
+</svg>
+</div>
+</div>
+<!-- Filtered ECG -->
+<div class="flex-1 bg-black border border-neutral-800 rounded relative overflow-hidden flex flex-col">
+<div class="px-4 py-2 border-b border-neutral-800 flex justify-between items-center bg-black">
+<span class="text-label-caps font-label-caps text-white">Lead I (Filtered)</span>
+<div class="flex gap-4 text-label-caps font-label-caps text-neutral-400">
+<span class="">10mm/mV</span>
+<span class="">25mm/s</span>
+</div>
+</div>
+<div class="flex-1 ecg-grid relative w-full overflow-hidden">
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 1000 100">
+<path class="waveform-path" d="M0,50 L50,50 L60,42 L70,50 L90,50 L95,58 L100,25 L110,75 L115,50 L140,50 L150,46 L170,46 L180,50 L200,50 
+                                         L250,50 L260,42 L270,50 L290,50 L295,58 L300,25 L310,75 L315,50 L340,50 L350,46 L370,46 L380,50 L400,50
+                                         L450,50 L460,42 L470,50 L490,50 L495,58 L500,25 L510,75 L515,50 L540,50 L550,46 L570,46 L580,50 L600,50
+                                         L650,50 L660,42 L670,50 L690,50 L695,58 L700,25 L710,75 L715,50 L740,50 L750,46 L770,46 L780,50 L800,50
+                                         L850,50 L860,42 L870,50 L890,50 L895,58 L900,25 L910,75 L915,50 L940,50 L950,46 L970,46 L980,50 L1000,50" style="stroke: #ffffff;"></path>
+</svg>
+</div>
+</div>
+<!-- PPG -->
+<div class="flex-1 bg-black border border-neutral-800 rounded relative overflow-hidden flex flex-col">
+<div class="px-4 py-2 border-b border-neutral-800 flex justify-between items-center bg-black">
+<span class="text-label-caps font-label-caps text-white">PPG Waveform</span>
+<div class="flex gap-4 text-label-caps font-label-caps text-neutral-400">
+<span class="">Auto Gain</span>
+<span class="">25mm/s</span>
+</div>
+</div>
+<div class="flex-1 bg-black relative w-full overflow-hidden">
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 1000 100">
+<path class="waveform-path" d="M0,80 Q20,80 30,50 T70,30 T100,60 T130,40 T170,80 T200,80
+                                         Q220,80 230,50 T270,30 T300,60 T330,40 T370,80 T400,80
+                                         Q420,80 430,50 T470,30 T500,60 T530,40 T570,80 T600,80
+                                         Q620,80 630,50 T670,30 T700,60 T730,40 T770,80 T800,80
+                                         Q820,80 830,50 T870,30 T900,60 T930,40 T970,80 T1000,80" style="stroke: #ffffff; stroke-width: 2;"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Right Panel (Clinical Summary) -->
+<div class="w-[30%] flex flex-col gap-gutter">
+<div class="bg-black border border-neutral-800 rounded p-6 flex flex-col justify-between h-48 focus-within:border-white">
+<div class="text-label-caps font-label-caps text-neutral-400 flex justify-between">
+<span class="">Heart Rate</span>
+<span class="material-symbols-outlined text-white text-[16px]">favorite</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-display-lg font-display-lg text-white">72</span>
+<span class="text-body-md font-body-md text-neutral-400">bpm</span>
+</div>
+<div class="w-full bg-neutral-900 h-1 rounded-full overflow-hidden">
+<div class="bg-white h-full w-[60%]"></div>
+</div>
+</div>
+<div class="bg-black border border-neutral-800 rounded p-6 flex flex-col justify-between h-48">
+<div class="text-label-caps font-label-caps text-neutral-400 flex justify-between">
+<span class="">SpO2</span>
+<span class="material-symbols-outlined text-white text-[16px]">water_drop</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="text-display-lg font-display-lg text-white">98</span>
+<span class="text-body-md font-body-md text-neutral-400">%</span>
+</div>
+<div class="w-full bg-neutral-900 h-1 rounded-full overflow-hidden">
+<div class="bg-white h-full w-[95%]"></div>
+</div>
+</div>
+<div class="bg-black border border-neutral-800 rounded p-6 flex-1 flex flex-col"><div class="flex flex-col h-full gap-4"><div class="flex justify-between items-center"><span class="text-label-caps font-label-caps text-neutral-400">Clinical Alerts</span><div class="flex gap-2"><div class="bg-black text-white border border-white px-2 py-1 text-[10px] font-label-caps uppercase">AFIB</div><div class="bg-white text-black border border-white px-2 py-1 text-[10px] font-label-caps uppercase animate-pulse">PVC</div><div class="bg-black text-white border border-white px-2 py-1 text-[10px] font-label-caps uppercase">BIGEM</div></div></div><div class="flex-1 flex flex-col justify-center border-y border-neutral-800 py-4"><div class="text-label-caps font-label-caps text-white mb-1">Current Rhythm</div><div class="text-headline-md font-headline-md text-white">Normal Sinus</div></div><div class="bg-black border border-neutral-800 rounded p-3"><div class="flex justify-between items-center mb-2"><span class="text-label-caps font-label-caps text-neutral-400">AI Confidence</span><span class="text-label-sm font-label-sm font-bold text-white">99.6%</span></div><div class="w-full bg-neutral-900 h-1.5 rounded-full overflow-hidden"><div class="bg-white h-full w-[99.6%]"></div></div></div></div></div>
+</div>
+</div>
+<!-- Bottom Timeline -->
+<div class="h-16 bg-black border border-neutral-800 rounded flex items-center px-4 relative mt-auto">
+<div class="absolute left-0 top-0 bottom-0 w-8 bg-black border-r border-neutral-800 flex items-center justify-center z-10 rounded-l">
+<span class="material-symbols-outlined text-neutral-400 text-[16px]">linear_scale</span>
+</div>
+<div class="ml-8 w-full h-1 bg-neutral-900 relative flex items-center">
+<!-- Markers -->
+<div class="absolute left-[10%] w-3 h-3 rounded-full bg-white -mt-1 cursor-pointer hover:scale-125 transition-transform" title="NSR"></div>
+<div class="absolute left-[45%] w-3 h-3 rounded-full bg-neutral-400 -mt-1 cursor-pointer hover:scale-125 transition-transform" title="PVC"></div>
+<div class="absolute left-[70%] w-3 h-3 rounded-full bg-white -mt-1 cursor-pointer hover:scale-125 transition-transform" title="NSR"></div>
+<!-- Time labels -->
+<div class="absolute left-0 top-4 text-label-caps font-label-caps text-neutral-400">10:00</div>
+<div class="absolute left-1/2 -translate-x-1/2 top-4 text-label-caps font-label-caps text-neutral-400">10:30</div>
+<div class="absolute right-0 top-4 text-label-caps font-label-caps text-neutral-400">11:00 (Now)</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

@@ -158,26 +158,32 @@ static bool max30102_configure_sensor(void)
     bool ok = true;
 
     // Reset register first
-    max30102_write_reg(MAX30102_MODE_CONFIG, MAX30102_MODE_RESET);
+    ok &= max30102_write_reg(MAX30102_MODE_CONFIG, MAX30102_MODE_RESET);
     ppg_delay_ms(50);
 
+    // Clear FIFO pointers
     ok &= max30102_write_reg(MAX30102_FIFO_WR_PTR,  0x00u);
     ok &= max30102_write_reg(MAX30102_OVF_COUNTER,  0x00u);
     ok &= max30102_write_reg(MAX30102_FIFO_RD_PTR,  0x00u);
 
-    ok &= max30102_write_reg(MAX30102_FIFO_CONFIG_REG, 0x0Fu);
+    /* 1. FIFO_CONFIG (0x08): 0x1F -> sample_avg=1, FIFO_ROLLOVER_EN=1 (bit 4), A_FULL=15
+     * CRITICAL: Bit 4 (FIFO_ROLLOVER_EN) MUST be 1, otherwise when FIFO fills
+     * to 32 samples, the sensor stops taking data and interrupts permanently halt! */
+    ok &= max30102_write_reg(MAX30102_FIFO_CONFIG_REG, 0x1Fu);
 
-    ok &= max30102_write_reg(MAX30102_INT_ENABLE1, MAX30102_INT_ENABLE1_PPG_RDY);
+    /* 2. INT_ENABLE1 (0x02): 0xC0 -> Enable both A_FULL_EN (bit 7) and PPG_RDY_EN (bit 6) */
+    ok &= max30102_write_reg(MAX30102_INT_ENABLE1, 0xC0u);
     ok &= max30102_write_reg(MAX30102_INT_ENABLE2, 0x00u);
 
+    /* 3. MODE_CONFIG (0x09): 0x03 -> SpO2 mode (Red + IR sampling) */
     ok &= max30102_write_reg(MAX30102_MODE_CONFIG, MAX30102_MODE_SPO2);
+
+    /* 4. SPO2_CONFIG (0x0A): 0x27 -> ADC range 4096nA, 100 SPS, 411us pulse width */
     ok &= max30102_write_reg(MAX30102_SPO2_CONFIG, 0x27u);
 
-    /* INCREASED LED CURRENT: 0x7F (~25mA) instead of 0x24 (7.2mA) to fix ZERO readings */
-    ok &= max30102_write_reg(MAX30102_LED1_PA,         0x7Fu);
-    ok &= max30102_write_reg(MAX30102_LED2_PA,         0x7Fu);
-    ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL1, 0x21u);
-    ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL2, 0x00u);
+    /* 5. LED Current (0x0C, 0x0D): 0x24 (~7.2mA) for both RED and IR LEDs */
+    ok &= max30102_write_reg(MAX30102_LED1_PA, 0x24u);
+    ok &= max30102_write_reg(MAX30102_LED2_PA, 0x24u);
 
     return ok;
 }
@@ -185,7 +191,13 @@ static bool max30102_configure_sensor(void)
 static void max30102_recover(void)
 {
     recovery_attempts++;
-    sl_i2cspm_init_instances();
+
+    /*
+     * NOTE: Do NOT call sl_i2cspm_init_instances() here at runtime.
+     * It reinitializes the entire I2C peripheral, which would corrupt
+     * any ongoing IMU transaction on the shared bus.
+     * Instead, just try to reconfigure the MAX30102 sensor.
+     */
 
     if (max30102_configure_sensor()) {
         consecutive_i2c_failures = 0u;
@@ -198,7 +210,7 @@ static void max30102_recover(void)
             ppg_data_ready = true;
         }
 
-        printf("[PPG] RECOVERED bus after %lu failures (attempt=%lu)\r\n",
+        printf("[PPG] RECOVERED after %lu failures (attempt=%lu)\r\n",
                (unsigned long)MAX30102_RECOVERY_THRESHOLD,
                (unsigned long)recovery_attempts);
     } else {
@@ -312,6 +324,12 @@ void tarang_ppg_init(void)
         printf("[PPG] SENSOR CONFIG FAILED after 3 attempts\r\n");
         return;
     }
+
+    uint8_t rb_int1 = 0, rb_mode = 0;
+    max30102_read_reg(MAX30102_INT_ENABLE1, &rb_int1);
+    max30102_read_reg(MAX30102_MODE_CONFIG, &rb_mode);
+    printf("[PPG] readback: INT_ENABLE1=0x%02X MODE_CONFIG=0x%02X ok=%d\r\n",
+           rb_int1, rb_mode, (int)config_ok);
 
     /* Clear pending interrupt status after sensor config, before GPIO service. */
     max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
@@ -458,8 +476,11 @@ void tarang_ppg_process(void)
 
     consecutive_i2c_failures = 0u;
 
-    if ((drained == MAX30102_MAX_DRAIN_PER_SERVICE)
-        && (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u)) {
+    /* Re-prime — if the pin is still LOW after our read, the sensor
+     * already has another sample queued (or INT line was held low).
+     * Edge-triggered IRQ won't fire again on its own since there's
+     * no new falling edge. */
+    if (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u) {
         ppg_data_ready = true;
     }
 
@@ -489,6 +510,11 @@ uint32_t tarang_ppg_get_ir(void)
 uint32_t tarang_ppg_get_sample_count(void)
 {
     return ppg_sample_count;
+}
+
+uint32_t tarang_ppg_get_interrupt_count(void)
+{
+    return interrupt_count;
 }
 
 bool tarang_ppg_is_found(void)
