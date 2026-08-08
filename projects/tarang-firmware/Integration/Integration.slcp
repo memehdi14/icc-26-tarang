@@ -129,8 +129,3 @@ ui_hints:
   highlight:
   - path: readme.md
     focus: true
-sdk_extension:
-- vendor: silabs
-  id: aiml
-  version: 2.2.2
-
