@@ -20,6 +20,7 @@ __pycache__/
 venv/
 .env
 *.egg-info/
+*.csv
 
 # Jupyter
 .ipynb_checkpoints/

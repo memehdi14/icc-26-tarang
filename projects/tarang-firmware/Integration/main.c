@@ -63,11 +63,14 @@ int main(void)
     app_process_action();
 
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
-    // Let the CPU go to sleep if the system allows it.
-    // NOTE: Power manager sleep disabled to ensure 100% active EM0 operation
-    // for real-time high-speed multi-sensor I2C/DMA data acquisition.
+    // Sleep DISABLED — GPIO interrupt wiring needs hardware verification.
+    // Using super-loop with throttle delay instead.
     // sl_power_manager_sleep();
 #endif
+
+    // Throttle the super loop — gives iostream time to flush printf output
+    // and prevents excessive CPU spinning. ~5ms = 200 Hz loop rate.
+    for (volatile uint32_t _d = 0; _d < 5u * 4000u; _d++) { }
   }
 #endif // SL_CATALOG_KERNEL_PRESENT
 }

@@ -210,9 +210,16 @@ def serial_reader(port, baud, data: TelemetryData, logger: TelemetryLogger, stop
             if not line:
                 continue
             t = time.time() - t0
-        except serial.SerialException:
-            print("[SERIAL] Connection lost.")
-            break
+        except serial.SerialException as e:
+            print(f"[SERIAL] Port error/lost ({e}). Retrying in 1s...")
+            time.sleep(1)
+            try:
+                ser.close()
+                ser = serial.Serial(port, baud, timeout=1)
+                print(f"[SERIAL] Reconnected to {port}")
+            except Exception:
+                pass
+            continue
         except Exception as e:
             print(f"[SERIAL] Read error: {e}")
             continue
@@ -519,7 +526,8 @@ def run_live(port, baud, ecg_only=False):
 
         return []
 
-    ani = animation.FuncAnimation(fig, update, interval=200, blit=False, cache_frame_data=False)
+    global _ani_ref
+    _ani_ref = animation.FuncAnimation(fig, update, interval=200, blit=False, cache_frame_data=False)
 
     try:
         fig.subplots_adjust(hspace=0.45, top=0.95, bottom=0.05, left=0.08, right=0.96)

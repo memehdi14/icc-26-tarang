@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Device Info - Tarang Edge AI</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container": "#000000",
+                        "tertiary-fixed-dim": "#ffffff",
+                        "inverse-on-surface": "#000000",
+                        "on-error-container": "#ffffff",
+                        "on-surface-variant": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-low": "#000000",
+                        "surface-container-high": "#000000",
+                        "on-primary-fixed-variant": "#ffffff",
+                        "surface-bright": "#000000",
+                        "inverse-surface": "#ffffff",
+                        "on-background": "#ffffff",
+                        "error": "#ffffff",
+                        "surface": "#000000",
+                        "error-container": "#000000",
+                        "outline-variant": "#ffffff",
+                        "tertiary-container": "#000000",
+                        "surface-container-lowest": "#000000",
+                        "on-tertiary-fixed-variant": "#ffffff",
+                        "on-error": "#ffffff",
+                        "on-primary": "#000000",
+                        "on-secondary-fixed": "#000000",
+                        "primary": "#ffffff",
+                        "primary-fixed": "#ffffff",
+                        "surface-variant": "#000000",
+                        "on-secondary-container": "#ffffff",
+                        "on-tertiary-container": "#ffffff",
+                        "on-surface": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed-dim": "#ffffff",
+                        "background": "#000000",
+                        "surface-container-highest": "#000000",
+                        "tertiary-fixed": "#ffffff",
+                        "secondary-container": "#000000",
+                        "on-primary-container": "#ffffff",
+                        "primary-fixed-dim": "#ffffff",
+                        "outline": "#ffffff",
+                        "on-tertiary-fixed": "#000000",
+                        "tertiary": "#ffffff",
+                        "primary-container": "#000000",
+                        "surface-dim": "#000000",
+                        "inverse-primary": "#ffffff",
+                        "secondary-fixed": "#ffffff",
+                        "secondary": "#ffffff",
+                        "surface-tint": "#ffffff",
+                        "on-secondary-fixed-variant": "#ffffff",
+                        "on-primary-fixed": "#000000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-max-width": "1440px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "gutter": "24px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "vitals-mobile": ["Geist"],
+                        "display-vitals": ["Geist"],
+                        "label-sm": ["Geist"],
+                        "label-caps": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "body-lg": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "body-md": ["Geist"]
+                    },
+                    "fontSize": {
+                        "vitals-mobile": ["36px", { "lineHeight": "1", "fontWeight": "600" }],
+                        "display-vitals": ["48px", { "lineHeight": "1", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-lg": ["30px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Geist', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+        }
+
+        .data-card {
+            background-color: #000000;
+            border: 1px solid #ffffff;
+            transition: border-color 0.2s ease-in-out;
+        }
+
+        .data-card:hover {
+            border-color: #ffffff;
+        }
+        
+        .sparkline-container {
+            position: relative;
+            height: 64px;
+            width: 100%;
+        }
+
+        .sparkline-svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+        
+        .sparkline-path {
+            fill: none;
+            stroke: #ffffff;
+            stroke-width: 1.5;
+            vector-effect: non-scaling-stroke;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-black border-b border-white flat no shadows">
+<div class="flex items-center gap-4">
+<img alt="Tarang Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxepB1XKivMCfyuykDql1DGz_nKssSoptLWCVXNDi32DlnenMsSlXvOn0YktGdmJ5bc7HnTOZarlvS7tT-3Zib5qnrl8qOd2__l9xriLcGhksxXNZKRwxKPD_JFaVDb7yvGknimQN5lcw8MyUQVcjMRHFxiL_uqw2lisvyz-FF3xfH3-aXf8kaddlWGi4-gR84PMAQM3ohM_4LMwqnGEC5W1DUke4o6ekgNgMm3s3NNCC6pSZI66NyRlvHBH6aLVeHYUM"/>
+</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-white font-medium hover:bg-gray-900 transition-colors px-3 py-2 rounded-md" href="#">Dashboard</a>
+<a class="text-white font-medium hover:bg-gray-900 transition-colors px-3 py-2 rounded-md" href="#">Session History</a>
+<a class="text-white font-bold border-b-2 border-white hover:bg-gray-900 transition-colors px-3 py-2" href="#">Device Info</a>
+<a class="text-white font-medium hover:bg-gray-900 transition-colors px-3 py-2 rounded-md" href="#">Settings</a>
+</nav>
+<div class="flex items-center gap-4">
+<span class="text-label-caps font-label-caps text-white border border-white px-2 py-1 rounded">Sess: #8821</span>
+<span class="text-label-caps font-label-caps text-white border border-white px-2 py-1 rounded">Vol: V-2204</span>
+<div class="flex items-center gap-2 text-white">
+<span class="material-symbols-outlined cursor-pointer hover:bg-gray-900 p-1 rounded-full transition-colors" data-icon="settings_input_component">settings_input_component</span>
+<span class="material-symbols-outlined cursor-pointer hover:bg-gray-900 p-1 rounded-full transition-colors" data-icon="memory">memory</span>
+<span class="material-symbols-outlined cursor-pointer hover:bg-gray-900 p-1 rounded-full transition-colors" data-icon="psychology">psychology</span>
+<span class="material-symbols-outlined cursor-pointer hover:bg-gray-900 p-1 rounded-full transition-colors" data-icon="biotech">biotech</span>
+<span class="material-symbols-outlined cursor-pointer hover:bg-gray-900 p-1 rounded-full transition-colors" data-icon="battery_charging_full">battery_charging_full</span>
+<span class="material-symbols-outlined cursor-pointer hover:bg-gray-900 p-1 rounded-full transition-colors" data-icon="schedule">schedule</span>
+</div>
+</div>
+</header>
+<div class="flex flex-1 pt-16">
+<!-- SideNavBar (Hidden on Mobile) -->
+<aside class="hidden md:flex fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex-col py-gutter bg-black border-r border-white flat no shadows z-40">
+<div class="px-6 mb-8 flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-black border border-white flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover grayscale" data-alt="A highly detailed close-up portrait of a medical professional, likely a clinician, wearing standard scrubs. Soft, diffuse clinical lighting highlights their face against a clean, minimal background. The aesthetic is serious, reliable, and modern medical, utilizing deep blacks, stark whites, and subtle teal tones to convey a sense of calm authority and high-acuity care readiness." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBsHzC7JUXIQXaUOmVLGAQlVKQkr2QmODCChy4-varRfOgPS0VY_74S37nQev30Cvf2q0G99K7HbvnSdQ43Q6WnWIiUZKV0VRzUnEzxft859AhxYUMrIF9KgKz0qGI3q3sIMTpZKMjtL7RVeyTBUs9E7MWmdDrkm9Ermbj-pcPa4Nr3e9ThduIE23-bQTszAl1kjaBXEuIrFqNc_lHtVWNx73Qb648zvd8bn6uy55-5YEBaEm2m-QkKww"/>
+</div>
+<div>
+<div class="text-headline-sm font-headline-sm text-white">Clinical Lead</div>
+<div class="text-label-sm font-label-sm text-white">Tarang Edge AI</div>
+</div>
+</div>
+<nav class="flex-1 px-4 space-y-2">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-white hover:text-white hover:bg-gray-900 transition-all duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-label-sm font-label-sm">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-white hover:text-white hover:bg-gray-900 transition-all duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="text-label-sm font-label-sm">Session History</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-black bg-white font-bold transition-opacity scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="developer_board">developer_board</span>
+<span class="text-label-sm font-label-sm">Device Info</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-white hover:text-white hover:bg-gray-900 transition-all duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-label-sm font-label-sm">Settings</span>
+</a>
+</nav>
+<div class="px-4 mt-auto space-y-2">
+<div class="flex items-center gap-3 px-3 py-2 text-white">
+<span class="material-symbols-outlined text-white" data-icon="bluetooth">bluetooth</span>
+<span class="text-label-sm font-label-sm">BLE Active</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 text-white">
+<span class="material-symbols-outlined text-white" data-icon="battery_full">battery_full</span>
+<span class="text-label-sm font-label-sm">98% Battery</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-2 text-white">
+<span class="material-symbols-outlined text-white" data-icon="sensors">sensors</span>
+<span class="text-label-sm font-label-sm">Connected</span>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 p-margin-mobile md:p-margin-desktop bg-black">
+<div class="max-w-container-max-width mx-auto space-y-8">
+<!-- Page Header -->
+<div class="flex justify-between items-end border-b border-white pb-4">
+<div>
+<h1 class="text-headline-lg font-headline-lg text-white tracking-tight">Diagnostics &amp; Info</h1>
+<p class="text-body-md font-body-md text-white mt-1">Real-time edge hardware telemetry</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="relative flex h-3 w-3">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+<span class="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+</span>
+<span class="text-label-caps font-label-caps text-white">LIVE STREAM</span>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Firmware & Connectivity (Span 4) -->
+<div class="md:col-span-4 data-card rounded-xl p-6 flex flex-col justify-between">
+<div>
+<div class="flex items-center gap-2 text-white mb-4">
+<span class="material-symbols-outlined text-lg" data-icon="memory">memory</span>
+<h2 class="text-label-caps font-label-caps">SYSTEM FIRMWARE</h2>
+</div>
+<div class="space-y-4">
+<div>
+<div class="text-label-sm font-label-sm text-white">OS Version</div>
+<div class="text-headline-md font-headline-md text-white">TarangOS v2.4.1-edge</div>
+</div>
+<div>
+<div class="text-label-sm font-label-sm text-white">Model Build</div>
+<div class="text-body-md font-body-md text-white">C-Net-Quantized-INT8</div>
+</div>
+<div>
+<div class="text-label-sm font-label-sm text-white">Last OTA Update</div>
+<div class="text-body-md font-body-md text-white">2023-10-27 04:22 UTC</div>
+</div>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-white">
+<div class="flex justify-between items-center">
+<span class="text-label-sm font-label-sm text-white">Network Status</span>
+<span class="text-label-sm font-label-sm text-white flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" data-icon="wifi">wifi</span> Strong (-42 dBm)
+                                 </span>
+</div>
+</div>
+</div>
+<!-- Performance & Thermals (Span 8) -->
+<div class="md:col-span-8 data-card rounded-xl p-6 flex flex-col">
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-2 text-white">
+<span class="material-symbols-outlined text-lg" data-icon="speed">speed</span>
+<h2 class="text-label-caps font-label-caps">EDGE INFERENCE PERFORMANCE</h2>
+</div>
+<span class="text-label-caps font-label-caps text-white border border-white px-2 py-1 rounded">30s Window</span>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+<div class="p-4 bg-black rounded-lg border border-white">
+<div class="text-label-sm font-label-sm text-white mb-1">Latency (Avg)</div>
+<div class="text-headline-md font-headline-md text-white flex items-baseline gap-1">
+                                    14<span class="text-label-sm font-label-sm text-white">ms</span>
+</div>
+</div>
+<div class="p-4 bg-black rounded-lg border border-white">
+<div class="text-label-sm font-label-sm text-white mb-1">Throughput</div>
+<div class="text-headline-md font-headline-md text-white flex items-baseline gap-1">
+                                    60<span class="text-label-sm font-label-sm text-white">fps</span>
+</div>
+</div>
+<div class="p-4 bg-black rounded-lg border border-white">
+<div class="text-label-sm font-label-sm text-white mb-1">MCU Temp</div>
+<div class="text-headline-md font-headline-md text-white flex items-baseline gap-1">
+                                    42<span class="text-label-sm font-label-sm text-white">°C</span>
+</div>
+</div>
+<div class="p-4 bg-black rounded-lg border border-white">
+<div class="text-label-sm font-label-sm text-white mb-1">NPU Load</div>
+<div class="text-headline-md font-headline-md text-white flex items-baseline gap-1">
+                                    68<span class="text-label-sm font-label-sm text-white">%</span>
+</div>
+</div>
+</div>
+<div class="mt-auto">
+<div class="text-label-sm font-label-sm text-white mb-2">Latency Trend (ms)</div>
+<div class="sparkline-container bg-black border border-white rounded p-2">
+<svg class="sparkline-svg" preserveaspectratio="none" viewbox="0 0 100 20">
+<!-- Simple static zig-zag representing dynamic sparkline -->
+<path class="sparkline-path" d="M0,10 L5,12 L10,8 L15,14 L20,9 L25,11 L30,7 L35,13 L40,10 L45,15 L50,9 L55,12 L60,8 L65,14 L70,10 L75,11 L80,9 L85,12 L90,8 L95,13 L100,10"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Battery Health (Span 6) -->
+<div class="md:col-span-6 data-card rounded-xl p-6">
+<div class="flex items-center gap-2 text-white mb-6">
+<span class="material-symbols-outlined text-lg" data-icon="battery_charging_full">battery_charging_full</span>
+<h2 class="text-label-caps font-label-caps">POWER &amp; BATTERY HEALTH</h2>
+</div>
+<div class="flex items-center justify-between mb-8">
+<div>
+<div class="text-display-vitals font-display-vitals text-white">98%</div>
+<div class="text-body-md font-body-md text-white">Discharging (Est. 14h 20m rem.)</div>
+</div>
+<div class="relative w-16 h-24 border-2 border-white rounded-md flex items-end p-1">
+<div class="w-full bg-white rounded-sm h-[98%]"></div>
+<div class="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-2 bg-white rounded-t-sm"></div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-y-4 gap-x-8 border-t border-white pt-4">
+<div>
+<div class="text-label-sm font-label-sm text-white">Cycle Count</div>
+<div class="text-headline-md font-headline-md text-white">142</div>
+</div>
+<div>
+<div class="text-label-sm font-label-sm text-white">Design Capacity</div>
+<div class="text-headline-md font-headline-md text-white">3200 mAh</div>
+</div>
+<div>
+<div class="text-label-sm font-label-sm text-white">Current Capacity</div>
+<div class="text-headline-md font-headline-md text-white">3110 mAh</div>
+</div>
+<div>
+<div class="text-label-sm font-label-sm text-white">Battery Health</div>
+<div class="text-headline-md font-headline-md text-white">97.1%</div>
+</div>
+</div>
+</div>
+<!-- Memory Allocation (Span 6) -->
+<div class="md:col-span-6 data-card rounded-xl p-6 flex flex-col">
+<div class="flex items-center gap-2 text-white mb-6">
+<span class="material-symbols-outlined text-lg" data-icon="storage">storage</span>
+<h2 class="text-label-caps font-label-caps">MEMORY ALLOCATION</h2>
+</div>
+<div class="mb-6">
+<div class="flex justify-between items-end mb-2">
+<span class="text-headline-md font-headline-md text-white">3.2 GB <span class="text-body-md text-white">/ 8.0 GB</span></span>
+<span class="text-label-caps font-label-caps text-white">40% USED</span>
+</div>
+<div class="w-full h-4 bg-black border border-white rounded-full overflow-hidden flex">
+<div class="h-full bg-white" style="width: 25%"></div> <!-- System OS -->
+<div class="h-full bg-black border-l border-white" style="width: 15%"></div> <!-- Model Weights -->
+<div class="h-full bg-white border-l border-black" style="width: 5%"></div> <!-- Buffer -->
+</div>
+</div>
+<div class="space-y-3 mt-auto">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-white border border-white"></div>
+<span class="text-body-md font-body-md text-white">System OS &amp; Base</span>
+</div>
+<span class="text-body-md font-body-md text-white">2.0 GB</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-black border border-white"></div>
+<span class="text-body-md font-body-md text-white">Model Weights in RAM</span>
+</div>
+<span class="text-body-md font-body-md text-white">1.2 GB</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-white border border-black shadow-[0_0_0_1px_#ffffff]"></div>
+<span class="text-body-md font-body-md text-white">Active Data Buffer</span>
+</div>
+<span class="text-body-md font-body-md text-white">0.4 GB</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-black border border-transparent"></div>
+<span class="text-body-md font-body-md text-white">Free</span>
+</div>
+<span class="text-body-md font-body-md text-white">4.4 GB</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

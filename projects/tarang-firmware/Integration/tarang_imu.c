@@ -387,16 +387,26 @@ void tarang_imu_init(void)
         }
       }
 
-      /* Interrupt pin configuration */
-      if (MPU6050_WriteRegister(MPU6050_INT_PIN_CFG, 0x00))
+      /* Interrupt pin configuration:
+       * Bit 5 = LATCH_INT_EN = 1 → hold INT high until INT_STATUS is read
+       * Bit 4 = INT_RD_CLEAR  = 1 → clear INT on ANY register read
+       * This prevents missed edges when the 50us pulse is too short.
+       */
+      if (MPU6050_WriteRegister(MPU6050_INT_PIN_CFG, 0x30))
       {
         MPU6050_ReadRegister(MPU6050_INT_PIN_CFG,
                              (uint8_t *)&int_pin_cfg_reg);
 
-        if (int_pin_cfg_reg == 0x00)
+        if (int_pin_cfg_reg == 0x30)
         {
           int_pin_cfg_ok = true;
         }
+        printf("[IMU] INT_PIN_CFG wrote=0x30 readback=0x%02X %s\r\n",
+               int_pin_cfg_reg, int_pin_cfg_ok ? "OK" : "MISMATCH");
+      }
+      else
+      {
+        printf("[IMU] INT_PIN_CFG write FAILED\r\n");
       }
 
       /* Enable DATA_RDY interrupt */
@@ -432,6 +442,9 @@ void tarang_imu_init(void)
                       gpioModeInputPull,
                       0);
 
+      printf("[IMU] PC00 pin state BEFORE arming: %u\r\n",
+             (unsigned)GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN));
+
       GPIOINT_CallbackRegister(MPU6050_INT_PIN,
                                mpu6050_gpio_callback);
 
@@ -442,12 +455,18 @@ void tarang_imu_init(void)
                         false,  /* falling edge */
                         true);  /* enable */
 
+      printf("[IMU] PC00 pin state AFTER arming: %u\r\n",
+             (unsigned)GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN));
+
       /* Prime imu_data_ready if INT pin is already active high */
       if (GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN) != 0u) {
           imu_data_ready = true;
+          printf("[IMU] Primed: INT pin already HIGH\r\n");
       }
 
-      printf("[IMU] MPU6050 init complete. WHO_AM_I=0x%02X\r\n", mpu_whoami);
+      printf("[IMU] MPU6050 init complete. WHO_AM_I=0x%02X wakeup=%d accel=%d gyro=%d dlpf=%d sr=%d int=%d\r\n",
+             mpu_whoami, wakeup_ok, accel_config_ok, gyro_config_ok,
+             config_ok, sample_rate_ok, int_enable_ok);
   }
   else
   {
@@ -543,6 +562,14 @@ void tarang_imu_process(void)
     read_failures++;
   }
 #endif /* MPU6050_USE_COMBINED_BURST */
+
+  /* Re-prime: if INT pin is still high after servicing (e.g. new DATA_RDY
+   * arrived during our I2C read, or latch was not cleared), set the flag
+   * so we process it on the next super-loop iteration instead of waiting
+   * for an edge that will never come. */
+  if (GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN) != 0u) {
+      imu_data_ready = true;
+  }
 }
 
 /*******************************************************************************

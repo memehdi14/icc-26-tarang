@@ -34,12 +34,25 @@
 #include <stdint.h>
 
 #include "em_cmu.h"
+#include "em_gpio.h"
 #include "gpiointerrupt.h"
+#include "sl_i2cspm.h"
 #include "sl_i2cspm_instances.h"
+#include "sl_sleeptimer.h"
 
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
 #include "sl_power_manager.h"
 #endif
+
+/* Sleeptimer handle for periodic 10ms wakeup */
+static sl_sleeptimer_timer_handle_t wakeup_timer;
+static void wakeup_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
+{
+  (void)handle;
+  (void)data;
+  /* Empty — the sole purpose is to wake the CPU from EM1 every 10ms
+   * so the super loop runs and processes any pending sensor data. */
+}
 
 /* Simple delay for sensor power-up stabilization */
 static void delay_ms(uint32_t ms)
@@ -52,8 +65,8 @@ static void delay_ms(uint32_t ms)
  * For individual testing, enable only one at a time.
  * For full integration, enable all three.
  ******************************************************************************/
-#define TARANG_ENABLE_ECG   0
-#define TARANG_ENABLE_PPG   0
+#define TARANG_ENABLE_ECG   1
+#define TARANG_ENABLE_PPG   1
 #define TARANG_ENABLE_IMU   1
 
 /***************************************************************************//**
@@ -90,13 +103,70 @@ void app_init(void)
   /*
    * CRITICAL: Give I2C sensors time to power up after flash/reset.
    * MAX30102 and MPU6050 both need ~50-100ms for stable power-on.
-   * Re-initialize I2CSPM to ensure clean bus state.
    */
   printf("[INIT] Waiting for sensor power-up (100ms)...\r\n");
   delay_ms(100);
+
+  /*
+   * I2C BUS RECOVERY: If the MPU6050/MAX30102 was mid-transaction when
+   * the debugger halted or the MCU reset, the slave may be holding SDA low.
+   * Toggle SCL 9 times + generate a STOP to release the bus.
+   * This MUST happen BEFORE sl_i2cspm_init_instances().
+   */
+  printf("[INIT] I2C bus recovery (9 SCL pulses)...\r\n");
+  {
+    /* PC05 = SCL, PC07 = SDA (I2C1 mikroe) */
+    GPIO_PinModeSet(gpioPortC, 5, gpioModeWiredAndPullUp, 1);
+    GPIO_PinModeSet(gpioPortC, 7, gpioModeWiredAndPullUp, 1);
+
+    for (int i = 0; i < 9; i++) {
+      GPIO_PinOutClear(gpioPortC, 5);  /* SCL low */
+      delay_ms(1);
+      GPIO_PinOutSet(gpioPortC, 5);    /* SCL high */
+      delay_ms(1);
+    }
+    /* Generate STOP: SDA low→high while SCL high */
+    GPIO_PinOutClear(gpioPortC, 7);    /* SDA low */
+    delay_ms(1);
+    GPIO_PinOutSet(gpioPortC, 5);      /* SCL high */
+    delay_ms(1);
+    GPIO_PinOutSet(gpioPortC, 7);      /* SDA high → STOP */
+    delay_ms(1);
+
+    printf("[INIT] Bus state: SCL=%u SDA=%u\r\n",
+           (unsigned)GPIO_PinInGet(gpioPortC, 5),
+           (unsigned)GPIO_PinInGet(gpioPortC, 7));
+  }
+
   printf("[INIT] Re-initializing I2C bus...\r\n");
   sl_i2cspm_init_instances();
+  printf("[INIT] I2C bus ready.\r\n");
   delay_ms(50);
+
+  /* ── I2C Bus Scan — probe known sensor addresses ───────────────────── */
+  {
+    printf("[INIT] I2C scan: probing known addresses...\r\n");
+    uint8_t addrs[] = { 0x57, 0x68 };  /* MAX30102, MPU6050 */
+    const char *names[] = { "MAX30102 (PPG)", "MPU6050  (IMU)" };
+
+    for (int i = 0; i < 2; i++) {
+      I2C_TransferSeq_TypeDef seq;
+      uint8_t dummy = 0;
+      seq.addr  = addrs[i] << 1;
+      seq.flags = I2C_FLAG_WRITE_READ;
+      uint8_t reg = 0x00;
+      seq.buf[0].data = &reg;
+      seq.buf[0].len  = 1;
+      seq.buf[1].data = &dummy;
+      seq.buf[1].len  = 1;
+
+      I2C_TransferReturn_TypeDef ret = I2CSPM_Transfer(sl_i2cspm_mikroe, &seq);
+      printf("[INIT]   0x%02X %s -> %s (ret=%d)\r\n",
+             addrs[i], names[i],
+             (ret == i2cTransferDone) ? "ACK (found)" : "NACK (missing)",
+             (int)ret);
+    }
+  }
 
 #if TARANG_ENABLE_ECG
   printf("[INIT] ECG: Starting LETIMER+PRS+IADC+DMADRV...\r\n");
@@ -127,6 +197,19 @@ void app_init(void)
   printf("==========================================\r\n");
   printf("[INIT] Done. Diagnostics every ~2 sec.\r\n");
   printf("==========================================\r\n");
+
+  /*
+   * Start a 10ms periodic wakeup timer. This wakes the CPU from EM1
+   * every 10ms so the super loop can check sensor data_ready flags.
+   * GPIO sensor interrupts ALSO wake the CPU — this timer is a
+   * guaranteed fallback that ensures the system never sleeps forever.
+   */
+  uint32_t ticks = sl_sleeptimer_ms_to_tick(10);
+  sl_sleeptimer_start_periodic_timer(&wakeup_timer,
+                                     ticks,
+                                     wakeup_callback,
+                                     NULL, 0, 0);
+  printf("[INIT] 10ms wakeup timer started.\r\n");
 }
 
 /***************************************************************************//**
@@ -174,6 +257,25 @@ void app_process_action(void)
 #endif
 
   if (current_count - last_diag < diag_interval) {
+    /* Fallback: if no samples collected at all, print a warning periodically
+     * so we know the firmware is alive but the sensor isn't producing data. */
+    static uint32_t stall_counter = 0;
+    if (current_count == 0 && (++stall_counter % 400u) == 0) {
+      printf("\r\n[WARN] No samples collected. Sensor may not be generating interrupts.\r\n");
+#if TARANG_ENABLE_PPG
+      printf("[WARN] PPG found=%d  samples=%lu  pin_PC06=%u  int_count=%lu\r\n",
+             (int)tarang_ppg_is_found(),
+             (unsigned long)tarang_ppg_get_sample_count(),
+             (unsigned)GPIO_PinInGet(gpioPortC, 6),
+             (unsigned long)tarang_ppg_get_interrupt_count());
+#endif
+#if TARANG_ENABLE_IMU
+      printf("[WARN] IMU found=%d  samples=%lu  int_count=%lu\r\n",
+             (int)tarang_imu_is_found(),
+             (unsigned long)tarang_imu_get_sample_count(),
+             (unsigned long)tarang_imu_get_interrupt_count());
+#endif
+    }
     return;
   }
   last_diag = current_count;

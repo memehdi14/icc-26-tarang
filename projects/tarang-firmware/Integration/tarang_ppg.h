@@ -35,6 +35,7 @@ void tarang_ppg_process(void);
 uint32_t tarang_ppg_get_red(void);
 uint32_t tarang_ppg_get_ir(void);
 uint32_t tarang_ppg_get_sample_count(void);
+uint32_t tarang_ppg_get_interrupt_count(void);
 bool     tarang_ppg_is_found(void);
 
 #ifdef __cplusplus

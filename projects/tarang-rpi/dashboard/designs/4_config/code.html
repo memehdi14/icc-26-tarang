@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tarang System Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 1,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container": "#000000",
+                        "tertiary-fixed-dim": "#ffffff",
+                        "inverse-on-surface": "#000000",
+                        "on-error-container": "#000000",
+                        "on-surface-variant": "#ffffff",
+                        "on-tertiary": "#000000",
+                        "surface-container-low": "#000000",
+                        "surface-container-high": "#000000",
+                        "on-primary-fixed-variant": "#000000",
+                        "surface-bright": "#000000",
+                        "inverse-surface": "#ffffff",
+                        "on-background": "#ffffff",
+                        "error": "#ffffff",
+                        "surface": "#000000",
+                        "error-container": "#ffffff",
+                        "outline-variant": "#ffffff",
+                        "tertiary-container": "#ffffff",
+                        "surface-container-lowest": "#000000",
+                        "on-tertiary-fixed-variant": "#000000",
+                        "on-error": "#000000",
+                        "on-primary": "#000000",
+                        "on-secondary-fixed": "#000000",
+                        "primary": "#ffffff",
+                        "primary-fixed": "#ffffff",
+                        "surface-variant": "#000000",
+                        "on-secondary-container": "#000000",
+                        "on-tertiary-container": "#000000",
+                        "on-surface": "#ffffff",
+                        "on-secondary": "#000000",
+                        "secondary-fixed-dim": "#ffffff",
+                        "background": "#000000",
+                        "surface-container-highest": "#000000",
+                        "tertiary-fixed": "#ffffff",
+                        "secondary-container": "#ffffff",
+                        "on-primary-container": "#000000",
+                        "primary-fixed-dim": "#ffffff",
+                        "outline": "#ffffff",
+                        "on-tertiary-fixed": "#000000",
+                        "tertiary": "#ffffff",
+                        "primary-container": "#ffffff",
+                        "surface-dim": "#000000",
+                        "inverse-primary": "#ffffff",
+                        "secondary-fixed": "#ffffff",
+                        "secondary": "#ffffff",
+                        "surface-tint": "#ffffff",
+                        "on-secondary-fixed-variant": "#000000",
+                        "on-primary-fixed": "#000000"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "container-max-width": "1440px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "gutter": "24px",
+                        "unit": "4px"
+                    },
+                    fontFamily: {
+                        "vitals-mobile": ["Geist"],
+                        "display-vitals": ["Geist"],
+                        "label-sm": ["Geist"],
+                        "label-caps": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "body-lg": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "body-md": ["Geist"]
+                    },
+                    fontSize: {
+                        "vitals-mobile": ["36px", { "lineHeight": "1", "fontWeight": "600" }],
+                        "display-vitals": ["48px", { "lineHeight": "1", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "headline-lg": ["30px", { "lineHeight": "36px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-black text-white font-body-md min-h-screen antialiased flex">
+<!-- SideNavBar Component -->
+<nav class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex flex-col py-gutter bg-black border-r border-white z-40 hidden md:flex">
+<div class="px-6 mb-8 flex flex-col items-center border-b border-white pb-6">
+<div class="w-16 h-16 rounded-full bg-black flex items-center justify-center mb-4 border border-white">
+<span class="material-symbols-outlined text-white text-3xl">account_circle</span>
+</div>
+<h2 class="text-headline-sm font-headline-sm text-white">Clinical Lead</h2>
+<p class="text-label-sm font-label-sm text-white">Tarang Edge AI</p>
+</div>
+<div class="flex-1 px-4 space-y-2">
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-white hover:text-black hover:bg-white transition-all duration-150" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-label-sm font-label-sm">Dashboard</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-white hover:text-black hover:bg-white transition-all duration-150" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="text-label-sm font-label-sm">Session History</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-white hover:text-black hover:bg-white transition-all duration-150" href="#">
+<span class="material-symbols-outlined">developer_board</span>
+<span class="text-label-sm font-label-sm">Device Info</span>
+</a>
+<a class="flex items-center space-x-3 px-4 py-3 rounded-lg text-black bg-white font-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="text-label-sm font-label-sm">Settings</span>
+</a>
+</div>
+<div class="px-4 mt-auto space-y-2 border-t border-white pt-4">
+<div class="flex items-center space-x-3 px-4 py-2 text-white">
+<span class="material-symbols-outlined text-white">bluetooth</span>
+<span class="text-label-sm font-label-sm">BLE Active</span>
+</div>
+<div class="flex items-center space-x-3 px-4 py-2 text-white">
+<span class="material-symbols-outlined text-white">battery_full</span>
+<span class="text-label-sm font-label-sm">98% Battery</span>
+</div>
+<div class="flex items-center space-x-3 px-4 py-2 text-white">
+<span class="material-symbols-outlined text-white">sensors</span>
+<span class="text-label-sm font-label-sm">Connected</span>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 md:ml-64 flex flex-col min-h-screen">
+<!-- TopAppBar Component -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-black border-b border-white md:w-[calc(100%-16rem)] md:ml-64">
+<div class="flex items-center space-x-6">
+<img alt="Tarang Logo" class="h-8 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxg9Yf5_AAYhsEQIiOzVz3N9bPdI1UtjNe4QbwcqTRjYW1KsGH1whRKrwc37oozzcgKfZfXo383oZ-mTwoJZKIiN94ZWZ-SwtVHSUEtp9YYTaJAMIabAe8XY5Ow25DhTniUYPi2bgvKjDf1tuTvc_OhiILcUxWdFYqepTeYHbJtAgAK_VRTkTy9eizyovpxmdLDRlcEy1jm6zYFopRXOaz5_MOX5BjYt7HUKIngLxVEWYs9wHegHxvTNvQlGMFqdFeIIM"/>
+<div class="hidden md:flex space-x-4">
+<span class="text-white font-medium text-label-caps font-label-caps">Sess: #8821</span>
+<span class="text-white font-medium text-label-caps font-label-caps">Vol: V-2204</span>
+</div>
+</div>
+<div class="flex items-center space-x-2">
+<button class="p-2 text-white hover:bg-white hover:text-black transition-colors rounded-full opacity-80">
+<span class="material-symbols-outlined">settings_input_component</span>
+</button>
+<button class="p-2 text-white hover:bg-white hover:text-black transition-colors rounded-full">
+<span class="material-symbols-outlined">memory</span>
+</button>
+<button class="p-2 text-white hover:bg-white hover:text-black transition-colors rounded-full">
+<span class="material-symbols-outlined">psychology</span>
+</button>
+<button class="p-2 text-white hover:bg-white hover:text-black transition-colors rounded-full">
+<span class="material-symbols-outlined">biotech</span>
+</button>
+<button class="p-2 text-white hover:bg-white hover:text-black transition-colors rounded-full">
+<span class="material-symbols-outlined">battery_charging_full</span>
+</button>
+<button class="p-2 text-white hover:bg-white hover:text-black transition-colors rounded-full">
+<span class="material-symbols-outlined">schedule</span>
+</button>
+</div>
+</header>
+<!-- Settings Content -->
+<main class="flex-1 pt-24 px-margin-desktop pb-12 overflow-y-auto">
+<div class="max-w-4xl mx-auto space-y-8">
+<div class="mb-8 border-b border-white pb-4">
+<h2 class="text-headline-lg font-headline-lg text-white">System Configuration</h2>
+<p class="text-body-md font-body-md text-white mt-2">Adjust core telemetry, display, and network parameters.</p>
+</div>
+<!-- Connectivity Section -->
+<section class="bg-black rounded-lg border border-white p-6">
+<div class="flex items-center space-x-3 mb-6">
+<span class="material-symbols-outlined text-white">wifi</span>
+<h3 class="text-label-caps font-label-caps text-white uppercase tracking-wider">Connectivity</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<!-- BLE -->
+<div class="flex items-center justify-between p-4 bg-black rounded border border-white">
+<div>
+<p class="font-bold text-white">Bluetooth Low Energy (BLE)</p>
+<p class="text-label-sm font-label-sm text-white mt-1">Primary sensor array connection.</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-black border border-white peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-white peer-checked:after:bg-black"></div>
+</label>
+</div>
+<!-- Wi-Fi -->
+<div class="flex items-center justify-between p-4 bg-black rounded border border-white">
+<div>
+<p class="font-bold text-white">Wi-Fi Telemetry Sync</p>
+<p class="text-label-sm font-label-sm text-white mt-1">Background data upload to central server.</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-black border border-white peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-white peer-checked:after:bg-black"></div>
+</label>
+</div>
+</div>
+</section>
+<!-- Clinical Alerts Section -->
+<section class="bg-black rounded-lg border border-white p-6">
+<div class="flex items-center space-x-3 mb-6">
+<span class="material-symbols-outlined text-white">warning</span>
+<h3 class="text-label-caps font-label-caps text-white uppercase tracking-wider">Clinical Alerts</h3>
+</div>
+<div class="space-y-6">
+<!-- HR Thresholds -->
+<div class="p-4 bg-black rounded border border-white">
+<div class="flex justify-between items-center mb-4">
+<p class="font-bold text-white">Heart Rate Limits (BPM)</p>
+<span class="text-label-sm font-label-sm text-white">Default: 50 - 120</span>
+</div>
+<div class="flex items-center space-x-4">
+<div class="flex-1">
+<label class="block text-label-sm font-label-sm text-white mb-1">Lower Limit</label>
+<input class="w-full bg-black border border-white rounded p-2 text-white focus:border-white focus:ring-0 focus:outline-none transition-colors" type="number" value="50"/>
+</div>
+<div class="flex-1">
+<label class="block text-label-sm font-label-sm text-white mb-1">Upper Limit</label>
+<input class="w-full bg-black border border-white rounded p-2 text-white focus:border-white focus:ring-0 focus:outline-none transition-colors" type="number" value="120"/>
+</div>
+</div>
+</div>
+<!-- SpO2 Thresholds -->
+<div class="p-4 bg-black rounded border border-white">
+<div class="flex justify-between items-center mb-4">
+<p class="font-bold text-white">SpO2 Alert Threshold (%)</p>
+<span class="text-label-sm font-label-sm text-white">Default: &lt; 90%</span>
+</div>
+<div class="flex items-center space-x-4">
+<input class="w-full h-2 bg-black border border-white rounded-lg appearance-none cursor-pointer accent-white" max="100" min="80" type="range" value="90"/>
+<span class="text-headline-md font-headline-md text-white w-12 text-right">90</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Display Configuration -->
+<section class="bg-black rounded-lg border border-white p-6">
+<div class="flex items-center space-x-3 mb-6">
+<span class="material-symbols-outlined text-white">monitor</span>
+<h3 class="text-label-caps font-label-caps text-white uppercase tracking-wider">Display Configuration</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div class="p-4 bg-black rounded border border-white">
+<label class="block font-bold text-white mb-2">Wave Speed (mm/s)</label>
+<select class="w-full bg-black border border-white rounded p-2 text-white focus:border-white focus:ring-0 focus:outline-none transition-colors">
+<option>12.5 mm/s</option>
+<option selected="">25.0 mm/s</option>
+<option>50.0 mm/s</option>
+</select>
+</div>
+<div class="p-4 bg-black rounded border border-white">
+<label class="block font-bold text-white mb-2">Default Gain</label>
+<select class="w-full bg-black border border-white rounded p-2 text-white focus:border-white focus:ring-0 focus:outline-none transition-colors">
+<option>x0.5</option>
+<option selected="">x1.0</option>
+<option>x2.0</option>
+</select>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+</body></html>
