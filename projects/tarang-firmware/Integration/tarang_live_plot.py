@@ -98,6 +98,15 @@ RE_IMU_GYRO  = re.compile(
 RE_IMU_COMBO = re.compile(
     r"\[IMU\]\s+cnt=\d+\s+ax=(-?\d+)\s+ay=(-?\d+)\s+az=(-?\d+)\s+gx=(-?\d+)\s+gy=(-?\d+)\s+gz=(-?\d+)"
 )
+RE_PIPELINE_BEATS = re.compile(
+    r"\[PIPELINE\]\s+beats:\s+total=(\d+)\s+suspicious=(\d+)\s+gate_passed=(\d+)"
+)
+RE_PIPELINE_AI = re.compile(
+    r"\[PIPELINE\]\s+AI:\s+triggers=(\d+)\s+time=(\d+)\s+us\s+BLE_pkts=(\d+)"
+)
+RE_PIPELINE_STATUS = re.compile(
+    r"\[PIPELINE\]\s+HR=(\d+)\s+bpm\s+rhythm=(0x[0-9A-Fa-f]+)\s+PAC=(\d+)%\s+PVC=(\d+)%"
+)
 
 # ─── Auto-detect serial port ─────────────────────────────────────────────────
 
@@ -305,6 +314,40 @@ def serial_reader(port, baud, data: TelemetryData, logger: TelemetryLogger, stop
                 data.imu_gz.append(gz)
             logger.write("IMU_GYRO", [("gx", gx), ("gy", gy), ("gz", gz)], line)
             continue
+
+        # ── Parse Pipeline beats ──
+        m = RE_PIPELINE_BEATS.search(line)
+        if m:
+            logger.write("PIPELINE_BEATS", [
+                ("total", int(m.group(1))),
+                ("suspicious", int(m.group(2))),
+                ("gate_passed", int(m.group(3)))
+            ], line)
+            continue
+
+        # ── Parse Pipeline AI ──
+        m = RE_PIPELINE_AI.search(line)
+        if m:
+            logger.write("PIPELINE_AI", [
+                ("triggers", int(m.group(1))),
+                ("time_us", int(m.group(2))),
+                ("ble_pkts", int(m.group(3)))
+            ], line)
+            continue
+
+        # ── Parse Pipeline Status ──
+        m = RE_PIPELINE_STATUS.search(line)
+        if m:
+            logger.write("PIPELINE_STATUS", [
+                ("hr_bpm", int(m.group(1))),
+                ("rhythm", m.group(2)),
+                ("pac_pct", int(m.group(3))),
+                ("pvc_pct", int(m.group(4)))
+            ], line)
+            continue
+
+        # ── Catch-all for all other firmware lines ──
+        logger.write("OTHER", [], line)
 
     ser.close()
     print("[SERIAL] Closed.")

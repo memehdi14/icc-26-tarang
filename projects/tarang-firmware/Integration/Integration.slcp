@@ -20,10 +20,33 @@ readme:
 - path: readme.md
 source:
 - path: app.c
+- path: tarang_ecg.c
+- path: tarang_ppg.c
+- path: tarang_imu.c
+- path: tarang_dsp.c
+- path: tarang_pipeline.c
+- path: tarang_clinical_engine.c
+- path: tarang_ai.cc
+- path: tarang_fault_handler.c
+- path: gate_model_data.cc
+- path: sv_model_data.cc
 include:
 - path: .
   file_list:
   - path: app.h
+  - path: tarang_ecg.h
+  - path: tarang_ppg.h
+  - path: tarang_imu.h
+  - path: tarang_dsp.h
+  - path: tarang_pipeline.h
+  - path: tarang_clinical_engine.h
+  - path: tarang_ai.h
+  - path: tarang_constants.h
+  - path: tarang_time.h
+  - path: gate_model_data.h
+  - path: sv_model_data.h
+  - path: rr_scaler.h
+  - path: thresholds.h
 sdk:
   vendor: silabs
   id: simplicity_sdk
@@ -31,6 +54,9 @@ sdk:
 toolchain_settings: [
   ]
 component:
+- package: aiml
+  vendor: silabs
+  id: tensorflow_lite_micro
 - package: simplicity_sdk
   vendor: silabs
   id: EFR32MG26B510F3200IM48
@@ -103,4 +129,8 @@ ui_hints:
   highlight:
   - path: readme.md
     focus: true
+sdk_extension:
+- vendor: silabs
+  id: aiml
+  version: 2.2.2
 

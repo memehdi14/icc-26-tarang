@@ -29,6 +29,8 @@
 #include "tarang_ecg.h"
 #include "tarang_ppg.h"
 #include "tarang_imu.h"
+#include "tarang_pipeline.h"
+#include "tarang_time.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -46,6 +48,10 @@
 
 /* Sleeptimer handle for periodic 10ms wakeup */
 static sl_sleeptimer_timer_handle_t wakeup_timer;
+
+/* ── TARANG DSP/ML/Clinical Pipeline (static — ~32KB in .bss) ────────── */
+static tarang_pipeline_t s_pipeline;
+
 static void wakeup_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
 {
   (void)handle;
@@ -85,7 +91,7 @@ void app_init(void)
 
   printf("\r\n");
   printf("==========================================\r\n");
-  printf("  TARANG INTEGRATION v1.0\r\n");
+  printf("  TARANG INTEGRATION v2.0 (DSP+ML)\r\n");
   printf("  Active: %s%s%s\r\n",
          TARANG_ENABLE_ECG ? "ECG " : "",
          TARANG_ENABLE_PPG ? "PPG " : "",
@@ -210,6 +216,12 @@ void app_init(void)
                                      wakeup_callback,
                                      NULL, 0, 0);
   printf("[INIT] 10ms wakeup timer started.\r\n");
+
+  /* ── Initialize DSP → ML → Clinical Pipeline ────────────────────────── */
+  printf("[INIT] Pipeline: Initializing DSP + ML + Clinical Engine...\r\n");
+  tarang_pipeline_init(&s_pipeline);
+  printf("[INIT] Pipeline: Ready. Feed ECG samples via process_ecg_sample().\r\n");
+  printf("==========================================\r\n");
 }
 
 /***************************************************************************//**
@@ -223,7 +235,35 @@ void app_process_action(void)
 {
   /* ── Sensor processing ──────────────────────────────────────────────── */
 #if TARANG_ENABLE_ECG
+  /* CRITICAL: Read DMA half-ready flags BEFORE ecg_process() clears them.
+   * ecg_process() sets halfXReady = false internally, so if we check
+   * after, we'd always see false and never feed samples to the pipeline. */
+  bool h0 = tarang_ecg_half0_ready();
+  bool h1 = tarang_ecg_half1_ready();
+
   tarang_ecg_process();
+
+  /* ── Feed completed ECG DMA half-buffers into the DSP→ML pipeline ─── */
+  {
+    uint32_t *ecg_buf = tarang_ecg_get_buffer();
+    if (ecg_buf != NULL) {
+      /* Half 0 completed (DMA wrote 64 samples at index 0..63) */
+      if (h0) {
+        uint32_t now = tarang_now_ms();
+        for (int i = 0; i < ECG_HALF_SAMPLES; i++) {
+          tarang_pipeline_process_ecg_sample(&s_pipeline, ecg_buf[i], now);
+        }
+      }
+      /* Half 1 completed (DMA wrote 64 samples at index 64..127) */
+      if (h1) {
+        uint32_t now = tarang_now_ms();
+        for (int i = 0; i < ECG_HALF_SAMPLES; i++) {
+          tarang_pipeline_process_ecg_sample(&s_pipeline,
+                                              ecg_buf[ECG_HALF_SAMPLES + i], now);
+        }
+      }
+    }
+  }
 #endif
 #if TARANG_ENABLE_PPG
   tarang_ppg_process();
@@ -366,5 +406,29 @@ void app_process_action(void)
   }
 #endif
 
+  printf("========================================\r\n");
+
+  /* ── Pipeline diagnostics ────────────────────────────────────────── */
+  {
+    const tarang_diagnostics_t *d = tarang_pipeline_get_diag(&s_pipeline);
+    printf("  [PIPELINE] beats: total=%lu  suspicious=%lu  gate_passed=%lu\r\n",
+           (unsigned long)s_pipeline.total_beats,
+           (unsigned long)s_pipeline.suspicious_beats,
+           (unsigned long)s_pipeline.gate_passed_beats);
+    printf("  [PIPELINE] AI: triggers=%lu  time=%lu us  BLE_pkts=%lu\r\n",
+           (unsigned long)d->ai_trigger_count,
+           (unsigned long)d->ai_time_us,
+           (unsigned long)d->ble_packet_count);
+    if (s_pipeline.engine.total_beats > 0) {
+      uint32_t total = s_pipeline.engine.total_beats;
+      uint32_t pac_pct = s_pipeline.engine.pac_count * 100u / total;
+      uint32_t pvc_pct = s_pipeline.engine.pvc_count * 100u / total;
+      printf("  [PIPELINE] HR=%u bpm  rhythm=0x%02X  PAC=%u%%  PVC=%u%%\r\n",
+             (unsigned)s_pipeline.engine.current_hr,
+             (unsigned)s_pipeline.engine.rhythm_flags,
+             (unsigned)pac_pct,
+             (unsigned)pvc_pct);
+    }
+  }
   printf("========================================\r\n");
 }
