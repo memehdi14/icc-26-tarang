@@ -44,6 +44,24 @@ typedef struct {
 } tarang_pending_beat_t;
 
 typedef struct {
+  uint32_t timestamp_ms;
+  uint32_t r_peak_sample_idx;
+  uint16_t rr_interval_ms;
+  uint16_t local_hr_bpm_x10;
+  uint8_t  signal_quality;
+  int16_t  gate_probability_x1000; /* -1 when Gate did not run */
+  int16_t  sv_p_v_x1000;           /* -1 when SV Head did not run */
+  int16_t  sv_p_s_x1000;           /* -1 when SV Head did not run */
+  uint8_t  beat_class;
+  uint8_t  confidence;
+  uint8_t  rhythm_flags;
+  uint8_t  current_hr;
+  uint16_t sdnn_ms;
+  uint16_t rmssd_ms;
+  uint8_t  prr50_pct;
+} tarang_pipeline_beat_telemetry_t;
+
+typedef struct {
   /* DSP state (entire streaming Pan-Tompkins chain) */
   tarang_dsp_state_t       dsp;
 
@@ -69,6 +87,12 @@ typedef struct {
   uint8_t  pending_head;
   uint8_t  pending_tail;
   uint8_t  pending_count;
+
+  /* One-shot debug event consumed immediately after each ECG sample. */
+  tarang_pipeline_beat_telemetry_t latest_beat_telemetry;
+  uint32_t current_rpeak_sample_idx;
+  uint32_t latest_sample_timestamp_ms;
+  bool     beat_telemetry_pending;
 
   /* Pipeline initialized flag */
   bool     initialized;
@@ -166,6 +190,13 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
  * @param[in,out] pipeline  Pipeline state.
  ******************************************************************************/
 void tarang_pipeline_run_deferred(tarang_pipeline_t *pipeline);
+
+const tarang_dsp_debug_sample_t *tarang_pipeline_get_debug_sample(
+    const tarang_pipeline_t *pipeline);
+
+bool tarang_pipeline_take_beat_telemetry(
+    tarang_pipeline_t *pipeline,
+    tarang_pipeline_beat_telemetry_t *telemetry);
 
 /***************************************************************************//**
  * @brief Get a const pointer to the diagnostic counters.

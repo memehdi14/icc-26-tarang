@@ -61,6 +61,16 @@ typedef struct {
   bool     valid;               /* false = extraction failed */
 } tarang_beat_output_t;
 
+typedef struct {
+  uint32_t sample_idx;
+  uint32_t raw_adc;
+  float    bandpassed;
+  float    zscored;
+  float    mwi;
+  float    threshold_th1;
+  bool     warmed_up;
+} tarang_dsp_debug_sample_t;
+
 /*******************************************************************************
  * SOS Biquad State
  ******************************************************************************/
@@ -195,6 +205,9 @@ typedef struct {
   float warmup_mwi_max;
   float warmup_mwi_sum;
   int   warmup_mwi_count;
+
+  /* Latest intermediate values for validation telemetry. */
+  tarang_dsp_debug_sample_t debug_sample;
 } tarang_dsp_state_t;
 
 /*******************************************************************************

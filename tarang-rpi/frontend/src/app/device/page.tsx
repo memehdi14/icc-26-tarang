@@ -2,7 +2,7 @@ import { MonitorSmartphone, Activity } from "lucide-react";
 
 export default function Device() {
   return (
-    <div className="flex flex-col h-full font-mono text-sm gap-4">
+    <div className="flex flex-col h-full font-mono text-sm gap-4 p-4">
        <div className="border border-border bg-card p-6 flex flex-col min-h-0 h-full">
           <div className="mb-8 border-b border-border pb-6">
              <div className="text-xl font-bold tracking-widest uppercase">Device Info</div>
@@ -33,11 +33,11 @@ export default function Device() {
                    <div className="space-y-3">
                       <div className="flex justify-between items-center border-b border-border pb-2">
                          <span className="flex items-center"><Activity className="w-4 h-4 mr-2" /> ECG (MAX30001)</span>
-                         <span className="text-foreground bg-[#222] px-2 py-1 text-xs">Active (250Hz)</span>
+                         <span className="text-foreground bg-[#222] px-2 py-1 text-xs text-white">Active (250Hz)</span>
                       </div>
                       <div className="flex justify-between items-center border-b border-border pb-2">
                          <span className="flex items-center"><Activity className="w-4 h-4 mr-2" /> PPG (MAX30102)</span>
-                         <span className="text-foreground bg-[#222] px-2 py-1 text-xs">Active (100Hz)</span>
+                         <span className="text-foreground bg-[#222] px-2 py-1 text-xs text-white">Active (100Hz)</span>
                       </div>
                    </div>
                 </div>

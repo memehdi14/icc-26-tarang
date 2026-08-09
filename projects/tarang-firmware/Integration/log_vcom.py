@@ -10,7 +10,7 @@ Usage:
   python log_vcom.py --port COM11
 """
 
-import sys
+import argparse
 import os
 import time
 import csv
@@ -20,7 +20,10 @@ import serial.tools.list_ports
 
 DEFAULT_BAUD = 115200
 DEFAULT_PORT = "COM11"
-CSV_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_DIR = os.path.abspath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "..", "tarang-dsp", "integration_validation", "captures",
+))
 
 def find_serial_port():
     ports = serial.tools.list_ports.comports()
@@ -37,11 +40,19 @@ def find_serial_port():
     return DEFAULT_PORT
 
 def main():
-    port = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].startswith("COM") else find_serial_port()
-    baud = DEFAULT_BAUD
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", help="serial port, for example COM11")
+    parser.add_argument("--baud", type=int, default=DEFAULT_BAUD)
+    parser.add_argument("--output", type=os.path.abspath)
+    parser.add_argument("--verbose", action="store_true",
+                        help="print every high-rate telemetry record")
+    args = parser.parse_args()
+    port = args.port or find_serial_port()
+    baud = args.baud
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_path = os.path.join(CSV_DIR, f"vcom_log_{ts}.csv")
+    csv_path = args.output or os.path.join(CSV_DIR, f"tarang_{ts}.csv")
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
 
     print("=" * 60)
     print(f" TARANG VCOM LOGGER & TERMINAL STREAMER")
@@ -58,6 +69,8 @@ def main():
         sys.exit(1)
 
     t0 = time.time()
+    last_flush = t0
+    record_count = 0
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["unix_timestamp", "elapsed_sec", "raw_line"])
@@ -74,13 +87,17 @@ def main():
 
                 now = time.time()
                 elapsed = now - t0
+                record_count += 1
 
-                # 1. Print live to screen
-                print(line)
+                if args.verbose or not line.startswith("@"):
+                    print(line)
 
-                # 2. Write to CSV file immediately
                 writer.writerow([f"{now:.3f}", f"{elapsed:.3f}", line])
-                f.flush()
+                if now - last_flush >= 1.0:
+                    f.flush()
+                    if not args.verbose:
+                        print(f"[CAPTURE] {record_count} records, {elapsed:.1f}s")
+                    last_flush = now
 
         except KeyboardInterrupt:
             print("\n[LOG] Stopped logging.")
