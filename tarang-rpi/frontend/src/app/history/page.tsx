@@ -1,6 +1,6 @@
 export default function History() {
   return (
-    <div className="flex flex-col h-full font-mono text-sm gap-4">
+    <div className="flex flex-col h-full font-mono text-sm gap-4 p-4">
        <div className="border border-border bg-card p-6 flex flex-col min-h-0 h-full">
           <div className="flex justify-between items-center mb-8 border-b border-border pb-6">
              <div className="text-xl font-bold tracking-widest uppercase">Session History</div>
