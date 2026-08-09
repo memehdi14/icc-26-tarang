@@ -27,6 +27,13 @@
  ******************************************************************************/
 static tarang_beat_input_t s_last_beat;
 
+static int16_t probability_to_x1000(float probability)
+{
+  if (probability < 0.0f) return -1;
+  if (probability > 1.0f) probability = 1.0f;
+  return (int16_t)(probability * 1000.0f + 0.5f);
+}
+
 /*******************************************************************************
  * Private: Tier-0 Trigger Heuristics
  *
@@ -253,6 +260,11 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
   uint8_t beat_class = TARANG_BEAT_N;
   uint8_t confidence = 255;  /* maximum confidence for heuristic-classified N */
   bool suspicious = beat_is_suspicious(pipeline, rr_interval_ms, signal_quality);
+  bool gate_ran = false;
+  bool sv_ran = false;
+  float gate_prob = 0.0f;
+  float p_v = 0.0f;
+  float p_s = 0.0f;
 
   if (suspicious) {
     pipeline->suspicious_beats++;
@@ -263,7 +275,8 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
     compute_rr_features(pipeline, rr_interval_ms, rr_features);
 
     uint32_t t0 = tarang_now_ms();
-    float gate_prob = tarang_ai_gate(beat_window_130, rr_features);
+    gate_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
+    gate_prob = tarang_ai_gate(beat_window_130, rr_features);
     uint32_t t1 = tarang_now_ms();
     pipeline->diag.ai_time_us += (t1 - t0) * 1000;
 
@@ -271,8 +284,8 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
       pipeline->gate_passed_beats++;
 
       /* ── TIER 2: SV Head CNN ────────────────────────────────────── */
-      float p_v = 0.0f, p_s = 0.0f;
       uint32_t t2 = tarang_now_ms();
+      sv_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
       tarang_ai_sv_head(beat_window_130, rr_features, &p_v, &p_s);
       uint32_t t3 = tarang_now_ms();
       pipeline->diag.ai_time_us += (t3 - t2) * 1000;
@@ -309,6 +322,27 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
   /* Cache for packet building */
   s_last_beat = beat_input;
 
+  tarang_pipeline_beat_telemetry_t *telemetry =
+      &pipeline->latest_beat_telemetry;
+  telemetry->timestamp_ms = timestamp_ms;
+  telemetry->r_peak_sample_idx = pipeline->current_rpeak_sample_idx;
+  telemetry->rr_interval_ms = rr_interval_ms;
+  telemetry->local_hr_bpm_x10 = rr_interval_ms > 0
+      ? (uint16_t)(600000u / rr_interval_ms) : 0u;
+  telemetry->signal_quality = signal_quality;
+  telemetry->gate_probability_x1000 = probability_to_x1000(
+      gate_ran ? gate_prob : -1.0f);
+  telemetry->sv_p_v_x1000 = probability_to_x1000(sv_ran ? p_v : -1.0f);
+  telemetry->sv_p_s_x1000 = probability_to_x1000(sv_ran ? p_s : -1.0f);
+  telemetry->beat_class = beat_class;
+  telemetry->confidence = confidence;
+  telemetry->rhythm_flags = pipeline->engine.rhythm_flags;
+  telemetry->current_hr = pipeline->engine.current_hr;
+  telemetry->sdnn_ms = pipeline->engine.sdnn_ms;
+  telemetry->rmssd_ms = pipeline->engine.rmssd_ms;
+  telemetry->prr50_pct = pipeline->engine.prr50_pct;
+  pipeline->beat_telemetry_pending = true;
+
   /* ── BLE event check ────────────────────────────────────────────────── */
   if (tarang_clinical_engine_rhythm_changed(&pipeline->engine) ||
       tarang_clinical_engine_significant_event(&pipeline->engine)) {
@@ -320,9 +354,8 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
                                          uint32_t raw_adc,
                                          uint32_t timestamp_ms)
 {
-  (void)timestamp_ms;
-
   if (!pipeline->initialized) return;
+  pipeline->latest_sample_timestamp_ms = timestamp_ms;
 
   /* Run the full DSP chain on this single ADC sample.
    * DSP internally manages:
@@ -344,10 +377,15 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
   /* DSP emitted a beat — feed it into the Tier 0→1→2→3 cascade.
    * tarang_pipeline_on_rpeak handles everything from heuristic gating
    * through CNN inference through the Clinical Event Engine. */
-  uint32_t rpeak_ms =
-      (uint32_t)(((uint64_t)dsp_beat.r_peak_sample_idx * 1000ULL)
-                 / TARANG_ECG_SAMPLE_RATE_HZ);
+  uint32_t sample_delta = pipeline->dsp.debug_sample.sample_idx -
+                          dsp_beat.r_peak_sample_idx;
+  uint32_t rpeak_age_ms =
+      (uint32_t)(((uint64_t)sample_delta * 1000ULL) /
+                 TARANG_ECG_SAMPLE_RATE_HZ);
+  uint32_t rpeak_ms = timestamp_ms >= rpeak_age_ms
+      ? timestamp_ms - rpeak_age_ms : 0u;
 
+  pipeline->current_rpeak_sample_idx = dsp_beat.r_peak_sample_idx;
   tarang_pipeline_on_rpeak(pipeline, rpeak_ms,
                             dsp_beat.waveform,
                             dsp_beat.signal_quality);
@@ -368,4 +406,23 @@ const tarang_diagnostics_t *tarang_pipeline_get_diag(
     const tarang_pipeline_t *pipeline)
 {
   return &pipeline->diag;
+}
+
+const tarang_dsp_debug_sample_t *tarang_pipeline_get_debug_sample(
+    const tarang_pipeline_t *pipeline)
+{
+  return &pipeline->dsp.debug_sample;
+}
+
+bool tarang_pipeline_take_beat_telemetry(
+    tarang_pipeline_t *pipeline,
+    tarang_pipeline_beat_telemetry_t *telemetry)
+{
+  if (!pipeline->beat_telemetry_pending || telemetry == NULL) {
+    return false;
+  }
+
+  *telemetry = pipeline->latest_beat_telemetry;
+  pipeline->beat_telemetry_pending = false;
+  return true;
 }

@@ -590,6 +590,14 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
   /* ── Step 8: MWI ────────────────────────────────────────────────── */
   float y_mwi = mwi_step(&state->mwi, y_sq);
 
+  state->debug_sample.sample_idx = (uint32_t)state->sample_idx;
+  state->debug_sample.raw_adc = raw_val;
+  state->debug_sample.bandpassed = y_post_notch;
+  state->debug_sample.zscored = y_norm;
+  state->debug_sample.mwi = y_mwi;
+  state->debug_sample.threshold_th1 = state->thresh.TH1;
+  state->debug_sample.warmed_up = state->warmed_up;
+
   /* ── Warm-up phase: collect MWI statistics, don't detect ────────── */
   if (!state->warmed_up) {
     if (y_mwi > state->warmup_mwi_max) state->warmup_mwi_max = y_mwi;
@@ -612,12 +620,12 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
       state->thresh.NPKI = npki_init;
       state->thresh.TH1 = npki_init + 0.25f * (spki_init - npki_init);
       state->thresh.TH2 = 0.5f * state->thresh.TH1;
-      state->thresh.current_idx = 0;
+      state->thresh.current_idx = state->sample_idx;
       state->thresh.prev_mwi = 0.0f;
       state->thresh.prev_mwi_idx = -1;
 
       state->warmed_up = true;
-      state->sample_idx = 0; /* Reset sample counter */
+      state->debug_sample.warmed_up = true;
 
       printf("[DSP] Warm-up complete: SPKI=%d NPKI=%d TH1=%d (x1000)\r\n",
              (int)(spki_init * 1000.0f),
@@ -632,6 +640,7 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
   /* ── Step 9: Adaptive threshold — R-peak detection ──────────────── */
   float slope_est = fabsf(y_deriv);
   int accepted_idx = adaptive_thresh_step(&state->thresh, y_mwi, slope_est);
+  state->debug_sample.threshold_th1 = state->thresh.TH1;
 
   /* ── Step 10-12: If peak detected, add to pending ───────────────── */
   if (accepted_idx >= 0) {

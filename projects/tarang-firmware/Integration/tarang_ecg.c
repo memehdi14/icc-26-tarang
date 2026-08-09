@@ -19,6 +19,8 @@
 #define SL_SUPPRESS_DEPRECATION_WARNINGS_SDK_2026_6
 
 #include "tarang_ecg.h"
+#include "tarang_time.h"
+#include "tarang_debug_config.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -58,9 +60,9 @@ static volatile uint32_t  halves_completed  = 0;
 static volatile bool      first_half_seen   = false;
 static volatile uint32_t  half0Pending      = 0;
 static volatile uint32_t  half1Pending      = 0;
-static volatile bool      ecg_disabled      = false;  /* set if ECG hardware chain stalls */
+static volatile tarang_sensor_health_t ecg_health = TARANG_SENSOR_DISABLED;
 
-#define ECG_STALL_THRESHOLD  1250u  /* ~5 sec at 250 Hz with no new samples */
+#define ECG_STALE_TIMEOUT_MS  5000u
 
 /***************************************************************************//**
  * LETIMER Interrupt — sample_count bookkeeping only.
@@ -110,6 +112,7 @@ static bool ecgDmaCallback(unsigned int channel, unsigned int sequenceNo, void *
  ******************************************************************************/
 void tarang_ecg_init(void)
 {
+  ecg_health = TARANG_SENSOR_STARTING;
   /**********************************************************************
    * 1. CMU - clocks
    **********************************************************************/
@@ -227,21 +230,29 @@ void tarang_ecg_init(void)
  ******************************************************************************/
 void tarang_ecg_process(void)
 {
-  static uint32_t last_output = 0;
-  static uint32_t stall_check_count = 0;
-  static uint32_t stall_check_sample = 0;
+  static uint32_t last_halves_seen = 0;
+  static uint32_t last_progress_ms = 0;
+  uint32_t now_ms = tarang_now_ms();
 
-  /* If ECG hardware chain has stalled, skip processing */
-  if (ecg_disabled) {
-    return;
+  if (last_progress_ms == 0u) {
+    last_progress_ms = now_ms;
   }
 
-  /*
-   * ECG hardware pipeline is fully autonomous:
-   *   LETIMER0 -> PRS ch2 -> IADC0 -> DMADRV ping-pong -> ecg_buffer RAM
-   * Runs in background with 0% CPU intervention.
-   */
-  
+  if (halves_completed != last_halves_seen) {
+    tarang_sensor_health_t previous = ecg_health;
+    last_halves_seen = halves_completed;
+    last_progress_ms = now_ms;
+    ecg_health = TARANG_SENSOR_OK;
+    if (previous == TARANG_SENSOR_STALE ||
+        previous == TARANG_SENSOR_UNAVAILABLE) {
+      printf("[ECG] RECOVERED - DMA samples are flowing again\r\n");
+    }
+  } else if ((uint32_t)(now_ms - last_progress_ms) >= ECG_STALE_TIMEOUT_MS &&
+             ecg_health != TARANG_SENSOR_STALE) {
+    ecg_health = TARANG_SENSOR_STALE;
+    printf("[ECG] STALE - no completed DMA half for 5 seconds; app remains alive\r\n");
+  }
+
   /* Clear half-ready flags */
   if (half0Ready) { 
     half0Ready = false; 
@@ -252,30 +263,18 @@ void tarang_ecg_process(void)
     half1Pending = 0;
   }
 
-  /* Stall detection: if sample_count hasn't advanced, the hardware chain died */
-  stall_check_count++;
-  if (stall_check_count >= ECG_STALL_THRESHOLD) {
-    if (sample_count == stall_check_sample && sample_count > 0) {
-      ecg_disabled = true;
-      printf("[ECG] *** STALL DETECTED — no new samples for ~5s ***\r\n");
-      printf("[ECG] *** DISABLED. PPG + IMU + Pipeline continue ***\r\n");
-      return;
+#if !TARANG_DEBUG_TELEMETRY
+  /* Stream ALL samples at full native 250 Hz rate whenever a half-buffer completes */
+  static uint32_t last_halves_printed = 0;
+  if (halves_completed != last_halves_printed) {
+    uint32_t start_idx = (halves_completed & 1U) ? 0 : ECG_HALF_SAMPLES;
+    for (uint32_t i = 0; i < ECG_HALF_SAMPLES; i++) {
+      uint32_t raw_val = ecg_buffer[start_idx + i] & 0x00FFFFFFu;
+      printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
     }
-    stall_check_sample = sample_count;
-    stall_check_count = 0;
+    last_halves_printed = halves_completed;
   }
-  
-  /* Lightweight telemetry: output one sample every 10 samples (~25 Hz stream from 250 Hz data)
-   * This gives the plotter smooth data without overwhelming serial port */
-  if (sample_count > 0 && (sample_count - last_output >= 10)) {
-    last_output = sample_count;
-    
-    /* Output most recent sample from the active half-buffer */
-    uint32_t idx = (halves_completed & 1U) ? 0 : ECG_HALF_SAMPLES;
-    uint32_t raw_val = ecg_buffer[idx] & 0x00FFFFFFu;
-    
-    printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
-  }
+#endif
 }
 
 /*******************************************************************************
@@ -309,4 +308,14 @@ uint32_t tarang_ecg_get_overrun_count(void)
 uint32_t tarang_ecg_get_halves_completed(void)
 {
   return halves_completed;
+}
+
+tarang_sensor_health_t tarang_ecg_get_health(void)
+{
+  return ecg_health;
+}
+
+bool tarang_ecg_is_valid(void)
+{
+  return tarang_sensor_health_is_valid(ecg_health);
 }
