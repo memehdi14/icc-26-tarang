@@ -267,7 +267,7 @@ void tarang_ecg_process(void)
   /* Stream ALL samples at full native 250 Hz rate whenever a half-buffer completes */
   static uint32_t last_halves_printed = 0;
   if (halves_completed != last_halves_printed) {
-    uint32_t start_idx = (halves_completed & 1U) ? 0 : ECG_HALF_SAMPLES;
+    uint32_t start_idx = (halves_completed & 1U) ? ECG_HALF_SAMPLES : 0;
     for (uint32_t i = 0; i < ECG_HALF_SAMPLES; i++) {
       uint32_t raw_val = ecg_buffer[start_idx + i] & 0x00FFFFFFu;
       printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);

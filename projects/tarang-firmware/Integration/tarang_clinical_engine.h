@@ -74,6 +74,10 @@ typedef struct {
   /* Last beat class for compensatory pause detection */
   uint8_t  last_beat_class;
 
+  /* Monotonic count of valid RR pushes — never saturates (unlike rr_count
+   * which caps at TARANG_RR_WINDOW_SIZE). Used for periodic HRV trigger. */
+  uint32_t rr_valid_push_count;
+
   /* Flag: rhythm_flags changed since last query */
   bool     rhythm_changed;
   bool     significant_event;   /* couplet, triplet, V-run, VT */

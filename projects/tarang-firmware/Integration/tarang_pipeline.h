@@ -154,12 +154,7 @@ bool tarang_pipeline_should_send_event(tarang_pipeline_t *pipeline);
 void tarang_pipeline_get_packet(const tarang_pipeline_t *pipeline,
                                  tarang_event_packet_t *pkt);
 
-/***************************************************************************//**
- * @brief Get a const pointer to the diagnostic counters.
- *
- * @param[in] pipeline  Pipeline state.
- * @return Pointer to diagnostics struct.
- ******************************************************************************/
+
 /***************************************************************************//**
  * @brief Process one raw ECG ADC sample through DSP + ML + Clinical Engine.
  *
@@ -183,9 +178,8 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
 /***************************************************************************//**
  * @brief Run deferred AI inference on any queued beats.
  *
- * Call this in the super loop AFTER all sensor _process() calls.
- * This drains the pending beat queue and runs Tier-1/2 CNN inference
- * without blocking ECG/PPG/IMU sample collection.
+ * NOT IMPLEMENTED — declared for a planned deferred-execution architecture
+ * that hasn't been built yet. Do not call. See BUG-1 in code review 2026-08-10.
  *
  * @param[in,out] pipeline  Pipeline state.
  ******************************************************************************/

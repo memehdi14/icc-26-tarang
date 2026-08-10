@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 """
-TARANG BLE Telemetry Receiver for Raspberry Pi / Linux
-------------------------------------------------------
+TARANG BLE Telemetry Receiver for Raspberry Pi / Linux — mmd_tarang.py
+---------------------------------------------------------------------
 Connects to the TARANG EFR32 BLE device, subscribes to GATT telemetry notifications,
-unpacks the 16-byte clinical event packet, and displays real-time telemetry:
-- Heart Rate & Rhythm Status (Normal, AFib, Sinus Tachy/Brady, Bigeminy, Trigeminy, V-Run, VT)
-- Beat Classification (N, S/PAC, V/PVC, Q)
-- PAC/PVC Burden %
-- HRV Metrics (SDNN, RMSSD)
+unpacking the 16-byte clinical event packet, and displays real-time telemetry with
+exact raw 128 binary bits, raw hex bytes, and offset breakdown.
 """
 
 import asyncio
@@ -16,8 +13,7 @@ import sys
 from bleak import BleakScanner, BleakClient
 
 # UUID of the telemetry characteristic defined in Simplicity Studio GATT Configurator.
-# Replace this with your exact GATT characteristic UUID if different.
-TELEMETRY_CHAR_UUID = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"  # Standard / Custom UUID
+TELEMETRY_CHAR_UUID = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"
 
 # Rhythm Flag Bitfield Bitmask Definitions
 RHYTHM_FLAGS = {
