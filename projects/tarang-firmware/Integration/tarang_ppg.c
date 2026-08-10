@@ -299,7 +299,7 @@ static void max30102_gpio_callback(uint8_t pin)
 /*******************************************************************************
  * tarang_ppg_init
  ******************************************************************************/
-void tarang_ppg_init(void)
+void tarang_ppg_init(bool bus_already_clear)
 {
     ppg_health = TARANG_SENSOR_STARTING;
     ppg_last_sample_ms = tarang_now_ms();
@@ -310,7 +310,9 @@ void tarang_ppg_init(void)
     printf("====================================\r\n");
 
     /* ── Step 0: Clear I2C bus (in case slave was holding SDA low) ────── */
-    i2c_bus_clear();
+    if (!bus_already_clear) {
+      i2c_bus_clear();
+    }
 
     /* ── Step 1: Configure MAX30102 sensor registers with retry ──────── */
     bool config_ok = false;

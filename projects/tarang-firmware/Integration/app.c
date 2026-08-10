@@ -43,6 +43,7 @@
 #include "sl_i2cspm.h"
 #include "sl_i2cspm_instances.h"
 #include "sl_sleeptimer.h"
+#include "em_core.h"
 
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
 #include "sl_power_manager.h"
@@ -62,10 +63,12 @@ static void wakeup_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
    * so the super loop runs and processes any pending sensor data. */
 }
 
-/* Simple delay for sensor power-up stabilization */
+/* Calibrated delay for sensor power-up stabilization.
+ * All call sites are inside app_init(), which runs after sl_system_init()
+ * has initialized the sleeptimer — safe to use the SDK function here. */
 static void delay_ms(uint32_t ms)
 {
-  for (volatile uint32_t i = 0; i < ms * 4000u; i++) { }
+  sl_sleeptimer_delay_millisecond(ms);
 }
 
 #if TARANG_DEBUG_TELEMETRY
@@ -153,7 +156,7 @@ static void telemetry_emit_sensor_samples(void)
  * For individual testing, enable only one at a time.
  * For full integration, enable all three.
  ******************************************************************************/
-#define TARANG_ENABLE_ECG   0
+#define TARANG_ENABLE_ECG   1
 #define TARANG_ENABLE_PPG   0
 #define TARANG_ENABLE_IMU   1
 
@@ -266,7 +269,7 @@ void app_init(void)
 
 #if TARANG_ENABLE_PPG
   printf("[INIT] PPG: Configuring MAX30102...\r\n");
-  tarang_ppg_init();
+  tarang_ppg_init(true);  /* bus already cleared by app.c I2C recovery above */
   printf("[INIT] PPG: %s\r\n",
          tarang_ppg_is_found() ? "OK — interrupts armed at ~100 Hz" : "FAILED");
 #else
@@ -328,9 +331,14 @@ void app_process_action(void)
 #if TARANG_ENABLE_ECG
   /* CRITICAL: Read DMA half-ready flags BEFORE ecg_process() clears them.
    * ecg_process() sets halfXReady = false internally, so if we check
-   * after, we'd always see false and never feed samples to the pipeline. */
+   * after, we'd always see false and never feed samples to the pipeline.
+   * Atomic block ensures both flags are read consistently — without it,
+   * a DMA completion between reading h0 and h1 could be missed. */
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
   bool h0 = tarang_ecg_half0_ready();
   bool h1 = tarang_ecg_half1_ready();
+  CORE_EXIT_ATOMIC();
 
   tarang_ecg_process();
 

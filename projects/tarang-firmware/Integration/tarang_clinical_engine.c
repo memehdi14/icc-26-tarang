@@ -438,6 +438,7 @@ void tarang_clinical_engine_process_beat(tarang_clinical_engine_t *engine,
   if (beat->rr_interval_ms > 0) {
     rr_ring_push(engine->rr_buffer, &engine->rr_head, &engine->rr_count,
                  TARANG_RR_WINDOW_SIZE, beat->rr_interval_ms);
+    engine->rr_valid_push_count++;  /* monotonic — never saturates */
   }
 
   /* ── Push beat class into pattern buffer ────────────────────────────── */
@@ -473,8 +474,13 @@ void tarang_clinical_engine_process_beat(tarang_clinical_engine_t *engine,
   /* 8. Sinus Tach / Brady (gated on NOT AFIB) */
   check_sinus_rate(engine);
 
-  /* 9. HRV metrics (updated whenever valid RR count reaches a multiple of 30) */
-  if (engine->rr_count > 0 && (engine->rr_count % TARANG_RR_WINDOW_SIZE) == 0) {
+  /* 9. HRV metrics — update every 30 valid RR pushes (not every beat).
+   * rr_count saturates at TARANG_RR_WINDOW_SIZE (30) once the ring fills,
+   * so using it for the modulus would fire on every single beat. The
+   * monotonic rr_valid_push_count keeps climbing and gives a true
+   * periodic trigger. */
+  if (engine->rr_count >= TARANG_RR_WINDOW_SIZE &&
+      (engine->rr_valid_push_count % TARANG_RR_WINDOW_SIZE) == 0) {
     update_hrv(engine);
   }
 

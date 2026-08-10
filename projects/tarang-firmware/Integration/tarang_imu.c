@@ -546,16 +546,15 @@ void tarang_imu_process(void)
     return;
   }
 
-  if (!imu_data_ready)
-  {
-    return;
-  }
+  bool have_data;
 
   CORE_DECLARE_IRQ_STATE;
-
   CORE_ENTER_ATOMIC();
-  imu_data_ready = false;
+  have_data = imu_data_ready;
+  if (have_data) { imu_data_ready = false; }
   CORE_EXIT_ATOMIC();
+
+  if (!have_data) { return; }
 
   read_attempts++;
 

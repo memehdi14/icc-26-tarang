@@ -22,9 +22,13 @@ extern "C" {
  * Initialize PPG sensor (MAX30102).
  * Configures: sensor registers, GPIO PC06 interrupt, I2C bus.
  *
+ * @param bus_already_clear  If true, skip the initial i2c_bus_clear()
+ *                           (caller already cleared the bus, e.g. app.c).
+ *                           Retry-on-failure bus clears are still performed.
+ *
  * @note Call GPIOINT_Init() and CMU_ClockEnable(cmuClock_GPIO) BEFORE this.
  ******************************************************************************/
-void tarang_ppg_init(void);
+void tarang_ppg_init(bool bus_already_clear);
 
 /***************************************************************************//**
  * PPG process action — call from app_process_action().
