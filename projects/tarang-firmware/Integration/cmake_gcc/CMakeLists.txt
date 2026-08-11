@@ -14,7 +14,6 @@ include(Integration.cmake)
 
 add_executable(Integration
     # Add additional sources here
-    "${CMAKE_CURRENT_LIST_DIR}/../tarang_ble.c"
 )
 
 target_include_directories(Integration PUBLIC

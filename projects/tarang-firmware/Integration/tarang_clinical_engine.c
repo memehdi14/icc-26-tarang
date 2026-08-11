@@ -25,6 +25,7 @@
  ******************************************************************************/
 
 #include "tarang_clinical_engine.h"
+#include "tarang_time.h"
 #include <string.h>
 #include <math.h>
 
@@ -497,16 +498,24 @@ void tarang_clinical_engine_build_packet(const tarang_clinical_engine_t *engine,
                                           const tarang_beat_input_t *beat,
                                           tarang_event_packet_t *pkt)
 {
-  pkt->timestamp_ms    = beat->timestamp_ms;
-  pkt->beat_class      = beat->beat_class;
-  pkt->confidence      = beat->confidence;
-  pkt->rr_interval_ms  = beat->rr_interval_ms;
-  pkt->rhythm_flags    = engine->rhythm_flags;
-  pkt->pac_burden_pct  = compute_burden(engine->pac_count, engine->total_beats);
-  pkt->pvc_burden_pct  = compute_burden(engine->pvc_count, engine->total_beats);
-  pkt->current_hr      = engine->current_hr;
-  pkt->sdnn_ms         = engine->sdnn_ms;
-  pkt->rmssd_ms        = engine->rmssd_ms;
+  if (pkt == NULL) return;
+  if (beat != NULL && beat->timestamp_ms > 0) {
+    pkt->timestamp_ms    = beat->timestamp_ms;
+    pkt->beat_class      = beat->beat_class;
+    pkt->confidence      = beat->confidence;
+    pkt->rr_interval_ms  = beat->rr_interval_ms;
+  } else {
+    pkt->timestamp_ms    = tarang_now_ms();
+    pkt->beat_class      = 0;
+    pkt->confidence      = 255;
+    pkt->rr_interval_ms  = 0;
+  }
+  pkt->rhythm_flags    = engine ? engine->rhythm_flags : 0;
+  pkt->pac_burden_pct  = engine ? compute_burden(engine->pac_count, engine->total_beats) : 0;
+  pkt->pvc_burden_pct  = engine ? compute_burden(engine->pvc_count, engine->total_beats) : 0;
+  pkt->current_hr      = engine ? engine->current_hr : 0;
+  pkt->sdnn_ms         = engine ? engine->sdnn_ms : 0;
+  pkt->rmssd_ms        = engine ? engine->rmssd_ms : 0;
 }
 
 bool tarang_clinical_engine_rhythm_changed(tarang_clinical_engine_t *engine)

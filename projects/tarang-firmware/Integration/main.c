@@ -29,6 +29,7 @@
  ******************************************************************************/
 #include "sl_component_catalog.h"
 #include "sl_main_init.h"
+#include <stdio.h>
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
 #include "sl_power_manager.h"
 #endif
@@ -45,6 +46,11 @@ int main(void)
   // component initialization will take place there.
   sl_main_init();
 
+  // Early boot marker: confirms sl_main_init() completed and UART is ready.
+  // If this prints but app_init() is silent, the crash is inside app_init().
+  // If nothing prints at all, crash occurred inside sl_main_init() (BLE/clock init).
+  printf("\r\n[BOOT] sl_main_init() OK — entering app_init()\r\n");
+
 #if defined(SL_CATALOG_KERNEL_PRESENT)
   // Start the kernel. The start task will be executed (Highest priority) to complete
   // the Simplicity SDK components initialization and the user app_init() hook function will be called.
@@ -53,6 +59,7 @@ int main(void)
 
   // User provided code.
   app_init();
+  printf("[BOOT] app_init() complete — starting superloop\r\n");
 
   while (1) {
     // Silicon Labs components process action routine
