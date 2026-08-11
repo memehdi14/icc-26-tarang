@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" fill="none">
+  <defs>
+    <linearGradient id="tarang-full-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#006A61" />
+      <stop offset="100%" stop-color="#003732" />
+    </linearGradient>
+    <linearGradient id="pulse-line" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#85D5C9" />
+      <stop offset="100%" stop-color="#FFFFFF" />
+    </linearGradient>
+  </defs>
+
+  <!-- Logo Icon -->
+  <g transform="translate(10, 10)">
+    <circle cx="30" cy="30" r="28" fill="url(#tarang-full-grad)" stroke="#008378" stroke-width="2" />
+    <path d="M 8 30 H 18 L 21 24 L 24 36 L 28 14 L 33 46 L 37 26 L 40 32 L 42 30 H 52" 
+          stroke="url(#pulse-line)" 
+          stroke-width="3" 
+          stroke-linecap="round" 
+          stroke-linejoin="round" />
+    <circle cx="28" cy="14" r="2.5" fill="#FFFFFF" />
+  </g>
+
+  <!-- Brand Typography -->
+  <text x="80" y="38" font-family="Geist, system-ui, sans-serif" font-weight="800" font-size="24" fill="#131B2E" letter-spacing="-0.5">TARANG</text>
+  <text x="180" y="38" font-family="Geist, system-ui, sans-serif" font-weight="600" font-size="24" fill="#006A61" letter-spacing="-0.5">CLINICAL</text>
+  <text x="81" y="55" font-family="JetBrains Mono, monospace" font-weight="600" font-size="9" fill="#3E4947" letter-spacing="1.5">CARDIAC TELEMETRY WORKSTATION</text>
+</svg>
