@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tarang Clinical - Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#066a61",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#d2d9f4",
+                        "on-background": "#131b2e",
+                        "on-tertiary-fixed-variant": "#653e00",
+                        "on-error": "#ffffff",
+                        "primary-fixed-dim": "#85d5c9",
+                        "secondary-container": "#de294b",
+                        "tertiary-fixed": "#ffddb8",
+                        "surface-container": "#eaedff",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "surface-container-low": "#f2f3ff",
+                        "surface": "#faf8ff",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#faf8ff",
+                        "secondary-fixed-dim": "#ffb3b6",
+                        "surface-variant": "#dae2fc",
+                        "outline": "#6e7977",
+                        "outline-variant": "#bcc9c6",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed-variant": "#005049",
+                        "tertiary-fixed-dim": "#fcba66",
+                        "primary-container": "#00685f",
+                        "on-surface": "#131b2e",
+                        "on-secondary-fixed": "#40000c",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#2a1700",
+                        "secondary": "#ba0035",
+                        "on-primary-container": "#93e4d8",
+                        "surface-container-high": "#e1e7ff",
+                        "tertiary": "#623c00",
+                        "inverse-surface": "#283044",
+                        "tertiary-container": "#825100",
+                        "on-secondary-container": "#fffbff",
+                        "inverse-primary": "#85d5c9",
+                        "on-surface-variant": "#3e4947",
+                        "on-primary-fixed": "#00201d",
+                        "on-secondary-fixed-variant": "#920027",
+                        "secondary-fixed": "#ffdada",
+                        "primary": "#004e47",
+                        "on-tertiary-container": "#ffcb8f",
+                        "surface-container-highest": "#dae2fc",
+                        "inverse-on-surface": "#eef0ff",
+                        "primary-fixed": "#a1f1e5",
+                        "surface-bright": "#faf8ff",
+                        "on-secondary": "#ffffff",
+                        "cobalt-blue": "#2563EB",
+                        "teal-accent": "#0D9488"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "card-padding": "20px",
+                        "gutter": "16px",
+                        "margin-mobile": "16px",
+                        "stack-md": "16px",
+                        "base": "4px",
+                        "stack-lg": "24px",
+                        "margin-desktop": "32px",
+                        "stack-sm": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Geist"],
+                        "body-sm": ["Geist"],
+                        "reference-text": ["Geist"],
+                        "metric-display-mobile": ["Geist"],
+                        "label-mono": ["JetBrains Mono"],
+                        "body-md": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "metric-display": ["Geist"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "reference-text": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "metric-display-mobile": ["36px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "label-mono": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "metric-display": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Custom Toggle Switch CSS */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #2563EB; /* Cobalt Blue */
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #2563EB; /* Cobalt Blue */
+        }
+        .toggle-checkbox {
+            right: 0;
+            z-index: 1;
+            border-color: #bcc9c6;
+            transition: all 0.3s;
+        }
+        .toggle-label {
+            width: 3rem;
+            height: 1.5rem;
+            background-color: #bcc9c6;
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .toggle-label::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 1.25rem;
+            height: 1.25rem;
+            background-color: white;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        .toggle-checkbox:checked + .toggle-label::after {
+            transform: translateX(1.5rem);
+        }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #0D9488; /* Teal Accent */
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #e2e7ff;
+            border-radius: 2px;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface h-screen flex overflow-hidden font-body-md text-body-md">
+<!-- Side Navigation -->
+<aside class="hidden md:flex flex-col fixed left-0 top-16 bottom-0 w-64 bg-surface border-r border-outline-variant z-40 py-stack-lg">
+<div class="px-stack-lg mb-stack-lg">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold">
+                    A
+                </div>
+<div>
+<h2 class="font-headline-md text-headline-md font-bold text-primary">Dr. Aris</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">ICU Specialist</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-stack-sm flex flex-col gap-2">
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span>History</span>
+</a>
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="settings_input_component">settings_input_component</span>
+<span>Device Info</span>
+</a>
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md bg-surface-container-high text-primary border-r-4 border-primary font-bold rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined fill" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="mt-auto px-stack-sm flex flex-col gap-2">
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Support</span>
+</a>
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</aside>
+<!-- Top App Bar -->
+<header class="fixed top-0 w-full z-50 h-16 bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center px-gutter md:pl-72">
+<div class="flex items-center gap-4">
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary">Tarang Clinical</h1>
+<nav class="hidden md:flex gap-6 ml-8">
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors py-5 border-b-2 border-transparent" href="#">Patient Context</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors py-5 border-b-2 border-transparent" href="#">Room 402-A</a>
+<a class="text-primary font-semibold border-b-2 border-primary py-5" href="#">Critical Care</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="bg-secondary-container text-on-secondary-container px-4 py-2 rounded font-medium text-sm flex items-center gap-2 hover:bg-secondary transition-colors">
+<span class="material-symbols-outlined text-sm">warning</span>
+                Emergency Alert
+            </button>
+<button class="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-full transition-colors md:hidden">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 w-full pt-16 md:pl-64 overflow-y-auto bg-surface-container-lowest">
+<div class="p-gutter md:p-margin-desktop max-w-5xl mx-auto space-y-stack-lg pb-32">
+<header class="mb-stack-lg">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">System Settings</h2>
+<p class="text-on-surface-variant font-body-md">Manage telemetry preferences, alert thresholds, and device configurations.</p>
+</header>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-stack-lg">
+<!-- Left Column: Navigation/Categories -->
+<div class="lg:col-span-1 space-y-2">
+<button class="w-full text-left px-4 py-3 bg-surface-container-high text-cobalt-blue font-semibold rounded-lg flex items-center justify-between border border-outline-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">vital_signs</span>
+<span>Telemetry Defaults</span>
+</div>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+<button class="w-full text-left px-4 py-3 text-on-surface-variant hover:bg-surface-container-low font-medium rounded-lg flex items-center justify-between transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">notifications_active</span>
+<span>Alert Thresholds</span>
+</div>
+</button>
+<button class="w-full text-left px-4 py-3 text-on-surface-variant hover:bg-surface-container-low font-medium rounded-lg flex items-center justify-between transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">tune</span>
+<span>Waveform Display</span>
+</div>
+</button>
+<button class="w-full text-left px-4 py-3 text-on-surface-variant hover:bg-surface-container-low font-medium rounded-lg flex items-center justify-between transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">security</span>
+<span>Security &amp; Access</span>
+</div>
+</button>
+</div>
+<!-- Right Column: Settings Content -->
+<div class="lg:col-span-2 space-y-stack-lg">
+<!-- Card 1: Data Acquisition -->
+<section class="bg-surface border border-outline-variant rounded-xl p-card-padding">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-4 border-b border-outline-variant pb-2">Data Acquisition</h3>
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<div>
+<h4 class="font-medium text-on-surface">Continuous Monitoring</h4>
+<p class="text-sm text-on-surface-variant">Enable uninterrupted data streaming from connected devices.</p>
+</div>
+<div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" id="toggle1" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer" for="toggle1"></label>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<div>
+<h4 class="font-medium text-on-surface">High-Fidelity Mode</h4>
+<p class="text-sm text-on-surface-variant">Increase sampling rate for detailed waveform analysis (uses more bandwidth).</p>
+</div>
+<div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+<input class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" id="toggle2" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer" for="toggle2"></label>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-2">
+<h4 class="font-medium text-on-surface">Data Sync Interval</h4>
+<span class="font-label-mono text-teal-accent">500 ms</span>
+</div>
+<input class="w-full" max="2000" min="100" type="range" value="500"/>
+<div class="flex justify-between text-xs text-on-surface-variant mt-1 font-label-mono">
+<span>100ms</span>
+<span>2000ms</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Card 2: AI Clinical Insights -->
+<section class="bg-surface border border-outline-variant rounded-xl p-card-padding">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-4 border-b border-outline-variant pb-2">AI Clinical Insights</h3>
+<div class="space-y-4">
+<div class="p-4 bg-primary-fixed-dim/10 border border-primary-fixed-dim rounded-lg flex gap-4">
+<span class="material-symbols-outlined text-primary-fixed-dim">memory</span>
+<div>
+<h4 class="font-medium text-on-surface">Predictive Deterioration Warnings</h4>
+<p class="text-sm text-on-surface-variant mb-3">AI model analyzes historical vitals to predict potential critical events before they occur.</p>
+<div class="flex gap-3">
+<button class="bg-cobalt-blue text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-blue-700 transition-colors">Enabled</button>
+<button class="border border-outline bg-transparent text-on-surface px-4 py-1.5 rounded text-sm font-medium hover:bg-surface-container-low transition-colors">Configure Model</button>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between py-2">
+<div>
+<h4 class="font-medium text-on-surface">Artifact Rejection</h4>
+<p class="text-sm text-on-surface-variant">Automatically filter out noise from patient movement.</p>
+</div>
+<div class="relative inline-block w-12 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" id="toggle3" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer" for="toggle3"></label>
+</div>
+</div>
+</div>
+</section>
+<!-- Action Buttons -->
+<div class="flex justify-end gap-4 pt-4 border-t border-outline-variant">
+<button class="px-6 py-2 border border-outline text-on-surface rounded font-medium hover:bg-surface-container-low transition-colors">Discard Changes</button>
+<button class="px-6 py-2 bg-cobalt-blue text-white rounded font-medium hover:bg-blue-700 transition-colors shadow-sm">Save Configuration</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

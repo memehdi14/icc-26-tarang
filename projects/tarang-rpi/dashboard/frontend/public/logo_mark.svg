@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="tarang-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#006A61" />
+      <stop offset="50%" stop-color="#004E47" />
+      <stop offset="100%" stop-color="#00201D" />
+    </linearGradient>
+    <linearGradient id="pulse-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#85D5C9" />
+      <stop offset="50%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#A1F1E5" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Outer Ring -->
+  <circle cx="50" cy="50" r="44" fill="url(#tarang-grad)" stroke="#008378" stroke-width="2.5" />
+  
+  <!-- Subtle Grid Lines inside Emblem -->
+  <path d="M50 10 V90 M10 50 H90 M25 10 V90 M75 10 V90 M10 25 H90 M10 75 H90" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+
+  <!-- ECG Pulse Wave path -->
+  <path d="M 16 50 H 32 L 36 42 L 40 58 L 46 22 L 54 78 L 60 44 L 64 54 L 68 50 H 84" 
+        stroke="url(#pulse-grad)" 
+        stroke-width="4.5" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        filter="url(#glow)" />
+        
+  <!-- Center R-peak Pulse dot -->
+  <circle cx="46" cy="22" r="3" fill="#FFFFFF" />
+</svg>

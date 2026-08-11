@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tarang Clinical - Workstation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#066a61",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#d2d9f4",
+                        "on-background": "#131b2e",
+                        "on-tertiary-fixed-variant": "#653e00",
+                        "on-error": "#ffffff",
+                        "primary-fixed-dim": "#85d5c9",
+                        "secondary-container": "#de294b",
+                        "tertiary-fixed": "#ffddb8",
+                        "surface-container": "#eaedff",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "surface-container-low": "#f2f3ff",
+                        "surface": "#faf8ff",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#faf8ff",
+                        "secondary-fixed-dim": "#ffb3b6",
+                        "surface-variant": "#dae2fc",
+                        "outline": "#6e7977",
+                        "outline-variant": "#bcc9c6",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed-variant": "#005049",
+                        "tertiary-fixed-dim": "#fcba66",
+                        "primary-container": "#00685f",
+                        "on-surface": "#131b2e",
+                        "on-secondary-fixed": "#40000c",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#2a1700",
+                        "secondary": "#ba0035",
+                        "on-primary-container": "#93e4d8",
+                        "surface-container-high": "#e1e7ff",
+                        "tertiary": "#623c00",
+                        "inverse-surface": "#283044",
+                        "tertiary-container": "#825100",
+                        "on-secondary-container": "#fffbff",
+                        "inverse-primary": "#85d5c9",
+                        "on-surface-variant": "#3e4947",
+                        "on-primary-fixed": "#00201d",
+                        "on-secondary-fixed-variant": "#920027",
+                        "secondary-fixed": "#ffdada",
+                        "primary": "#004e47",
+                        "on-tertiary-container": "#ffcb8f",
+                        "surface-container-highest": "#dae2fc",
+                        "inverse-on-surface": "#eef0ff",
+                        "primary-fixed": "#a1f1e5",
+                        "surface-bright": "#faf8ff",
+                        "on-secondary": "#ffffff",
+                        "brand-blue": "#2563EB",
+                        "brand-teal": "#0D9488"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "card-padding": "20px",
+                        "gutter": "16px",
+                        "margin-mobile": "16px",
+                        "stack-md": "16px",
+                        "base": "4px",
+                        "stack-lg": "24px",
+                        "margin-desktop": "32px",
+                        "stack-sm": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Geist"],
+                        "body-sm": ["Geist"],
+                        "reference-text": ["Geist"],
+                        "metric-display-mobile": ["Geist"],
+                        "label-mono": ["JetBrains Mono"],
+                        "body-md": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "metric-display": ["Geist"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "reference-text": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "metric-display-mobile": ["36px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "label-mono": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "metric-display": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .waveform-grid {
+            background-image: linear-gradient(to right, #f1f5f9 1px, transparent 1px),
+                              linear-gradient(to bottom, #f1f5f9 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-sans antialiased overflow-hidden flex flex-col">
+<!-- TopAppBar -->
+<header class="bg-surface-container-lowest dark:bg-surface-container-lowest fixed top-0 w-full z-50 h-16 border-b border-outline-variant dark:border-outline flex justify-between items-center px-gutter w-full">
+<div class="flex items-center gap-4">
+<img alt="Tarang Logo" class="h-8 w-8 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxsuE-n6MVH6v--cF6U-CwSs1d5i_N2P4h83YchKTX7Tf7i-53-Ajr_hHwuKx1nNhitVaeDLzMclARh7PsqGngtey52w50a_9I4Xalup5osrbbl3I5UoZ6oIkHtDqEC0_7fLEzfCsrlaf0YnpUdopTQzWPeAF7UBz_igs_SBJnQGThkWmqtZ5_j7PRZTVd4qJl_988_RuGnWdZA0wMUR3nLz5D1jGyTXlBwJrqEKmnSC0IOQRb5WlYyj2rz_4d2oA8NIQ"/>
+<span class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed">Tarang Clinical</span>
+</div>
+<nav class="hidden md:flex items-center gap-8 h-full">
+<a class="h-full flex items-center text-primary font-semibold border-b-2 border-primary hover:bg-surface-container-high transition-colors px-4 cursor-pointer active:scale-95" href="#">Patient Context</a>
+<a class="h-full flex items-center text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors px-4 cursor-pointer active:scale-95" href="#">Room 402-A</a>
+<a class="h-full flex items-center text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors px-4 cursor-pointer active:scale-95" href="#">Critical Care</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="bg-error text-on-error px-4 py-2 rounded font-body-sm font-semibold hover:bg-on-error-container transition-colors shadow-sm">Emergency Alert</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<div class="flex flex-1 pt-16">
+<!-- SideNavBar -->
+<aside class="bg-surface dark:bg-surface fixed left-0 top-16 bottom-0 w-64 border-r border-outline-variant flex flex-col h-full py-stack-lg hidden md:flex z-40">
+<div class="px-stack-lg mb-8 flex items-center gap-4">
+<div class="w-10 h-10 bg-primary-container text-on-primary-container rounded-full flex items-center justify-center font-bold">DA</div>
+<div>
+<div class="font-headline-md text-headline-md font-bold text-on-surface">Dr. Aris</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">ICU Specialist</div>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-2">
+<a class="bg-surface-container-high text-primary border-r-4 border-primary font-bold flex items-center gap-stack-md px-stack-lg py-stack-md" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200 flex items-center gap-stack-md px-stack-lg py-stack-md" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span>History</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200 flex items-center gap-stack-md px-stack-lg py-stack-md" href="#">
+<span class="material-symbols-outlined" data-icon="settings_input_component">settings_input_component</span>
+<span>Device Info</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200 flex items-center gap-stack-md px-stack-lg py-stack-md" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="mt-auto flex flex-col gap-2 pt-4 border-t border-outline-variant mx-4">
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200 flex items-center gap-stack-md px-4 py-3 rounded" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Support</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200 flex items-center gap-stack-md px-4 py-3 rounded" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Canvas -->
+<main class="flex-1 ml-0 md:ml-64 p-gutter md:p-margin-desktop overflow-y-auto bg-surface-container-lowest h-[calc(100vh-64px)]">
+<!-- Patient Header -->
+<div class="flex justify-between items-end mb-stack-lg pb-stack-sm border-b border-outline-variant">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">John Doe</h1>
+<div class="flex gap-4 font-body-sm text-body-sm text-on-surface-variant mt-1">
+<span>ID: <span class="font-label-mono text-label-mono text-on-surface">4502931</span></span>
+<span>DOB: <span class="font-label-mono text-label-mono text-on-surface">12/05/1965</span></span>
+</div>
+</div>
+<div class="flex gap-2">
+<span class="bg-error-container text-on-error-container px-3 py-1 rounded-full font-reference-text text-reference-text flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]" data-icon="warning">warning</span> Penicillin Allergy
+                    </span>
+</div>
+</div>
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-stack-md mb-stack-lg">
+<!-- HR Card (Alert) -->
+<div class="bg-surface border-2 border-error rounded-xl p-card-padding shadow-sm hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-body-md text-body-md font-semibold text-error flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]" data-icon="favorite" data-weight="fill">favorite</span> HR
+                        </h3>
+<span class="material-symbols-outlined text-error" data-icon="trending_up">trending_up</span>
+</div>
+<div class="font-metric-display text-metric-display text-error">128</div>
+<div class="flex justify-between mt-2 font-reference-text text-reference-text text-on-surface-variant">
+<span>bpm</span>
+<span>Ref: 60-100</span>
+</div>
+</div>
+<!-- SpO2 Card (Warning) -->
+<div class="bg-surface border border-outline-variant rounded-xl p-card-padding shadow-sm hover:shadow-md transition-shadow relative overflow-hidden">
+<div class="absolute inset-0 border-2 border-tertiary-fixed-dim rounded-xl pointer-events-none"></div>
+<div class="flex justify-between items-start mb-2 relative z-10">
+<h3 class="font-body-md text-body-md font-semibold text-tertiary-container flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]" data-icon="air">air</span> SpO2
+                        </h3>
+<span class="material-symbols-outlined text-tertiary-container" data-icon="trending_down">trending_down</span>
+</div>
+<div class="font-metric-display text-metric-display text-tertiary-container relative z-10">94</div>
+<div class="flex justify-between mt-2 font-reference-text text-reference-text text-on-surface-variant relative z-10">
+<span>%</span>
+<span>Ref: 95-100</span>
+</div>
+</div>
+<!-- Resp Rate Card (Success/Nominal) -->
+<div class="bg-surface border border-outline-variant rounded-xl p-card-padding shadow-sm hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-body-md text-body-md font-semibold text-brand-teal flex items-center gap-2">
+<span class="material-symbols-outlined text-[20px]" data-icon="pulmonology">pulmonology</span> RESP
+                        </h3>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="trending_flat">trending_flat</span>
+</div>
+<div class="font-metric-display text-metric-display text-brand-teal">16</div>
+<div class="flex justify-between mt-2 font-reference-text text-reference-text text-on-surface-variant">
+<span>rpm</span>
+<span>Ref: 12-20</span>
+</div>
+</div>
+</div>
+<!-- Waveforms -->
+<div class="space-y-stack-md">
+<!-- ECG Waveform -->
+<div class="bg-surface border border-outline-variant rounded-xl p-4 flex gap-4 h-48">
+<div class="w-16 flex flex-col justify-between shrink-0">
+<div class="font-body-sm text-body-sm font-semibold text-brand-blue">ECG II</div>
+<div class="text-[10px] text-on-surface-variant">1mV</div>
+</div>
+<div class="flex-1 waveform-grid relative rounded border border-outline-variant/30 overflow-hidden">
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 1000 100">
+<!-- Simulated noisy high HR ECG -->
+<path d="M0,50 L20,50 L25,45 L35,55 L40,50 L80,50 L85,20 L90,80 L95,50 L110,50 L120,40 L130,50 L180,50 L185,45 L195,55 L200,50 L240,50 L245,20 L250,80 L255,50 L270,50 L280,40 L290,50 L340,50 L345,45 L355,55 L360,50 L400,50 L405,20 L410,80 L415,50 L430,50 L440,40 L450,50 L500,50 L505,45 L515,55 L520,50 L560,50 L565,20 L570,80 L575,50 L590,50 L600,40 L610,50 L660,50 L665,45 L675,55 L680,50 L720,50 L725,20 L730,80 L735,50 L750,50 L760,40 L770,50 L820,50 L825,45 L835,55 L840,50 L880,50 L885,20 L890,80 L895,50 L910,50 L920,40 L930,50 L980,50 L1000,50" fill="none" stroke="#2563EB" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+<!-- SpO2 Waveform -->
+<div class="bg-surface border border-outline-variant rounded-xl p-4 flex gap-4 h-32">
+<div class="w-16 flex flex-col justify-between shrink-0">
+<div class="font-body-sm text-body-sm font-semibold text-tertiary-container">SpO2</div>
+</div>
+<div class="flex-1 waveform-grid relative rounded border border-outline-variant/30 overflow-hidden">
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 1000 100">
+<!-- Simulated Pleth -->
+<path d="M0,80 Q20,80 30,20 Q40,40 50,30 Q60,80 100,80 Q120,80 130,20 Q140,40 150,30 Q160,80 200,80 Q220,80 230,20 Q240,40 250,30 Q260,80 300,80 Q320,80 330,20 Q340,40 350,30 Q360,80 400,80 Q420,80 430,20 Q440,40 450,30 Q460,80 500,80 Q520,80 530,20 Q540,40 550,30 Q560,80 600,80 Q620,80 630,20 Q640,40 650,30 Q660,80 700,80 Q720,80 730,20 Q740,40 750,30 Q760,80 800,80 Q820,80 830,20 Q840,40 850,30 Q860,80 900,80 Q920,80 930,20 Q940,40 950,30 Q960,80 1000,80" fill="none" stroke="#825100" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+<!-- Resp Waveform -->
+<div class="bg-surface border border-outline-variant rounded-xl p-4 flex gap-4 h-32">
+<div class="w-16 flex flex-col justify-between shrink-0">
+<div class="font-body-sm text-body-sm font-semibold text-brand-teal">RESP</div>
+</div>
+<div class="flex-1 waveform-grid relative rounded border border-outline-variant/30 overflow-hidden">
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 1000 100">
+<!-- Simulated Respiration -->
+<path d="M0,50 Q100,10 200,50 Q300,90 400,50 Q500,10 600,50 Q700,90 800,50 Q900,10 1000,50" fill="none" stroke="#0D9488" stroke-width="1.5" vector-effect="non-scaling-stroke"></path>
+</svg>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
