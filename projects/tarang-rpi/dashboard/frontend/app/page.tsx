@@ -14,8 +14,31 @@ import {
 } from '../src/types/telemetry';
 
 // ── API Configuration ─────────────────────────────────────────────────────────
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/telemetry';
+function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (envUrl && !envUrl.includes('localhost')) {
+      return envUrl;
+    }
+    return `${window.location.protocol}//${host}:8000`;
+  }
+  return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+}
+
+function getWsUrl(): string {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const envWs = process.env.NEXT_PUBLIC_WS_URL;
+    if (envWs && !envWs.includes('localhost')) {
+      return envWs;
+    }
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProto}//${host}:8000/ws/telemetry`;
+  }
+  return process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/telemetry';
+}
+
 const PATIENT_MRN = '884219';
 
 // ── Default fallback data (shown while loading / backend offline) ─────────────
@@ -137,24 +160,27 @@ export default function Home() {
 
   // ── Fetch patient, settings, diagnostics on mount ──────────────────────────
   useEffect(() => {
+    let pollInterval: ReturnType<typeof setInterval>;
+
     const fetchAll = async () => {
+      const apiBase = getApiBase();
       try {
         // Patient
-        const pRes = await fetch(`${API_BASE}/api/patients/${PATIENT_MRN}`);
+        const pRes = await fetch(`${apiBase}/api/patients/${PATIENT_MRN}`);
         if (pRes.ok) {
           const pData = await pRes.json();
           setPatient(mapApiPatient(pData));
         }
 
         // Settings
-        const sRes = await fetch(`${API_BASE}/api/settings`);
+        const sRes = await fetch(`${apiBase}/api/settings`);
         if (sRes.ok) {
           const sData = await sRes.json();
           if (!sData.message) setSettings(sData as SystemSettings);
         }
 
         // Diagnostics (initial snapshot)
-        const dRes = await fetch(`${API_BASE}/api/diagnostics/latest`);
+        const dRes = await fetch(`${apiBase}/api/diagnostics/latest`);
         if (dRes.ok) {
           const dData = await dRes.json();
           if (!dData.message) {
@@ -165,7 +191,7 @@ export default function Home() {
         }
 
         // Latest telemetry (seed canvas before WS connects)
-        const tRes = await fetch(`${API_BASE}/api/telemetry/latest`);
+        const tRes = await fetch(`${apiBase}/api/telemetry/latest`);
         if (tRes.ok) {
           const tData = await tRes.json();
           if (!tData.message) setTelemetry(mapApiTelemetry(tData));
@@ -180,10 +206,11 @@ export default function Home() {
 
     fetchAll();
 
-    // Poll diagnostics every 5 seconds
-    const diagInterval = setInterval(async () => {
+    // Poll diagnostics and check backend status every 3 seconds
+    pollInterval = setInterval(async () => {
+      const apiBase = getApiBase();
       try {
-        const dRes = await fetch(`${API_BASE}/api/diagnostics/latest`);
+        const dRes = await fetch(`${apiBase}/api/diagnostics/latest`);
         if (dRes.ok) {
           const dData = await dRes.json();
           if (!dData.message) {
@@ -191,25 +218,28 @@ export default function Home() {
             setDiagnostics(mapped);
             setBleConnected(mapped.bleConnected);
           }
+          setBackendOnline(true);
         }
-      } catch {/* ignore */}
-    }, 5000);
+      } catch {
+        setBackendOnline(false);
+      }
+    }, 3000);
 
-    return () => clearInterval(diagInterval);
+    return () => clearInterval(pollInterval);
   }, []);
 
   // ── WebSocket: live telemetry stream ──────────────────────────────────────
   useEffect(() => {
-    if (!backendOnline) return;
-
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
     const connect = () => {
-      ws = new WebSocket(WS_URL);
+      const wsUrl = getWsUrl();
+      ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('[Tarang WS] Connected');
+        console.log('[Tarang WS] Connected to:', wsUrl);
+        setBackendOnline(true);
       };
 
       ws.onmessage = (event) => {
@@ -223,7 +253,7 @@ export default function Home() {
       };
 
       ws.onerror = () => {
-        console.warn('[Tarang WS] Error — will reconnect...');
+        console.warn('[Tarang WS] Error connecting to:', wsUrl);
       };
 
       ws.onclose = () => {
@@ -238,13 +268,14 @@ export default function Home() {
       clearTimeout(reconnectTimer);
       ws?.close();
     };
-  }, [backendOnline]);
+  }, []);
 
   // ── Save settings to backend ──────────────────────────────────────────────
   const handleSaveSettings = useCallback(async (newSettings: SystemSettings) => {
     setSettings(newSettings);
+    const apiBase = getApiBase();
     try {
-      await fetch(`${API_BASE}/api/settings`, {
+      await fetch(`${apiBase}/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSettings),
