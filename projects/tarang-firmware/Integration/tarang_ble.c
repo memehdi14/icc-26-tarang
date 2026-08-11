@@ -3,6 +3,7 @@
  * @brief TARANG Bluetooth Low Energy (BLE) Telemetry Implementation.
  ******************************************************************************/
 #include "tarang_ble.h"
+#include "tarang_time.h"
 #include <stdio.h>
 
 #if defined(SL_COMPONENT_CATALOG_PRESENT)
@@ -16,6 +17,10 @@
 
 #if !defined(gattdb_telemetry_data) && defined(gattdb_device_status)
 #define gattdb_telemetry_data gattdb_device_status
+#elif !defined(gattdb_telemetry_data) && defined(gattdb_system_id)
+#define gattdb_telemetry_data gattdb_system_id
+#elif !defined(gattdb_telemetry_data)
+#define gattdb_telemetry_data 21
 #endif
 
 #if defined(SL_CATALOG_APP_ASSERT_PRESENT)
@@ -54,10 +59,35 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
     return;
   }
 
+  static uint32_t last_periodic_notify_ms = 0;
+
+  bool connected = (tarang_ble_conn_handle != SL_BT_INVALID_CONNECTION_HANDLE);
+  bool notif_enabled = tarang_ble_telemetry_notifications_enabled;
+
+  /* Only compute time-based fallback when BLE is actually connected and
+   * subscribed — no point tracking the timer when nobody is listening.
+   * This also prevents the flag-clear path from running at boot when
+   * last_periodic_notify_ms=0 and now_ms >= 1000ms after init delays. */
+  bool should_send = tarang_pipeline_should_send_event(pipeline);
+  if (connected && notif_enabled && !should_send) {
+    uint32_t now_ms = tarang_now_ms();
+    if (now_ms - last_periodic_notify_ms >= 1000u) {
+      should_send = true; /* 1 Hz fallback periodic telemetry packet */
+    }
+  }
+
   /* ── BLE telemetry notification ─────────────────────────────────── */
-  if (tarang_ble_telemetry_notifications_enabled &&
-      tarang_ble_conn_handle != SL_BT_INVALID_CONNECTION_HANDLE &&
-      tarang_pipeline_should_send_event(pipeline)) {
+  if (notif_enabled &&
+      connected &&
+      should_send) {
+
+    uint32_t now_ms = tarang_now_ms();
+    last_periodic_notify_ms = now_ms;
+
+    /* Clear pending flags ONLY when we actually send — not before */
+    pipeline->beat_telemetry_pending = false;
+    pipeline->engine.rhythm_changed = false;
+    pipeline->engine.significant_event = false;
 
     tarang_event_packet_t pkt;
     tarang_pipeline_get_packet(pipeline, &pkt);
@@ -71,8 +101,8 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
     if (sc != SL_STATUS_OK) {
       printf("[BLE] Notification failed: 0x%04lX\r\n", (unsigned long)sc);
     } else {
-      printf("[BLE] Telemetry notification sent! (16 bytes, HR=%u rhythm=0x%02X)\r\n",
-             (unsigned)pkt.current_hr, (unsigned)pkt.rhythm_flags);
+      printf("[BLE] Telemetry notification sent! (16 bytes, HR=%u rhythm=0x%02X class=%u)\r\n",
+             (unsigned)pkt.current_hr, (unsigned)pkt.rhythm_flags, (unsigned)pkt.beat_class);
     }
   }
 #else
@@ -156,15 +186,19 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       break;
 
     case sl_bt_evt_gatt_server_characteristic_status_id:
-      if (evt->data.evt_gatt_server_characteristic_status.status_flags
-          == sl_bt_gatt_server_client_config) {
+    {
+      uint16_t characteristic = evt->data.evt_gatt_server_characteristic_status.characteristic;
+      uint8_t status_flags = evt->data.evt_gatt_server_characteristic_status.status_flags;
+      uint16_t client_config_flags = evt->data.evt_gatt_server_characteristic_status.client_config_flags;
 
-        if (evt->data.evt_gatt_server_characteristic_status.characteristic
-            == gattdb_telemetry_data) {
+      printf("[BLE] Characteristic status change: char=0x%04X status=0x%02X config=0x%04X (telemetry char=0x%04X)\r\n",
+             (unsigned)characteristic, (unsigned)status_flags, (unsigned)client_config_flags,
+             (unsigned)gattdb_telemetry_data);
 
-          if (evt->data.evt_gatt_server_characteristic_status.client_config_flags
-              == sl_bt_gatt_notification) {
-            printf("[BLE] Client subscribed to telemetry notifications!\r\n");
+      if (status_flags & sl_bt_gatt_server_client_config) {
+        if (characteristic == gattdb_telemetry_data || characteristic == (gattdb_telemetry_data - 1)) {
+          if (client_config_flags != sl_bt_gatt_disable) {
+            printf("[BLE] SUCCESS: Client subscribed to telemetry notifications!\r\n");
             tarang_ble_telemetry_notifications_enabled = true;
           } else {
             printf("[BLE] Client unsubscribed from telemetry notifications.\r\n");
@@ -173,6 +207,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
         }
       }
       break;
+    }
 
     default:
       break;

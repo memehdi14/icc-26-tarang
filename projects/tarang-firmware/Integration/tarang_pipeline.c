@@ -344,8 +344,7 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
   pipeline->beat_telemetry_pending = true;
 
   /* ── BLE event check ────────────────────────────────────────────────── */
-  if (tarang_clinical_engine_rhythm_changed(&pipeline->engine) ||
-      tarang_clinical_engine_significant_event(&pipeline->engine)) {
+  if (pipeline->engine.rhythm_changed || pipeline->engine.significant_event) {
     pipeline->diag.ble_packet_count++;
   }
 }
@@ -393,7 +392,13 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
 
 bool tarang_pipeline_should_send_event(tarang_pipeline_t *pipeline)
 {
-  return pipeline->engine.rhythm_changed || pipeline->engine.significant_event;
+  if (pipeline == NULL) return false;
+  /* NOTE: beat_telemetry_pending is intentionally NOT included here.
+   * That flag drives the per-beat CSV telemetry log (app.c), not BLE sends.
+   * Including it here caused tarang_ble_process() to clear engine flags on
+   * every superloop tick even when BLE was disconnected, corrupting state. */
+  return pipeline->engine.rhythm_changed ||
+         pipeline->engine.significant_event;
 }
 
 void tarang_pipeline_get_packet(const tarang_pipeline_t *pipeline,

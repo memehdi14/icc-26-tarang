@@ -165,6 +165,11 @@ static void telemetry_emit_sensor_samples(void)
  ******************************************************************************/
 void app_init(void)
 {
+  /* Early crash-probe marker: this is the very first thing app_init() does.
+   * If this prints but later init is silent, the crash is after this line.
+   * If BOOT OK appears but this doesn't, sl_main_init → app_init transition failed. */
+  printf("\r\n[BOOT] app_init() STARTED\r\n");
+
   /*
    * CRITICAL: Prevent the power manager from entering EM2/EM3.
    * EM2 shuts down I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
