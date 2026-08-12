@@ -41,7 +41,7 @@ dataset/
 **/*.pintool
 
 
-# Build and Target Output
+# Build, Archive and Target Output
 build/
 out/
 generated/
@@ -55,8 +55,39 @@ generated/
 *.lst
 *.d
 *.out
+*.out.txt
+out.txt
 GNU ARM*/
 IAR*/
+
+# Simplicity Studio Export & Project Archives
+*.xtar
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+*.rar
+
+# Node.js & Next.js Frontend
+node_modules/
+.next/
+dist/
+.env.local
+.env.*.local
+next-env.d.ts
+
+# Databases & Local Data
+*.db
+*.sqlite
+*.sqlite3
+tarang_clinical.db
+
+# DSP Captures & Generated Plots
+projects/tarang-dsp/integration_validation/plots/
+projects/tarang-dsp/integration_validation/captures/
+projects/tarang-dsp/dsp_diagnostic_output/
+*.csv
 
 # IDE and Environment
 .vscode/
@@ -99,5 +130,6 @@ comms/
 communications/
 *credentials*
 *secrets*
+
 
 
