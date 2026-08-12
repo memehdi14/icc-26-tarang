@@ -1,6 +1,13 @@
-# Step-by-Step Sensor Reading Verification & Validation Guide
+# Step-by-Step Sensor Reading Verification & Validation Guide (Standard Lead I)
 
 This guide provides a practical, step-by-step protocol for biomedical hardware, DSP, and firmware engineers to verify whether telemetry readings (ECG, PPG, IMU) recorded by the **TARANG** board represent **true physiological human signals** and meet concrete healthtech pass conditions.
+
+> [!IMPORTANT]
+> **ECG Lead Configuration**: TARANG DSP & Edge AI models are trained and validated specifically on **Standard ECG Lead I**:
+> - **Positive Lead ($+$)**: Left Arm (LA) / Left Wrist
+> - **Negative Lead ($-$)**: Right Arm (RA) / Right Wrist
+> - **Ground / Reference (RL)**: Right Leg (RL) / Driven Right Leg (DRL) ground
+> - **Potential Difference**: $V_{\text{Lead I}} = V_{\text{LA}} - V_{\text{RA}}$
 
 ---
 
