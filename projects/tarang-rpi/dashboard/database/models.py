@@ -1,0 +1,149 @@
+"""
+Tarang Clinical — SQLAlchemy ORM Models
+=======================================
+Tables: telemetry_events, patients, device_diagnostics, system_settings
+"""
+
+from sqlalchemy import (
+    Column, Integer, BigInteger, SmallInteger, Float, String, Boolean,
+    DateTime, JSON, Text, func
+)
+from sqlalchemy.orm import DeclarativeBase
+from datetime import datetime
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class TelemetryEvent(Base):
+    """Stores every 16-byte clinical packet received from the EFR32 via BLE."""
+    __tablename__ = "telemetry_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp_ms = Column(BigInteger, nullable=False, index=True)
+    received_at = Column(DateTime, default=func.now(), nullable=False)
+    beat_class = Column(SmallInteger, nullable=False, default=0)       # 0=N, 1=PAC, 2=PVC, 3=Q
+    confidence = Column(SmallInteger, nullable=False, default=0)       # 0–255
+    rr_interval_ms = Column(Integer, nullable=False, default=0)
+    rhythm_flags = Column(SmallInteger, nullable=False, default=0)     # bitmask
+    pac_burden_pct = Column(Float, nullable=False, default=0.0)
+    pvc_burden_pct = Column(Float, nullable=False, default=0.0)
+    current_hr = Column(SmallInteger, nullable=False, default=0)
+    sdnn_ms = Column(Integer, nullable=False, default=0)
+    rmssd_ms = Column(Integer, nullable=False, default=0)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "timestamp_ms": self.timestamp_ms,
+            "received_at": self.received_at.isoformat() if self.received_at else None,
+            "beat_class": self.beat_class,
+            "confidence": self.confidence,
+            "rr_interval_ms": self.rr_interval_ms,
+            "rhythm_flags": self.rhythm_flags,
+            "pac_burden_pct": self.pac_burden_pct,
+            "pvc_burden_pct": self.pvc_burden_pct,
+            "current_hr": self.current_hr,
+            "sdnn_ms": self.sdnn_ms,
+            "rmssd_ms": self.rmssd_ms,
+        }
+
+
+class Patient(Base):
+    """Patient demographics and clinical context."""
+    __tablename__ = "patients"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), nullable=False)
+    age = Column(SmallInteger, nullable=False)
+    gender = Column(String(20), nullable=False)
+    mrn = Column(String(50), unique=True, nullable=False, index=True)   # Medical Record Number
+    bed = Column(String(50), nullable=False)
+    admit_date = Column(String(20), nullable=False)
+    attending_physician = Column(String(200), nullable=False)
+    blood_type = Column(String(10), nullable=False, default="Unknown")
+    allergies = Column(JSON, default=list)
+    medical_history = Column(JSON, default=list)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "age": self.age,
+            "gender": self.gender,
+            "mrn": self.mrn,
+            "bed": self.bed,
+            "admit_date": self.admit_date,
+            "attending_physician": self.attending_physician,
+            "blood_type": self.blood_type,
+            "allergies": self.allergies or [],
+            "medical_history": self.medical_history or [],
+        }
+
+
+class DeviceDiagnostics(Base):
+    """Latest EFR32 device state snapshot."""
+    __tablename__ = "device_diagnostics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ble_connected = Column(Boolean, default=False)
+    device_name = Column(String(100), default="EFR32MG26 (Tarang SoC)")
+    device_mac = Column(String(20), default="00:00:00:00:00:00")
+    firmware_version = Column(String(50), default="v1.0.0-EFR32MG26")
+    rssi_dbm = Column(Integer, default=-100)
+    packets_received = Column(Integer, default=0)
+    packets_dropped = Column(Integer, default=0)
+    latency_ms = Column(Float, default=0.0)
+    battery_pct = Column(SmallInteger, default=0)
+    ecg_health = Column(Boolean, default=True)
+    ppg_health = Column(Boolean, default=True)
+    imu_health = Column(Boolean, default=True)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "bleConnected": self.ble_connected,
+            "deviceName": self.device_name,
+            "deviceMac": self.device_mac,
+            "firmwareVersion": self.firmware_version,
+            "rssiDbm": self.rssi_dbm,
+            "packetsReceived": self.packets_received,
+            "packetsDropped": self.packets_dropped,
+            "latencyMs": self.latency_ms,
+            "batteryPct": self.battery_pct,
+            "ecgDmaHealth": self.ecg_health,
+            "ppgI2cHealth": self.ppg_health,
+            "imuFifoHealth": self.imu_health,
+            "lastSyncTimestamp": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class SystemSetting(Base):
+    """Persisted alarm thresholds and workstation preferences."""
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    hr_low_threshold = Column(SmallInteger, default=60)
+    hr_high_threshold = Column(SmallInteger, default=100)
+    spo2_low_threshold = Column(SmallInteger, default=92)
+    rr_low_threshold = Column(SmallInteger, default=10)
+    rr_high_threshold = Column(SmallInteger, default=24)
+    ble_sync_interval_ms = Column(Integer, default=1000)
+    grid_density = Column(String(20), default="standard")
+    audio_alerts_enabled = Column(Boolean, default=True)
+    attending_doctor = Column(String(200), default="Dr. Aris")
+
+    def to_dict(self):
+        return {
+            "hrLowThreshold": self.hr_low_threshold,
+            "hrHighThreshold": self.hr_high_threshold,
+            "spo2LowThreshold": self.spo2_low_threshold,
+            "rrLowThreshold": self.rr_low_threshold,
+            "rrHighThreshold": self.rr_high_threshold,
+            "bleSyncIntervalMs": self.ble_sync_interval_ms,
+            "gridDensity": self.grid_density,
+            "audioAlertsEnabled": self.audio_alerts_enabled,
+            "attendingDoctor": self.attending_doctor,
+        }

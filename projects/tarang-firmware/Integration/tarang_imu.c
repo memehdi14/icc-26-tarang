@@ -14,6 +14,8 @@
  ******************************************************************************/
 
 #include "tarang_imu.h"
+#include "tarang_time.h"
+#include "tarang_debug_config.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -109,6 +111,16 @@ static volatile uint32_t interrupt_count = 0;
 static volatile uint32_t read_attempts = 0;
 static volatile uint32_t read_success = 0;
 static volatile uint32_t read_failures = 0;
+
+static volatile uint32_t consecutive_i2c_failures = 0u;
+static volatile uint32_t imu_recovery_attempts     = 0u;
+static volatile tarang_sensor_health_t imu_health  = TARANG_SENSOR_DISABLED;
+static volatile uint32_t imu_last_sample_ms        = 0u;
+static volatile uint32_t imu_last_recovery_ms      = 0u;
+
+#define IMU_FAILURE_THRESHOLD       10u  /* consecutive fails before recovery */
+#define IMU_STALE_TIMEOUT_MS        2000u
+#define IMU_RECOVERY_INTERVAL_MS    5000u
 
 static volatile uint8_t int_pin_cfg_reg = 0;
 static volatile bool int_pin_cfg_ok = false;
@@ -293,6 +305,9 @@ static void mpu6050_gpio_callback(uint8_t pin)
  ******************************************************************************/
 void tarang_imu_init(void)
 {
+  imu_health = TARANG_SENSOR_STARTING;
+  imu_last_sample_ms = tarang_now_ms();
+  imu_last_recovery_ms = imu_last_sample_ms;
   printf("[IMU] Starting MPU6050 initialization...\r\n");
   
   uint8_t whoami = 0;
@@ -387,16 +402,26 @@ void tarang_imu_init(void)
         }
       }
 
-      /* Interrupt pin configuration */
-      if (MPU6050_WriteRegister(MPU6050_INT_PIN_CFG, 0x00))
+      /* Interrupt pin configuration:
+       * Bit 5 = LATCH_INT_EN = 1 → hold INT high until INT_STATUS is read
+       * Bit 4 = INT_RD_CLEAR  = 1 → clear INT on ANY register read
+       * This prevents missed edges when the 50us pulse is too short.
+       */
+      if (MPU6050_WriteRegister(MPU6050_INT_PIN_CFG, 0x30))
       {
         MPU6050_ReadRegister(MPU6050_INT_PIN_CFG,
                              (uint8_t *)&int_pin_cfg_reg);
 
-        if (int_pin_cfg_reg == 0x00)
+        if (int_pin_cfg_reg == 0x30)
         {
           int_pin_cfg_ok = true;
         }
+        printf("[IMU] INT_PIN_CFG wrote=0x30 readback=0x%02X %s\r\n",
+               int_pin_cfg_reg, int_pin_cfg_ok ? "OK" : "MISMATCH");
+      }
+      else
+      {
+        printf("[IMU] INT_PIN_CFG write FAILED\r\n");
       }
 
       /* Enable DATA_RDY interrupt */
@@ -432,6 +457,9 @@ void tarang_imu_init(void)
                       gpioModeInputPull,
                       0);
 
+      printf("[IMU] PC00 pin state BEFORE arming: %u\r\n",
+             (unsigned)GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN));
+
       GPIOINT_CallbackRegister(MPU6050_INT_PIN,
                                mpu6050_gpio_callback);
 
@@ -442,36 +470,91 @@ void tarang_imu_init(void)
                         false,  /* falling edge */
                         true);  /* enable */
 
+      printf("[IMU] PC00 pin state AFTER arming: %u\r\n",
+             (unsigned)GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN));
+
       /* Prime imu_data_ready if INT pin is already active high */
       if (GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN) != 0u) {
           imu_data_ready = true;
+          printf("[IMU] Primed: INT pin already HIGH\r\n");
       }
 
-      printf("[IMU] MPU6050 init complete. WHO_AM_I=0x%02X\r\n", mpu_whoami);
+      printf("[IMU] MPU6050 init complete. WHO_AM_I=0x%02X wakeup=%d accel=%d gyro=%d dlpf=%d sr=%d int=%d\r\n",
+             mpu_whoami, wakeup_ok, accel_config_ok, gyro_config_ok,
+             config_ok, sample_rate_ok, int_enable_ok);
   }
   else
   {
+    mpu_found = false;
+    imu_health = TARANG_SENSOR_UNAVAILABLE;
     printf("[IMU] WHO_AM_I mismatch: got 0x%02X (expected 0x68 or 0x70)\r\n", whoami);
+
+    /* Keep the interrupt path armed so a sensor that returns later can
+     * recover without rebooting the rest of the system. */
+    GPIO_PinModeSet(MPU6050_INT_PORT, MPU6050_INT_PIN, gpioModeInputPull, 0);
+    GPIOINT_CallbackRegister(MPU6050_INT_PIN, mpu6050_gpio_callback);
+    GPIO_ExtIntConfig(MPU6050_INT_PORT, MPU6050_INT_PIN,
+                      MPU6050_INT_LINE, true, false, true);
   }
 }
 
 /*******************************************************************************
  * tarang_imu_process — interrupt-driven IMU sample collection
  ******************************************************************************/
+static void imu_try_recover(void)
+{
+  imu_recovery_attempts++;
+  imu_last_recovery_ms = tarang_now_ms();
+
+  /* Try to re-wake and reconfigure the MPU6050 */
+  if (MPU6050_WriteRegister(MPU6050_PWR_MGMT_1, 0x00) &&
+      MPU6050_WriteRegister(MPU6050_INT_ENABLE, 0x01)) {
+    consecutive_i2c_failures = 0u;
+    mpu_found = true;
+    imu_health = TARANG_SENSOR_STARTING;
+    imu_data_ready = true;
+    printf("[IMU] RECOVERY probe succeeded (attempt=%lu)\r\n",
+           (unsigned long)imu_recovery_attempts);
+  } else {
+    mpu_found = false;
+    imu_health = TARANG_SENSOR_UNAVAILABLE;
+    printf("[IMU] RECOVERY probe failed (attempt=%lu); retrying later\r\n",
+           (unsigned long)imu_recovery_attempts);
+  }
+}
+
 void tarang_imu_process(void)
 {
   uint8_t raw[14];
+  uint32_t now_ms = tarang_now_ms();
 
-  if (!imu_data_ready)
-  {
+  if ((uint32_t)(now_ms - imu_last_sample_ms) >= IMU_STALE_TIMEOUT_MS &&
+      (imu_health == TARANG_SENSOR_OK ||
+       imu_health == TARANG_SENSOR_STARTING)) {
+    imu_health = TARANG_SENSOR_STALE;
+    printf("[IMU] STALE - no fresh sample for 2 seconds; ECG pipeline continues\r\n");
+  }
+
+  if ((imu_health == TARANG_SENSOR_STALE ||
+       imu_health == TARANG_SENSOR_UNAVAILABLE) &&
+      (uint32_t)(now_ms - imu_last_recovery_ms) >= IMU_RECOVERY_INTERVAL_MS) {
+    imu_try_recover();
+  }
+
+  /* A stuck-high interrupt must not turn a missing IMU into a tight I2C loop. */
+  if (imu_health == TARANG_SENSOR_UNAVAILABLE) {
     return;
   }
 
-  CORE_DECLARE_IRQ_STATE;
+  bool have_data;
 
+  CORE_DECLARE_IRQ_STATE;
   CORE_ENTER_ATOMIC();
-  imu_data_ready = false;
+  have_data = imu_data_ready;
+  if (have_data) { imu_data_ready = false; }
   CORE_EXIT_ATOMIC();
+
+  if (!have_data) { return; }
 
   read_attempts++;
 
@@ -497,6 +580,8 @@ void tarang_imu_process(void)
 
       sample_count++;
       read_success++;
+      imu_last_sample_ms = now_ms;
+      imu_health = TARANG_SENSOR_OK;
     }
     else
     {
@@ -514,6 +599,8 @@ void tarang_imu_process(void)
     read14_ok = true;
     read14_fail = false;
     read_success++;
+    consecutive_i2c_failures = 0u;
+    mpu_found = true;
 
     accel_x = (int16_t)((raw[0] << 8) | raw[1]);
     accel_y = (int16_t)((raw[2] << 8) | raw[3]);
@@ -526,23 +613,37 @@ void tarang_imu_process(void)
     gyro_z = (int16_t)((raw[12] << 8) | raw[13]);
 
     sample_count++;
+    imu_last_sample_ms = now_ms;
+    imu_health = TARANG_SENSOR_OK;
 
-    /* Print every 100 samples (every 1 second at 100Hz) */
-    if ((sample_count % 100u) == 0u)
-    {
-      printf("[IMU] cnt=%lu ax=%d ay=%d az=%d gx=%d gy=%d gz=%d\r\n",
-             (unsigned long)sample_count,
-             accel_x, accel_y, accel_z,
-             gyro_x, gyro_y, gyro_z);
-    }
+#if !TARANG_DEBUG_TELEMETRY
+    /* Print EVERY sample at native 100 Hz sample rate */
+    printf("[IMU] cnt=%lu ax=%d ay=%d az=%d gx=%d gy=%d gz=%d\r\n",
+           (unsigned long)sample_count,
+           accel_x, accel_y, accel_z,
+           gyro_x, gyro_y, gyro_z);
+#endif
   }
   else
   {
     read14_ok = false;
     read14_fail = true;
     read_failures++;
+    consecutive_i2c_failures++;
+    imu_health = TARANG_SENSOR_UNAVAILABLE;
+
+    if (consecutive_i2c_failures >= IMU_FAILURE_THRESHOLD) {
+      printf("[IMU] %lu consecutive I2C failures — attempting recovery\r\n",
+             (unsigned long)consecutive_i2c_failures);
+      imu_try_recover();
+    }
   }
-#endif /* MPU6050_USE_COMBINED_BURST */
+#endif
+
+  /* Re-prime: if INT pin is still high after servicing, set the flag */
+  if (GPIO_PinInGet(MPU6050_INT_PORT, MPU6050_INT_PIN) != 0u) {
+      imu_data_ready = true;
+  }
 }
 
 /*******************************************************************************
@@ -596,4 +697,14 @@ uint32_t tarang_imu_get_sample_count(void)
 uint32_t tarang_imu_get_interrupt_count(void)
 {
   return interrupt_count;
+}
+
+tarang_sensor_health_t tarang_imu_get_health(void)
+{
+  return imu_health;
+}
+
+bool tarang_imu_is_valid(void)
+{
+  return tarang_sensor_health_is_valid(imu_health);
 }

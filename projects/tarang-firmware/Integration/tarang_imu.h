@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "tarang_sensor_health.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +42,8 @@ int16_t  tarang_imu_get_gyro_z(void);
 int16_t  tarang_imu_get_temp_raw(void);
 uint32_t tarang_imu_get_sample_count(void);
 uint32_t tarang_imu_get_interrupt_count(void);
+tarang_sensor_health_t tarang_imu_get_health(void);
+bool     tarang_imu_is_valid(void);
 
 #ifdef __cplusplus
 }

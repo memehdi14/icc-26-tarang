@@ -20,6 +20,7 @@ __pycache__/
 venv/
 .env
 *.egg-info/
+*.csv
 
 # Jupyter
 .ipynb_checkpoints/
@@ -37,6 +38,7 @@ dataset/
 # Simplicity Studio Generated Configs and Output
 **/autogen/
 **/cmake_gcc/
+!**/cmake_gcc/CMakeLists.txt
 **/config/
 **/*.pintool
 
@@ -115,6 +117,15 @@ projects/tarang-ml/outputs/
 projects/tarang-ml/outputs_v*/
 projects/tarang-ml/artifacts/
 projects/tarang-ml/metrics/
+
+# DSP and Validation analysis outputs
+projects/tarang-dsp/integration_validation/plots/
+projects/**/plots/
+projects/**/analysis_outputs/
+projects/**/analysis_output/
+projects/**/out.txt
+projects/**/$null
+projects/**/*_project.pdf
 
 # Internal Communications, Situation Reports & Team Syncs
 agent_guidelines/
