@@ -81,6 +81,17 @@ typedef struct {
   uint32_t suspicious_beats;
   uint32_t gate_passed_beats;
 
+  /* ISSUE-1 FIX: Circuit breaker for runaway suspicious rate.
+   * Tracks last 30 beats to detect if >20% are suspicious.
+   * When circuit breaker trips, Tier-1 CNN is disabled until rate recovers.
+   * This prevents power budget destruction if DSP tuning fails. */
+  #define CIRCUIT_BREAKER_WINDOW 30
+  uint8_t  circuit_breaker_ring[CIRCUIT_BREAKER_WINDOW];
+  uint8_t  circuit_breaker_idx;
+  uint8_t  circuit_breaker_count;
+  uint8_t  circuit_breaker_suspicious_count;
+  bool     circuit_breaker_tripped;
+
   /* Deferred AI beat queue — filled during ECG processing,
    * drained by tarang_pipeline_run_deferred() in the super loop */
   tarang_pending_beat_t pending_beats[TARANG_MAX_PENDING_BEATS];

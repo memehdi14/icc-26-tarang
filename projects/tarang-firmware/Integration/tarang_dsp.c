@@ -261,6 +261,28 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
   bool peak_detected = (th->prev_mwi_idx >= 0) &&
                         (mwi_val < th->prev_mwi - hysteresis);
 
+  /* ISSUE-1 FIX: Hard 300ms refractory backstop — reject ANY peak <300ms
+   * after last confirmed R-peak, BEFORE threshold/slope checks run.
+   * This is the primary defense against T-wave double-triggers.
+   * 300ms at 250Hz = 75 samples. At 200 BPM (fastest physiologic rate),
+   * RR interval is still 300ms, so this never rejects a true beat. */
+  #define HARD_REFRACTORY_MS 300
+  #define HARD_REFRACTORY_SAMPLES ((HARD_REFRACTORY_MS * TARANG_ECG_SAMPLE_RATE_HZ) / 1000)
+  if (peak_detected && th->last_R_idx >= 0) {
+    int dt = th->prev_mwi_idx - th->last_R_idx;
+    if (dt < HARD_REFRACTORY_SAMPLES) {
+      /* Reject this peak unconditionally — it's physiologically impossible
+       * to be a true R-peak. Update noise stats but do NOT accept it. */
+      if (th->prev_mwi > th->TH2) {
+        th->NPKI = 0.125f * th->prev_mwi + 0.875f * th->NPKI;
+        th->TH1 = th->NPKI + 0.25f * (th->SPKI - th->NPKI);
+        th->TH2 = 0.5f * th->TH1;
+      }
+      /* Intentionally skip all candidate buffering and threshold checks */
+      peak_detected = false;
+    }
+  }
+
   if (peak_detected) {
     float peak_val = th->prev_mwi;
     int   peak_idx = th->prev_mwi_idx;
@@ -311,13 +333,15 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
     /* Primary threshold check on PEAK value */
     if (accepted < 0 && peak_val > th->TH1 &&
         th->refractory_remaining == 0) {
-      /* T-wave rejection */
+      /* ISSUE-1 FIX: Re-tuned T-wave rejection — tighter slope ratio (0.3×)
+       * and wider window (40-120 samples = 160-480ms) to catch T-waves
+       * that occur later in the cycle (common at slower HR). */
       bool twave_ok = true;
       if (th->last_R_slope > 0.0f &&
-          slope_est < 0.5f * th->last_R_slope) {
+          slope_est < 0.3f * th->last_R_slope) {
         if (th->last_R_idx >= 0) {
           int dt = peak_idx - th->last_R_idx;
-          if (dt >= 50 && dt <= 100) twave_ok = false;
+          if (dt >= 40 && dt <= 120) twave_ok = false;
         }
       }
 

@@ -82,7 +82,7 @@ def simple_dc_remove(data, window=15):
 
 # ─── Regex parsers for each firmware printf line ──────────────────────────────
 
-RE_ECG_RAW   = re.compile(r"\[ECG\]\s+raw=(\d+)")
+RE_ECG_RAW   = re.compile(r"\[?ECG\]\s+raw=(\d+)")
 RE_ECG_DIAG  = re.compile(
     r"\[ECG\]\s+halves=(\d+)\s+total_samples=(\d+)\s+overruns=(\d+)"
 )
@@ -595,7 +595,8 @@ def plot_csv(csv_path):
     imu_gyro_t, imu_gx, imu_gy, imu_gz = [], [], [], []
 
     with open(csv_path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        lines = [line for line in f if not line.strip().startswith("#")]
+        reader = csv.DictReader(lines)
         for row in reader:
             if "raw_line" in row:
                 try:
