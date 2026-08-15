@@ -29,6 +29,7 @@
  ******************************************************************************/
 #include "sl_component_catalog.h"
 #include "sl_main_init.h"
+#include <stdio.h>
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
 #include "sl_power_manager.h"
 #endif
@@ -45,6 +46,11 @@ int main(void)
   // component initialization will take place there.
   sl_main_init();
 
+  // Early boot marker: confirms sl_main_init() completed and UART is ready.
+  // If this prints but app_init() is silent, the crash is inside app_init().
+  // If nothing prints at all, crash occurred inside sl_main_init() (BLE/clock init).
+  printf("\r\n[BOOT] sl_main_init() OK — entering app_init()\r\n");
+
 #if defined(SL_CATALOG_KERNEL_PRESENT)
   // Start the kernel. The start task will be executed (Highest priority) to complete
   // the Simplicity SDK components initialization and the user app_init() hook function will be called.
@@ -53,6 +59,7 @@ int main(void)
 
   // User provided code.
   app_init();
+  printf("[BOOT] app_init() complete — starting superloop\r\n");
 
   while (1) {
     // Silicon Labs components process action routine
@@ -63,11 +70,14 @@ int main(void)
     app_process_action();
 
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
-    // Let the CPU go to sleep if the system allows it.
-    // NOTE: Power manager sleep disabled to ensure 100% active EM0 operation
-    // for real-time high-speed multi-sensor I2C/DMA data acquisition.
+    // Sleep DISABLED — GPIO interrupt wiring needs hardware verification.
+    // Using super-loop with throttle delay instead.
     // sl_power_manager_sleep();
 #endif
+
+    // Throttle the super loop — gives iostream time to flush printf output
+    // and prevents excessive CPU spinning. ~5ms = 200 Hz loop rate.
+    for (volatile uint32_t _d = 0; _d < 5u * 4000u; _d++) { }
   }
 #endif // SL_CATALOG_KERNEL_PRESENT
 }

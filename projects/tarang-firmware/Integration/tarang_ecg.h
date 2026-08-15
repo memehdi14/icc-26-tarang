@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "tarang_sensor_health.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,6 +42,8 @@ bool      tarang_ecg_half1_ready(void);
 uint32_t  tarang_ecg_get_sample_count(void);
 uint32_t  tarang_ecg_get_overrun_count(void);
 uint32_t  tarang_ecg_get_halves_completed(void);
+tarang_sensor_health_t tarang_ecg_get_health(void);
+bool      tarang_ecg_is_valid(void);
 
 #ifdef __cplusplus
 }

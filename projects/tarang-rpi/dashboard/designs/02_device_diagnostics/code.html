@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tarang Clinical - Device Diagnostics</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-tint": "#066a61",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#d2d9f4",
+                        "on-background": "#131b2e",
+                        "on-tertiary-fixed-variant": "#653e00",
+                        "on-error": "#ffffff",
+                        "primary-fixed-dim": "#85d5c9",
+                        "secondary-container": "#de294b",
+                        "tertiary-fixed": "#ffddb8",
+                        "surface-container": "#eaedff",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "surface-container-low": "#f2f3ff",
+                        "surface": "#faf8ff",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#faf8ff",
+                        "secondary-fixed-dim": "#ffb3b6",
+                        "surface-variant": "#dae2fc",
+                        "outline": "#6e7977",
+                        "outline-variant": "#bcc9c6",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed-variant": "#005049",
+                        "tertiary-fixed-dim": "#fcba66",
+                        "primary-container": "#00685f",
+                        "on-surface": "#131b2e",
+                        "on-secondary-fixed": "#40000c",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#2a1700",
+                        "secondary": "#ba0035",
+                        "on-primary-container": "#93e4d8",
+                        "surface-container-high": "#e1e7ff",
+                        "tertiary": "#623c00",
+                        "inverse-surface": "#283044",
+                        "tertiary-container": "#825100",
+                        "on-secondary-container": "#fffbff",
+                        "inverse-primary": "#85d5c9",
+                        "on-surface-variant": "#3e4947",
+                        "on-primary-fixed": "#00201d",
+                        "on-secondary-fixed-variant": "#920027",
+                        "secondary-fixed": "#ffdada",
+                        "primary": "#004e47",
+                        "on-tertiary-container": "#ffcb8f",
+                        "surface-container-highest": "#dae2fc",
+                        "inverse-on-surface": "#eef0ff",
+                        "primary-fixed": "#a1f1e5",
+                        "surface-bright": "#faf8ff",
+                        "on-secondary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "card-padding": "20px",
+                        "gutter": "16px",
+                        "margin-mobile": "16px",
+                        "stack-md": "16px",
+                        "base": "4px",
+                        "stack-lg": "24px",
+                        "margin-desktop": "32px",
+                        "stack-sm": "8px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Geist"],
+                        "body-sm": ["Geist"],
+                        "reference-text": ["Geist"],
+                        "metric-display-mobile": ["Geist"],
+                        "label-mono": ["JetBrains Mono"],
+                        "body-md": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "metric-display": ["Geist"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "reference-text": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "metric-display-mobile": ["36px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "label-mono": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "metric-display": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .waveform-grid {
+            background-image: 
+                linear-gradient(to right, #f1f5f9 1px, transparent 1px),
+                linear-gradient(to bottom, #f1f5f9 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface h-screen overflow-hidden flex flex-col font-body-md">
+<!-- TopAppBar -->
+<header class="bg-surface-container-lowest dark:bg-surface-container-lowest fixed top-0 w-full z-50 h-16 border-b border-outline-variant dark:border-outline flat no shadows flex justify-between items-center px-gutter w-full">
+<div class="flex items-center gap-stack-md">
+<span class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed">Tarang Clinical</span>
+<nav class="hidden md:flex gap-stack-lg ml-margin-desktop">
+<a class="text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors px-3 py-4 cursor-pointer active:scale-95" href="#">Patient Context</a>
+<a class="text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors px-3 py-4 cursor-pointer active:scale-95" href="#">Room 402-A</a>
+<a class="text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors px-3 py-4 cursor-pointer active:scale-95" href="#">Critical Care</a>
+</nav>
+</div>
+<div class="flex items-center gap-stack-md">
+<button class="bg-primary-container text-on-primary rounded px-4 py-2 font-body-sm hover:bg-surface-tint transition-colors">Emergency Alert</button>
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed cursor-pointer active:scale-95 hover:bg-surface-container-high transition-colors p-2 rounded-full" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed cursor-pointer active:scale-95 hover:bg-surface-container-high transition-colors p-2 rounded-full" data-icon="account_circle">account_circle</span>
+</div>
+</header>
+<div class="flex flex-1 pt-16">
+<!-- SideNavBar -->
+<aside class="hidden md:flex bg-surface dark:bg-surface border-r border-outline-variant flat no shadows fixed left-0 top-16 bottom-0 w-64 flex flex-col h-full py-stack-lg z-40">
+<div class="px-stack-lg mb-stack-lg">
+<div class="font-headline-md text-headline-md font-bold text-primary">Dr. Aris</div>
+<div class="font-body-sm text-on-surface-variant">ICU Specialist</div>
+</div>
+<nav class="flex-1 flex flex-col gap-base">
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-body-md text-body-md">History</span>
+</a>
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md bg-surface-container-high text-primary border-r-4 border-primary font-bold hover:bg-surface-container-low transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings_input_component">settings_input_component</span>
+<span class="font-body-md text-body-md">Device Info</span>
+</a>
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</nav>
+<div class="mt-auto flex flex-col gap-base border-t border-outline-variant pt-stack-md">
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="font-body-md text-body-md">Support</span>
+</a>
+<a class="flex items-center gap-stack-md px-stack-lg py-stack-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body-md text-body-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 md:ml-64 p-margin-desktop overflow-y-auto bg-surface-container-lowest">
+<div class="max-w-7xl mx-auto space-y-stack-lg">
+<!-- Header -->
+<div class="flex justify-between items-end border-b border-outline-variant pb-stack-md">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Telemetry Diagnostics</h1>
+<p class="font-body-sm text-on-surface-variant mt-1">System Health &amp; Signal Integrity</p>
+</div>
+<div class="flex gap-stack-sm">
+<span class="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-high text-primary rounded-full font-label-mono text-label-mono border border-outline-variant">
+<span class="w-2 h-2 rounded-full bg-[#0D9488]"></span> SYNC: STABLE
+                        </span>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-stack-lg">
+<!-- Primary Data Metric (Cobalt Blue Focus) -->
+<div class="lg:col-span-2 bg-surface rounded-xl border border-outline-variant p-card-padding shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-start mb-stack-md">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Transmission Latency</h2>
+<p class="font-body-sm text-on-surface-variant">Real-time packet delay</p>
+</div>
+<span class="material-symbols-outlined text-[#2563EB]" data-icon="network_check">network_check</span>
+</div>
+<div class="flex items-baseline gap-2 mb-stack-lg">
+<span class="font-metric-display text-metric-display text-[#2563EB]">14</span>
+<span class="font-label-mono text-label-mono text-on-surface-variant">ms</span>
+</div>
+<!-- Simulated Chart -->
+<div class="h-32 w-full waveform-grid relative overflow-hidden rounded border border-outline-variant">
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,80 L10,75 L20,85 L30,60 L40,80 L50,50 L60,85 L70,40 L80,90 L90,60 L100,75" fill="none" opacity="0.8" stroke="#2563EB" stroke-width="2" vector-effect="non-scaling-stroke"></path>
+<path d="M0,80 L10,75 L20,85 L30,60 L40,80 L50,50 L60,85 L70,40 L80,90 L90,60 L100,75 L100,100 L0,100 Z" fill="#2563EB" opacity="0.1"></path>
+</svg>
+</div>
+</div>
+<!-- Healthy Status Indicator (Teal Focus) -->
+<div class="bg-surface rounded-xl border border-outline-variant p-card-padding shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-start mb-stack-md">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Signal Strength</h2>
+<p class="font-body-sm text-on-surface-variant">Antenna Array 1</p>
+</div>
+<span class="material-symbols-outlined text-[#0D9488]" data-icon="wifi">wifi</span>
+</div>
+<div class="flex items-center justify-center flex-1">
+<div class="relative w-32 h-32">
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="45" stroke="#e1e7ff" stroke-width="10"></circle>
+<circle cx="50" cy="50" fill="none" r="45" stroke="#0D9488" stroke-dasharray="283" stroke-dashoffset="28" stroke-linecap="round" stroke-width="10"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-metric-display-mobile text-metric-display-mobile text-[#0D9488]">90</span>
+<span class="font-label-mono text-label-mono text-on-surface-variant">%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Hardware Telemetry Cards -->
+<div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-stack-md">
+<!-- Card 1 -->
+<div class="bg-surface rounded-lg border border-outline-variant p-stack-md hover:bg-surface-container-low transition-colors">
+<div class="flex justify-between items-center mb-2">
+<span class="font-reference-text text-reference-text text-on-surface-variant">CPU TEMP</span>
+<span class="material-symbols-outlined text-[#0D9488] text-sm" data-icon="thermostat">thermostat</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-on-surface">42°C</div>
+<div class="font-label-mono text-label-mono text-on-surface-variant mt-1">Normal Range</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface rounded-lg border border-outline-variant p-stack-md hover:bg-surface-container-low transition-colors">
+<div class="flex justify-between items-center mb-2">
+<span class="font-reference-text text-reference-text text-on-surface-variant">MEMORY LOAD</span>
+<span class="material-symbols-outlined text-[#2563EB] text-sm" data-icon="memory">memory</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-on-surface">68%</div>
+<div class="w-full bg-surface-container-high h-1 mt-2 rounded-full overflow-hidden">
+<div class="bg-[#2563EB] h-full w-[68%]"></div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface rounded-lg border border-outline-variant p-stack-md hover:bg-surface-container-low transition-colors">
+<div class="flex justify-between items-center mb-2">
+<span class="font-reference-text text-reference-text text-on-surface-variant">BATTERY</span>
+<span class="material-symbols-outlined text-[#0D9488] text-sm" data-icon="battery_charging_full">battery_charging_full</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-on-surface">94%</div>
+<div class="font-label-mono text-label-mono text-[#0D9488] mt-1">Charging</div>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface rounded-lg border border-outline-variant p-stack-md hover:bg-surface-container-low transition-colors">
+<div class="flex justify-between items-center mb-2">
+<span class="font-reference-text text-reference-text text-on-surface-variant">PACKET LOSS</span>
+<span class="material-symbols-outlined text-[#0D9488] text-sm" data-icon="check_circle">check_circle</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-on-surface">0.01%</div>
+<div class="font-label-mono text-label-mono text-on-surface-variant mt-1">Optimal</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
