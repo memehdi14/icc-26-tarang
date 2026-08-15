@@ -266,45 +266,83 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
   float p_v = 0.0f;
   float p_s = 0.0f;
 
+  /* ── ISSUE-1 FIX: Update circuit breaker state ───────────────────────── */
+  /* Update rolling window */
+  if (pipeline->circuit_breaker_count < CIRCUIT_BREAKER_WINDOW) {
+    pipeline->circuit_breaker_ring[pipeline->circuit_breaker_idx] = suspicious ? 1 : 0;
+    if (suspicious) pipeline->circuit_breaker_suspicious_count++;
+    pipeline->circuit_breaker_count++;
+  } else {
+    /* Window full — evict oldest, add newest */
+    uint8_t evicted = pipeline->circuit_breaker_ring[pipeline->circuit_breaker_idx];
+    if (evicted) pipeline->circuit_breaker_suspicious_count--;
+    pipeline->circuit_breaker_ring[pipeline->circuit_breaker_idx] = suspicious ? 1 : 0;
+    if (suspicious) pipeline->circuit_breaker_suspicious_count++;
+  }
+  pipeline->circuit_breaker_idx = (pipeline->circuit_breaker_idx + 1) % CIRCUIT_BREAKER_WINDOW;
+
+  /* Check if circuit breaker should trip (>20% suspicious over 30 beats) */
+  if (pipeline->circuit_breaker_count >= CIRCUIT_BREAKER_WINDOW) {
+    uint8_t threshold = (CIRCUIT_BREAKER_WINDOW * 20) / 100;  /* 20% of 30 = 6 */
+    bool should_trip = pipeline->circuit_breaker_suspicious_count > threshold;
+    if (should_trip && !pipeline->circuit_breaker_tripped) {
+      printf("[PIPELINE] ⚠ Circuit breaker TRIPPED: %u/%u beats suspicious (>20%%). "
+             "Disabling Tier-1 CNN until recovery.\r\n",
+             pipeline->circuit_breaker_suspicious_count, CIRCUIT_BREAKER_WINDOW);
+      pipeline->circuit_breaker_tripped = true;
+    } else if (!should_trip && pipeline->circuit_breaker_tripped) {
+      printf("[PIPELINE] ✓ Circuit breaker RESET: %u/%u beats suspicious (<20%%). "
+             "Re-enabling Tier-1 CNN.\r\n",
+             pipeline->circuit_breaker_suspicious_count, CIRCUIT_BREAKER_WINDOW);
+      pipeline->circuit_breaker_tripped = false;
+    }
+  }
+
   if (suspicious) {
     pipeline->suspicious_beats++;
     pipeline->diag.ai_trigger_count++;
 
-    /* ── TIER 1: Gate CNN ───────────────────────────────────────────── */
-    float rr_features[TARANG_RR_FEATURE_COUNT];
-    compute_rr_features(pipeline, rr_interval_ms, rr_features);
+    /* ── TIER 1: Gate CNN (disabled if circuit breaker tripped) ───────── */
+    if (!pipeline->circuit_breaker_tripped) {
+      float rr_features[TARANG_RR_FEATURE_COUNT];
+      compute_rr_features(pipeline, rr_interval_ms, rr_features);
 
-    uint32_t t0 = tarang_now_ms();
-    gate_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
-    gate_prob = tarang_ai_gate(beat_window_130, rr_features);
-    uint32_t t1 = tarang_now_ms();
-    pipeline->diag.ai_time_us += (t1 - t0) * 1000;
+      uint32_t t0 = tarang_now_ms();
+      gate_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
+      gate_prob = tarang_ai_gate(beat_window_130, rr_features);
+      uint32_t t1 = tarang_now_ms();
+      pipeline->diag.ai_time_us += (t1 - t0) * 1000;
 
-    if (gate_prob > TARANG_GATE_THRESHOLD) {
-      pipeline->gate_passed_beats++;
+      if (gate_prob > TARANG_GATE_THRESHOLD) {
+        pipeline->gate_passed_beats++;
 
-      /* ── TIER 2: SV Head CNN ────────────────────────────────────── */
-      uint32_t t2 = tarang_now_ms();
-      sv_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
-      tarang_ai_sv_head(beat_window_130, rr_features, &p_v, &p_s);
-      uint32_t t3 = tarang_now_ms();
-      pipeline->diag.ai_time_us += (t3 - t2) * 1000;
+        /* ── TIER 2: SV Head CNN ────────────────────────────────── */
+        uint32_t t2 = tarang_now_ms();
+        sv_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
+        tarang_ai_sv_head(beat_window_130, rr_features, &p_v, &p_s);
+        uint32_t t3 = tarang_now_ms();
+        pipeline->diag.ai_time_us += (t3 - t2) * 1000;
 
-      if (p_v > TARANG_V_THRESHOLD) {
-        beat_class = TARANG_BEAT_V;
-        confidence = (uint8_t)(p_v * 255.0f);
-      } else if (p_s > TARANG_S_THRESHOLD) {
-        beat_class = TARANG_BEAT_S;
-        confidence = (uint8_t)(p_s * 255.0f);
+        if (p_v > TARANG_V_THRESHOLD) {
+          beat_class = TARANG_BEAT_V;
+          confidence = (uint8_t)(p_v * 255.0f);
+        } else if (p_s > TARANG_S_THRESHOLD) {
+          beat_class = TARANG_BEAT_S;
+          confidence = (uint8_t)(p_s * 255.0f);
+        } else {
+          /* Gate was wrong — happens, not an error */
+          beat_class = TARANG_BEAT_N;
+          confidence = 200;
+        }
       } else {
-        /* Gate was wrong — happens, not an error */
+        /* Gate rejected — classify as N */
         beat_class = TARANG_BEAT_N;
-        confidence = 200;
+        confidence = (uint8_t)((1.0f - gate_prob) * 255.0f);
       }
     } else {
-      /* Gate rejected — classify as N */
+      /* Circuit breaker tripped — skip CNN, classify as N via Tier-0 only */
       beat_class = TARANG_BEAT_N;
-      confidence = (uint8_t)((1.0f - gate_prob) * 255.0f);
+      confidence = 255;
     }
   }
   /* If not suspicious: beat_class = N, confidence = 255 (already set) */

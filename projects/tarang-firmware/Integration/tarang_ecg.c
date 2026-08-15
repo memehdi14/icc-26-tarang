@@ -55,7 +55,7 @@ static volatile bool      half0Ready        = false;
 static volatile bool      half1Ready        = false;
 static volatile uint32_t  ecg_overrun_count = 0;
 static volatile uint32_t  halves_completed  = 0;
-static volatile bool      first_half_seen   = false;
+/* first_half_seen removed — was declared but never used */
 static volatile uint32_t  half0Pending      = 0;
 static volatile uint32_t  half1Pending      = 0;
 
@@ -224,35 +224,41 @@ void tarang_ecg_init(void)
  ******************************************************************************/
 void tarang_ecg_process(void)
 {
-  static uint32_t last_output = 0;
-  
   /*
    * ECG hardware pipeline is fully autonomous:
    *   LETIMER0 -> PRS ch2 -> IADC0 -> DMADRV ping-pong -> ecg_buffer RAM
    * Runs in background with 0% CPU intervention.
    */
-  
+
   /* Clear half-ready flags */
-  if (half0Ready) { 
-    half0Ready = false; 
+  if (half0Ready) {
+    half0Ready   = false;
     half0Pending = 0;
   }
-  if (half1Ready) { 
-    half1Ready = false;
+  if (half1Ready) {
+    half1Ready   = false;
     half1Pending = 0;
   }
-  
-  /* Lightweight telemetry: output one sample every 10 samples (~25 Hz stream from 250 Hz data)
-   * This gives the plotter smooth data without overwhelming serial port */
-  if (sample_count > 0 && (sample_count - last_output >= 10)) {
-    last_output = sample_count;
-    
-    /* Output most recent sample from the active half-buffer */
-    uint32_t idx = (halves_completed & 1U) ? 0 : ECG_HALF_SAMPLES;
-    uint32_t raw_val = ecg_buffer[idx] & 0x00FFFFFFu;
-    
-    printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
+
+  /* Gate on real DMA completions only */
+  static uint32_t last_halves = 0;
+  if (halves_completed == 0 || halves_completed == last_halves) {
+    return;
   }
+  if (halves_completed - last_halves < 5U) {
+    return;
+  }
+  last_halves = halves_completed;
+
+  /* Read newest sample from the freshest half */
+  uint32_t base_idx = (halves_completed & 1U)
+      ? ECG_HALF_SAMPLES   /* odd  -> half-1 just done */
+      : 0U;                /* even -> half-0 just done */
+  uint32_t newest_idx = base_idx + (ECG_HALF_SAMPLES - 1U);
+
+  uint32_t raw_val = ecg_buffer[newest_idx] & 0x00FFFFFFu;
+
+  printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
 }
 
 /*******************************************************************************

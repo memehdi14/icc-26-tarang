@@ -188,15 +188,16 @@ void app_process_action(void)
     uint32_t overruns = tarang_ecg_get_overrun_count();
     uint32_t *buf     = tarang_ecg_get_buffer();
 
-    /* Show most recent raw ADC from each half-buffer slot 0 */
-    uint32_t raw0 = (buf != NULL) ? (buf[0] & 0x00FFFFFFu) : 0;
-    uint32_t raw1 = (buf != NULL) ? (buf[ECG_HALF_SAMPLES] & 0x00FFFFFFu) : 0;
+    /* Show most recent raw ADC — last slot of each half (DMA fills forward,
+     * so the highest index in each half is the newest sample). */
+    uint32_t raw0 = (buf != NULL) ? (buf[ECG_HALF_SAMPLES - 1]  & 0x00FFFFFFu) : 0;
+    uint32_t raw1 = (buf != NULL) ? (buf[ECG_BUFFER_SIZE   - 1] & 0x00FFFFFFu) : 0;
 
     printf("  [ECG] halves=%lu  total_samples=%lu  overruns=%lu\r\n",
            (unsigned long)halves,
            (unsigned long)samples,
            (unsigned long)overruns);
-    printf("  [ECG] raw_half0[0]=%lu  raw_half1[0]=%lu\r\n",
+    printf("  [ECG] latest_half0=%lu  latest_half1=%lu\r\n",
            (unsigned long)raw0,
            (unsigned long)raw1);
 
