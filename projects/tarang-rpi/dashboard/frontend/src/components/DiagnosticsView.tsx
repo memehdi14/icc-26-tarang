@@ -35,14 +35,23 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
         <div className="card-clinical p-4 space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-[var(--color-on-surface-variant)]">
             <span>BLE Connection</span>
-            <Wifi className="w-4 h-4 text-emerald-600" />
+            <Wifi className={`w-4 h-4 ${diagnostics.bleConnected ? 'text-emerald-600' : 'text-red-500'}`} />
           </div>
-          <p className="text-xl font-mono font-extrabold text-emerald-700 flex items-center gap-2">
-            <CheckCircle className="w-5 h-5" />
-            CONNECTED
+          <p className={`text-xl font-mono font-extrabold flex items-center gap-2 ${diagnostics.bleConnected ? 'text-emerald-700' : 'text-red-600'}`}>
+            {diagnostics.bleConnected ? (
+              <>
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                CONNECTED
+              </>
+            ) : (
+              <>
+                <AlertCircle className="w-5 h-5 text-red-600" />
+                DISCONNECTED
+              </>
+            )}
           </p>
           <p className="text-[11px] font-mono text-[var(--color-on-surface-variant)] border-t border-[var(--color-outline-variant)] pt-2">
-            Interval: 20 ms • 1 Hz Periodic Sync
+            Interval: 20 ms • GATT Notifications
           </p>
         </div>
 
@@ -53,10 +62,10 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
             <Activity className="w-4 h-4 text-[var(--color-primary)]" />
           </div>
           <p className="text-xl font-mono font-extrabold text-[var(--color-on-surface)]">
-            {diagnostics.latencyMs} ms
+            {diagnostics.latencyMs ?? 0} ms
           </p>
           <p className="text-[11px] font-mono text-[var(--color-on-surface-variant)] border-t border-[var(--color-outline-variant)] pt-2">
-            Jitter: ±1.2 ms • Target &lt; 50ms
+            Dropped: {diagnostics.packetsDropped ?? 0} pkts • Target &lt; 50ms
           </p>
         </div>
 
@@ -67,10 +76,10 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
             <Radio className="w-4 h-4 text-blue-600" />
           </div>
           <p className="text-xl font-mono font-extrabold text-[var(--color-on-surface)]">
-            {diagnostics.rssiDbm} dBm
+            {diagnostics.rssiDbm ?? -100} dBm
           </p>
           <p className="text-[11px] font-mono text-emerald-700 border-t border-[var(--color-outline-variant)] pt-2">
-            Link Quality: Excellent (100%)
+            Link Quality: {diagnostics.bleConnected ? 'Active Link' : 'No Link'}
           </p>
         </div>
 
@@ -81,7 +90,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
             <Zap className="w-4 h-4 text-amber-500" />
           </div>
           <p className="text-xl font-mono font-extrabold text-[var(--color-on-surface)]">
-            {diagnostics.batteryPct}%
+            {diagnostics.batteryPct ?? 0}%
           </p>
           <p className="text-[11px] font-mono text-[var(--color-on-surface-variant)] border-t border-[var(--color-outline-variant)] pt-2">
             Power Mode: EM0 Active
@@ -103,15 +112,15 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
           <div className="space-y-3 font-mono text-xs">
             <div className="flex justify-between py-1.5 border-b border-[var(--color-outline-variant)]">
               <span className="text-[var(--color-on-surface-variant)]">Target SoC Board:</span>
-              <span className="font-bold text-[var(--color-on-surface)]">{diagnostics.deviceName}</span>
+              <span className="font-bold text-[var(--color-on-surface)]">{diagnostics.deviceName || 'EFR32MG26'}</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-[var(--color-outline-variant)]">
               <span className="text-[var(--color-on-surface-variant)]">BLE MAC Address:</span>
-              <span className="font-bold text-[var(--color-on-surface)]">{diagnostics.deviceMac}</span>
+              <span className="font-bold text-[var(--color-on-surface)]">{diagnostics.deviceMac || '—'}</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-[var(--color-outline-variant)]">
               <span className="text-[var(--color-on-surface-variant)]">Firmware Build:</span>
-              <span className="font-bold text-[var(--color-primary)]">{diagnostics.firmwareVersion}</span>
+              <span className="font-bold text-[var(--color-primary)]">{diagnostics.firmwareVersion || 'v1.0.0'}</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-[var(--color-outline-variant)]">
               <span className="text-[var(--color-on-surface-variant)]">Telemetry UUID:</span>
@@ -119,7 +128,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
             </div>
             <div className="flex justify-between py-1.5">
               <span className="text-[var(--color-on-surface-variant)]">Total Packets Rx:</span>
-              <span className="font-bold text-emerald-700">{diagnostics.packetsReceived.toLocaleString()}</span>
+              <span className="font-bold text-emerald-700">{(diagnostics.packetsReceived ?? 0).toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -140,8 +149,12 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
                 <p className="font-bold text-[var(--color-on-surface)]">ECG Analog Front-End (IADC DMA)</p>
                 <p className="text-[11px] font-mono text-[var(--color-on-surface-variant)]">Sample Rate: 250 Hz • Dual Half-Buffer Atomic Check</p>
               </div>
-              <span className="px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                HEALTHY
+              <span className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold border ${
+                diagnostics.ecgDmaHealth
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-red-100 text-red-800 border-red-300'
+              }`}>
+                {diagnostics.ecgDmaHealth ? 'HEALTHY' : 'FAULT'}
               </span>
             </div>
 
@@ -151,8 +164,12 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
                 <p className="font-bold text-[var(--color-on-surface)]">MAX30102 PPG Optical Sensor (I2C)</p>
                 <p className="text-[11px] font-mono text-[var(--color-on-surface-variant)]">Sample Rate: 100 Hz • Bus Recovery Auto-Clear</p>
               </div>
-              <span className="px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                HEALTHY
+              <span className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold border ${
+                diagnostics.ppgI2cHealth
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-red-100 text-red-800 border-red-300'
+              }`}>
+                {diagnostics.ppgI2cHealth ? 'HEALTHY' : 'FAULT'}
               </span>
             </div>
 
@@ -162,8 +179,12 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics })
                 <p className="font-bold text-[var(--color-on-surface)]">MPU6050 Motion IMU (I2C)</p>
                 <p className="text-[11px] font-mono text-[var(--color-on-surface-variant)]">Sample Rate: 100 Hz • Atomic Flag Reset</p>
               </div>
-              <span className="px-2.5 py-1 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                HEALTHY
+              <span className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold border ${
+                diagnostics.imuFifoHealth
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-red-100 text-red-800 border-red-300'
+              }`}>
+                {diagnostics.imuFifoHealth ? 'HEALTHY' : 'FAULT'}
               </span>
             </div>
           </div>

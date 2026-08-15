@@ -13,6 +13,7 @@ Requirements:
     pip install bleak httpx
 """
 
+import sys
 import asyncio
 import struct
 import time
@@ -25,7 +26,10 @@ TELEMETRY_CHAR_UUID = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"
 BACKEND_URL = "http://localhost:8000"
 INGEST_URL = f"{BACKEND_URL}/api/telemetry/ingest"
 DIAGNOSTICS_URL = f"{BACKEND_URL}/api/diagnostics/update"
+HEALTH_URL = f"{BACKEND_URL}/api/health"
 RECONNECT_DELAY_S = 5
+
+BEAT_CLASSES = {0: "N", 1: "PAC", 2: "PVC", 3: "Q"}
 
 # ── Packet Decoding ───────────────────────────────────────────────────────────
 
@@ -87,7 +91,7 @@ async def post_diagnostics(
     http: httpx.AsyncClient,
     ble_client: BleakClient,
     connected: bool,
-    rssi: int = -100,
+    rssi: int = -60,
 ):
     try:
         latency = (time.monotonic() - connect_time) if connect_time else 0.0
@@ -97,20 +101,33 @@ async def post_diagnostics(
             "rssi_dbm": rssi,
             "packets_received": packets_received,
             "packets_dropped": packets_dropped,
-            "latency_ms": round(latency * 1000 % 100, 1),  # last 100ms cycle
-            "battery_pct": 94,  # firmware doesn't expose battery yet
+            "latency_ms": round(latency * 1000 % 100, 1),
+            "battery_pct": 94,
             "ecg_health": True,
             "ppg_health": True,
             "imu_health": True,
         }, timeout=2.0)
+    except Exception as e:
+        print(f"[WARN] Diagnostic POST failed: {e}")
+
+
+async def wait_for_backend(http: httpx.AsyncClient):
+    """Check if backend is reachable before starting BLE loop."""
+    try:
+        res = await http.get(HEALTH_URL, timeout=2.0)
+        if res.status_code == 200:
+            print("[BLE] Backend connection verified.")
+            return True
     except Exception:
         pass
+    print(f"[BLE] Warning: Backend at {BACKEND_URL} not responding. Make sure FastAPI backend is running.")
+    return False
 
 
 # ── BLE Connection Loop ───────────────────────────────────────────────────────
 
 async def find_device():
-    """Scan and return the TARANG device, or prompt for manual selection."""
+    """Scan and return the TARANG device, or non-blocking prompt."""
     print("[BLE] Scanning for TARANG device...")
     devices = await BleakScanner.discover(timeout=5.0)
     for d in devices:
@@ -122,20 +139,30 @@ async def find_device():
     print("[BLE] Device not found by name. Available devices:")
     for i, d in enumerate(devices):
         print(f"  [{i}] {d.address} — {d.name}")
-    choice = input("Enter device index or MAC address (blank to retry): ").strip()
-    if choice.isdigit() and int(choice) < len(devices):
-        return devices[int(choice)].address
-    return choice or None
+
+    if not sys.stdin.isatty():
+        print("[BLE] Headless mode — auto retrying BLE scan...")
+        return None
+
+    try:
+        choice = input("Enter device index or MAC address (blank to retry): ").strip()
+        if choice.isdigit() and int(choice) < len(devices):
+            return devices[int(choice)].address
+        return choice or None
+    except EOFError:
+        return None
 
 
 async def run_ble_gateway():
     global connect_time
 
     async with httpx.AsyncClient() as http:
+        await wait_for_backend(http)
+
         while True:
             address = await find_device()
             if not address:
-                print(f"[BLE] No device. Retrying in {RECONNECT_DELAY_S}s...")
+                print(f"[BLE] No device selected/found. Retrying in {RECONNECT_DELAY_S}s...")
                 await asyncio.sleep(RECONNECT_DELAY_S)
                 continue
 
@@ -153,6 +180,15 @@ async def run_ble_gateway():
                     def handler(sender, data: bytearray):
                         packet = decode_packet(data)
                         if packet:
+                            elapsed = time.monotonic() - connect_time
+                            beat_name = BEAT_CLASSES.get(packet['beat_class'], 'Q')
+                            print(
+                                f"[{elapsed:>8.1f}s] HR={packet['current_hr']:>3} BPM | "
+                                f"RR={packet['rr_interval_ms']:>4}ms | "
+                                f"Beat={beat_name:>3} (Conf:{packet['confidence']}/255) | "
+                                f"Flags=0x{packet['rhythm_flags']:02X} | "
+                                f"Pkt#{packets_received + 1}"
+                            )
                             asyncio.ensure_future(post_telemetry(http, packet))
                             asyncio.ensure_future(
                                 post_diagnostics(http, client, True)
@@ -161,26 +197,30 @@ async def run_ble_gateway():
                     # Try exact UUID first, then fall back to any notify char
                     try:
                         await client.start_notify(TELEMETRY_CHAR_UUID, handler)
-                        print(f"[BLE] Subscribed to {TELEMETRY_CHAR_UUID}")
-                    except Exception:
-                        print("[BLE] Exact UUID not found. Trying any notify char...")
+                        print(f"[BLE] Subscribed to telemetry UUID {TELEMETRY_CHAR_UUID}")
+                    except Exception as e:
+                        print(f"[BLE] Exact UUID subscription failed: {e}. Trying service discovery...")
                         services = await client.get_services()
+                        subscribed = False
                         for svc in services:
                             for char in svc.characteristics:
                                 if "notify" in char.properties:
                                     await client.start_notify(char.uuid, handler)
-                                    print(f"[BLE] Subscribed to fallback {char.uuid}")
+                                    print(f"[BLE] Subscribed to fallback notify char {char.uuid}")
+                                    subscribed = True
                                     break
+                            if subscribed:
+                                break
 
-                    print("[BLE] Streaming telemetry. Press Ctrl+C to stop.")
+                    print("[BLE] Streaming live telemetry to backend. Press Ctrl+C to stop.")
                     while client.is_connected:
                         await asyncio.sleep(1.0)
 
-                    print("[BLE] Disconnected.")
+                    print("[BLE] Device disconnected.")
                     await post_diagnostics(http, client, False)
 
             except Exception as e:
-                print(f"[BLE] Error: {e}")
+                print(f"[BLE] Connection error: {e}")
 
             print(f"[BLE] Reconnecting in {RECONNECT_DELAY_S}s...")
             await asyncio.sleep(RECONNECT_DELAY_S)
@@ -191,3 +231,4 @@ if __name__ == "__main__":
         asyncio.run(run_ble_gateway())
     except KeyboardInterrupt:
         print("\n[BLE] Gateway stopped.")
+

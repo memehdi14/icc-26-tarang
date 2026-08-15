@@ -10,12 +10,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from .models import Base
 
-# Default: SQLite file in the database/ directory.
-# Override with env var TARANG_DATABASE_URL for PostgreSQL, e.g.:
-#   export TARANG_DATABASE_URL="postgresql://tarang:password@localhost:5432/tarang_clinical"
+_DB_DIR = os.path.dirname(os.path.abspath(__file__))
+_DEFAULT_DB_PATH = os.path.join(_DB_DIR, "tarang_clinical.db")
+
 DATABASE_URL = os.getenv(
     "TARANG_DATABASE_URL",
-    "sqlite:///./tarang_clinical.db"
+    f"sqlite:///{_DEFAULT_DB_PATH}"
 )
 
 engine = create_engine(

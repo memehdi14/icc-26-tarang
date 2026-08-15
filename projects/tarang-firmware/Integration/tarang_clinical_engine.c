@@ -196,6 +196,13 @@ static void update_hr(tarang_clinical_engine_t *engine,
   /* Hold previous HR if signal quality is poor */
   if (beat->signal_quality < TARANG_SQI_MIN) return;
 
+  /* FIX: Gate HR output until ≥5 consistent beats detected
+   * (prevents bootstrap garbage from appearing in telemetry) */
+  if (engine->rr_count < 5) {
+    engine->current_hr = 0;
+    return;
+  }
+
   uint32_t mean8 = rr_mean(engine->rr_buffer, engine->rr_head,
                             engine->rr_count, TARANG_RR_WINDOW_SIZE,
                             TARANG_HR_WINDOW_SIZE);
@@ -385,6 +392,13 @@ static void check_afib(tarang_clinical_engine_t *engine)
  ******************************************************************************/
 static void check_sinus_rate(tarang_clinical_engine_t *engine)
 {
+  /* FIX: Gate rhythm flags until ≥5 consistent beats
+   * (prevents 0x02 SINUS_BRADY flag from firing during startup) */
+  if (engine->rr_count < 5) {
+    engine->rhythm_flags &= ~(TARANG_RHYTHM_SINUS_TACH | TARANG_RHYTHM_SINUS_BRADY);
+    return;
+  }
+
   bool afib_active = (engine->rhythm_flags & TARANG_RHYTHM_AFIB) != 0;
 
   if (!afib_active && engine->current_hr > TARANG_TACHYCARDIA_BPM) {

@@ -347,7 +347,9 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
     if (th->SPKI < 0.01f) th->SPKI = 0.01f;
     th->TH1 = th->NPKI + 0.25f * (th->SPKI - th->NPKI);
     th->TH2 = 0.5f * th->TH1;
-    th->last_R_idx = idx - (TARANG_PEAK_TIMEOUT_SAMPLES / 2);
+    /* FIX: Reset last_R_idx to current index, not half-timeout back
+     * (prevents runaway decay loop) */
+    th->last_R_idx = idx;
   }
 
   /* Update state for next call */
@@ -534,8 +536,9 @@ void tarang_dsp_init(tarang_dsp_state_t *state)
   state->thresh.spki_max_step_ratio = 3.0f;
   state->thresh.default_rr_samples = TARANG_ECG_SAMPLE_RATE_HZ; /* 1s = 60bpm */
 
-  /* Warm-up: 2 seconds of signal for threshold initialization */
-  state->warmup_samples = 2 * TARANG_ECG_SAMPLE_RATE_HZ;
+  /* Warm-up: 8 seconds of signal for threshold initialization
+   * (fixes premature threshold lock-in from startup transients) */
+  state->warmup_samples = 8 * TARANG_ECG_SAMPLE_RATE_HZ;
 
   printf("[DSP] Initialized: fs=%dHz, MWI_N=%d, refractory=%d, "
          "norm_window=%d, detection_delay=%d\r\n",
@@ -616,6 +619,12 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
       }
       if (spki_init <= npki_init) spki_init = npki_init * 2.0f;
 
+      /* FIX: Absolute SPKI ceiling to prevent catastrophic startup values */
+      float spki_ceiling = npki_init * 10.0f;
+      if (spki_init > spki_ceiling) {
+        spki_init = spki_ceiling;
+      }
+
       state->thresh.SPKI = spki_init;
       state->thresh.NPKI = npki_init;
       state->thresh.TH1 = npki_init + 0.25f * (spki_init - npki_init);
@@ -627,10 +636,9 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
       state->warmed_up = true;
       state->debug_sample.warmed_up = true;
 
-      printf("[DSP] Warm-up complete: SPKI=%d NPKI=%d TH1=%d (x1000)\r\n",
-             (int)(spki_init * 1000.0f),
-             (int)(npki_init * 1000.0f),
-             (int)(state->thresh.TH1 * 1000.0f));
+      /* FIX: Use %.4f format to show actual float values, not clipped-to-int */
+      printf("[DSP] Warm-up complete: SPKI=%.4f NPKI=%.4f TH1=%.4f\r\n",
+             spki_init, npki_init, state->thresh.TH1);
     } else {
       state->sample_idx++;
       return false;

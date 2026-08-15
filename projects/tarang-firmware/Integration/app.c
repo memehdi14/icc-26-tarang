@@ -29,127 +29,23 @@
 #include "tarang_ecg.h"
 #include "tarang_ppg.h"
 #include "tarang_imu.h"
-#include "tarang_pipeline.h"
-#include "tarang_ble.h"
-#include "tarang_time.h"
-#include "tarang_debug_config.h"
 
 #include <stdio.h>
 #include <stdint.h>
 
 #include "em_cmu.h"
-#include "em_gpio.h"
 #include "gpiointerrupt.h"
-#include "sl_i2cspm.h"
 #include "sl_i2cspm_instances.h"
-#include "sl_sleeptimer.h"
-#include "em_core.h"
 
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
 #include "sl_power_manager.h"
 #endif
 
-/* Sleeptimer handle for periodic 10ms wakeup */
-static sl_sleeptimer_timer_handle_t wakeup_timer;
-
-/* ── TARANG DSP/ML/Clinical Pipeline (static — ~32KB in .bss) ────────── */
-static tarang_pipeline_t s_pipeline;
-
-static void wakeup_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
-{
-  (void)handle;
-  (void)data;
-  /* Empty — the sole purpose is to wake the CPU from EM1 every 10ms
-   * so the super loop runs and processes any pending sensor data. */
-}
-
-/* Calibrated delay for sensor power-up stabilization.
- * All call sites are inside app_init(), which runs after sl_system_init()
- * has initialized the sleeptimer — safe to use the SDK function here. */
+/* Simple delay for sensor power-up stabilization */
 static void delay_ms(uint32_t ms)
 {
-  sl_sleeptimer_delay_millisecond(ms);
+  for (volatile uint32_t i = 0; i < ms * 4000u; i++) { }
 }
-
-#if TARANG_DEBUG_TELEMETRY
-static int32_t telemetry_float_x1000(float value)
-{
-  if (value > 2147483.0f) return INT32_MAX;
-  if (value < -2147483.0f) return INT32_MIN;
-  return (int32_t)(value * 1000.0f);
-}
-
-static void telemetry_emit_ecg_sample(void)
-{
-  const tarang_dsp_debug_sample_t *sample =
-      tarang_pipeline_get_debug_sample(&s_pipeline);
-  uint32_t timestamp_ms = s_pipeline.latest_sample_timestamp_ms;
-
-  printf("@S,%lu,%lu,%lu,%ld,%ld,%ld,%ld,%u,%u\r\n",
-         (unsigned long)timestamp_ms,
-         (unsigned long)sample->sample_idx,
-         (unsigned long)sample->raw_adc,
-         (long)telemetry_float_x1000(sample->bandpassed),
-         (long)telemetry_float_x1000(sample->zscored),
-         (long)telemetry_float_x1000(sample->mwi),
-         (long)telemetry_float_x1000(sample->threshold_th1),
-         (unsigned)sample->warmed_up,
-         (unsigned)tarang_ecg_is_valid());
-}
-
-static void telemetry_emit_beat(void)
-{
-  tarang_pipeline_beat_telemetry_t beat;
-  if (!tarang_pipeline_take_beat_telemetry(&s_pipeline, &beat)) return;
-
-  printf("@B,%lu,%lu,%u,%u,%u,%d,%d,%d,%u,%u,%u,%u,%u,%u,%u\r\n",
-         (unsigned long)beat.timestamp_ms,
-         (unsigned long)beat.r_peak_sample_idx,
-         (unsigned)beat.rr_interval_ms,
-         (unsigned)beat.local_hr_bpm_x10,
-         (unsigned)beat.signal_quality,
-         (int)beat.gate_probability_x1000,
-         (int)beat.sv_p_v_x1000,
-         (int)beat.sv_p_s_x1000,
-         (unsigned)beat.beat_class,
-         (unsigned)beat.confidence,
-         (unsigned)beat.rhythm_flags,
-         (unsigned)beat.current_hr,
-         (unsigned)beat.sdnn_ms,
-         (unsigned)beat.rmssd_ms,
-         (unsigned)beat.prr50_pct);
-}
-
-static void telemetry_emit_sensor_samples(void)
-{
-  static uint32_t last_imu_count = 0;
-  static uint32_t last_ppg_count = 0;
-  uint32_t now_ms = tarang_now_ms();
-  uint32_t imu_count = tarang_imu_get_sample_count();
-  uint32_t ppg_count = tarang_ppg_get_sample_count();
-
-  if (imu_count != last_imu_count) {
-    last_imu_count = imu_count;
-    printf("@I,%lu,%lu,%u,%d,%d,%d,%d,%d,%d\r\n",
-           (unsigned long)now_ms,
-           (unsigned long)imu_count,
-           (unsigned)tarang_imu_is_valid(),
-           tarang_imu_get_accel_x(), tarang_imu_get_accel_y(),
-           tarang_imu_get_accel_z(), tarang_imu_get_gyro_x(),
-           tarang_imu_get_gyro_y(), tarang_imu_get_gyro_z());
-  }
-
-  if (ppg_count != last_ppg_count) {
-    last_ppg_count = ppg_count;
-    printf("@P,%lu,%lu,%u,%lu,%lu\r\n",
-           (unsigned long)now_ms,
-           (unsigned long)ppg_count,
-           (unsigned)tarang_ppg_is_valid(),
-           (unsigned long)tarang_ppg_get_red(),
-           (unsigned long)tarang_ppg_get_ir());
-  }
-}
-#endif
 
 /*******************************************************************************
  * TEST MODE — Change these to select which sensors are active.
@@ -157,7 +53,7 @@ static void telemetry_emit_sensor_samples(void)
  * For full integration, enable all three.
  ******************************************************************************/
 #define TARANG_ENABLE_ECG   1
-#define TARANG_ENABLE_PPG   0
+#define TARANG_ENABLE_PPG   1
 #define TARANG_ENABLE_IMU   1
 
 /***************************************************************************//**
@@ -165,11 +61,6 @@ static void telemetry_emit_sensor_samples(void)
  ******************************************************************************/
 void app_init(void)
 {
-  /* Early crash-probe marker: this is the very first thing app_init() does.
-   * If this prints but later init is silent, the crash is after this line.
-   * If BOOT OK appears but this doesn't, sl_main_init → app_init transition failed. */
-  printf("\r\n[BOOT] app_init() STARTED\r\n");
-
   /*
    * CRITICAL: Prevent the power manager from entering EM2/EM3.
    * EM2 shuts down I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
@@ -181,7 +72,7 @@ void app_init(void)
 
   printf("\r\n");
   printf("==========================================\r\n");
-  printf("  TARANG INTEGRATION v2.0 (DSP+ML)\r\n");
+  printf("  TARANG INTEGRATION v1.0\r\n");
   printf("  Active: %s%s%s\r\n",
          TARANG_ENABLE_ECG ? "ECG " : "",
          TARANG_ENABLE_PPG ? "PPG " : "",
@@ -199,70 +90,13 @@ void app_init(void)
   /*
    * CRITICAL: Give I2C sensors time to power up after flash/reset.
    * MAX30102 and MPU6050 both need ~50-100ms for stable power-on.
+   * Re-initialize I2CSPM to ensure clean bus state.
    */
   printf("[INIT] Waiting for sensor power-up (100ms)...\r\n");
   delay_ms(100);
-
-  /*
-   * I2C BUS RECOVERY: If the MPU6050/MAX30102 was mid-transaction when
-   * the debugger halted or the MCU reset, the slave may be holding SDA low.
-   * Toggle SCL 9 times + generate a STOP to release the bus.
-   * This MUST happen BEFORE sl_i2cspm_init_instances().
-   */
-  printf("[INIT] I2C bus recovery (9 SCL pulses)...\r\n");
-  {
-    /* PC05 = SCL, PC07 = SDA (I2C1 mikroe) */
-    GPIO_PinModeSet(gpioPortC, 5, gpioModeWiredAndPullUp, 1);
-    GPIO_PinModeSet(gpioPortC, 7, gpioModeWiredAndPullUp, 1);
-
-    for (int i = 0; i < 9; i++) {
-      GPIO_PinOutClear(gpioPortC, 5);  /* SCL low */
-      delay_ms(1);
-      GPIO_PinOutSet(gpioPortC, 5);    /* SCL high */
-      delay_ms(1);
-    }
-    /* Generate STOP: SDA low→high while SCL high */
-    GPIO_PinOutClear(gpioPortC, 7);    /* SDA low */
-    delay_ms(1);
-    GPIO_PinOutSet(gpioPortC, 5);      /* SCL high */
-    delay_ms(1);
-    GPIO_PinOutSet(gpioPortC, 7);      /* SDA high → STOP */
-    delay_ms(1);
-
-    printf("[INIT] Bus state: SCL=%u SDA=%u\r\n",
-           (unsigned)GPIO_PinInGet(gpioPortC, 5),
-           (unsigned)GPIO_PinInGet(gpioPortC, 7));
-  }
-
   printf("[INIT] Re-initializing I2C bus...\r\n");
   sl_i2cspm_init_instances();
-  printf("[INIT] I2C bus ready.\r\n");
   delay_ms(50);
-
-  /* ── I2C Bus Scan — probe known sensor addresses ───────────────────── */
-  {
-    printf("[INIT] I2C scan: probing known addresses...\r\n");
-    uint8_t addrs[] = { 0x57, 0x68 };  /* MAX30102, MPU6050 */
-    const char *names[] = { "MAX30102 (PPG)", "MPU6050  (IMU)" };
-
-    for (int i = 0; i < 2; i++) {
-      I2C_TransferSeq_TypeDef seq;
-      uint8_t dummy = 0;
-      seq.addr  = addrs[i] << 1;
-      seq.flags = I2C_FLAG_WRITE_READ;
-      uint8_t reg = 0x00;
-      seq.buf[0].data = &reg;
-      seq.buf[0].len  = 1;
-      seq.buf[1].data = &dummy;
-      seq.buf[1].len  = 1;
-
-      I2C_TransferReturn_TypeDef ret = I2CSPM_Transfer(sl_i2cspm_mikroe, &seq);
-      printf("[INIT]   0x%02X %s -> %s (ret=%d)\r\n",
-             addrs[i], names[i],
-             (ret == i2cTransferDone) ? "ACK (found)" : "NACK (missing)",
-             (int)ret);
-    }
-  }
 
 #if TARANG_ENABLE_ECG
   printf("[INIT] ECG: Starting LETIMER+PRS+IADC+DMADRV...\r\n");
@@ -274,7 +108,7 @@ void app_init(void)
 
 #if TARANG_ENABLE_PPG
   printf("[INIT] PPG: Configuring MAX30102...\r\n");
-  tarang_ppg_init(true);  /* bus already cleared by app.c I2C recovery above */
+  tarang_ppg_init();
   printf("[INIT] PPG: %s\r\n",
          tarang_ppg_is_found() ? "OK — interrupts armed at ~100 Hz" : "FAILED");
 #else
@@ -293,34 +127,6 @@ void app_init(void)
   printf("==========================================\r\n");
   printf("[INIT] Done. Diagnostics every ~2 sec.\r\n");
   printf("==========================================\r\n");
-
-  /*
-   * Start a 10ms periodic wakeup timer. This wakes the CPU from EM1
-   * every 10ms so the super loop can check sensor data_ready flags.
-   * GPIO sensor interrupts ALSO wake the CPU — this timer is a
-   * guaranteed fallback that ensures the system never sleeps forever.
-   */
-  uint32_t ticks = sl_sleeptimer_ms_to_tick(10);
-  sl_sleeptimer_start_periodic_timer(&wakeup_timer,
-                                     ticks,
-                                     wakeup_callback,
-                                     NULL, 0, 0);
-  printf("[INIT] 10ms wakeup timer started.\r\n");
-
-  /* ── Initialize DSP → ML → Clinical Pipeline ────────────────────────── */
-  printf("[INIT] Pipeline: Initializing DSP + ML + Clinical Engine...\r\n");
-  tarang_pipeline_init(&s_pipeline);
-  printf("[INIT] Pipeline: Ready. Feed ECG samples via process_ecg_sample().\r\n");
-
-  /* ── Initialize BLE Telemetry ───────────────────────────────────────── */
-  tarang_ble_init();
-#if TARANG_DEBUG_TELEMETRY
-  printf("@SCHEMA,S,timestamp_ms,sample_idx,ecg_raw,ecg_bandpassed_x1000,ecg_zscored_x1000,mwi_x1000,threshold_th1_x1000,dsp_warmed,ecg_valid\r\n");
-  printf("@SCHEMA,I,timestamp_ms,sample_count,imu_valid,ax,ay,az,gx,gy,gz\r\n");
-  printf("@SCHEMA,P,timestamp_ms,sample_count,ppg_valid,red,ir\r\n");
-  printf("@SCHEMA,B,timestamp_ms,r_peak_sample_idx,rr_prev_ms,local_hr_bpm_x10,signal_quality,gate_p_abnormal_x1000,sv_p_v_x1000,sv_p_s_x1000,beat_class,confidence,rhythm_flags,current_hr,sdnn_ms,rmssd_ms,prr50_pct\r\n");
-#endif
-  printf("==========================================\r\n");
 }
 
 /***************************************************************************//**
@@ -334,57 +140,7 @@ void app_process_action(void)
 {
   /* ── Sensor processing ──────────────────────────────────────────────── */
 #if TARANG_ENABLE_ECG
-  /* CRITICAL: Read DMA half-ready flags BEFORE ecg_process() clears them.
-   * ecg_process() sets halfXReady = false internally, so if we check
-   * after, we'd always see false and never feed samples to the pipeline.
-   * Atomic block ensures both flags are read consistently — without it,
-   * a DMA completion between reading h0 and h1 could be missed. */
-  CORE_DECLARE_IRQ_STATE;
-  CORE_ENTER_ATOMIC();
-  bool h0 = tarang_ecg_half0_ready();
-  bool h1 = tarang_ecg_half1_ready();
-  CORE_EXIT_ATOMIC();
-
   tarang_ecg_process();
-
-  /* ── Feed completed ECG DMA half-buffers into the DSP→ML pipeline ─── */
-  {
-    uint32_t *ecg_buf = tarang_ecg_get_buffer();
-    if (ecg_buf != NULL) {
-      /* Half 0 completed (DMA wrote 64 samples at index 0..63) */
-      if (h0) {
-        uint32_t now = tarang_now_ms();
-        for (int i = 0; i < ECG_HALF_SAMPLES; i++) {
-          uint32_t age_ms = (uint32_t)(((uint64_t)(ECG_HALF_SAMPLES - 1 - i)
-                                       * 1000ULL) /
-                                      TARANG_ECG_SAMPLE_RATE_HZ);
-          uint32_t sample_ms = now >= age_ms ? now - age_ms : 0u;
-          tarang_pipeline_process_ecg_sample(&s_pipeline, ecg_buf[i], sample_ms);
-#if TARANG_DEBUG_TELEMETRY
-          telemetry_emit_ecg_sample();
-          telemetry_emit_beat();
-#endif
-        }
-      }
-      /* Half 1 completed (DMA wrote 64 samples at index 64..127) */
-      if (h1) {
-        uint32_t now = tarang_now_ms();
-        for (int i = 0; i < ECG_HALF_SAMPLES; i++) {
-          uint32_t age_ms = (uint32_t)(((uint64_t)(ECG_HALF_SAMPLES - 1 - i)
-                                       * 1000ULL) /
-                                      TARANG_ECG_SAMPLE_RATE_HZ);
-          uint32_t sample_ms = now >= age_ms ? now - age_ms : 0u;
-          tarang_pipeline_process_ecg_sample(&s_pipeline,
-                                              ecg_buf[ECG_HALF_SAMPLES + i],
-                                              sample_ms);
-#if TARANG_DEBUG_TELEMETRY
-          telemetry_emit_ecg_sample();
-          telemetry_emit_beat();
-#endif
-        }
-      }
-    }
-  }
 #endif
 #if TARANG_ENABLE_PPG
   tarang_ppg_process();
@@ -392,12 +148,6 @@ void app_process_action(void)
 #if TARANG_ENABLE_IMU
   tarang_imu_process();
 #endif
-#if TARANG_DEBUG_TELEMETRY
-  telemetry_emit_sensor_samples();
-#endif
-
-  /* ── BLE Telemetry Transmission ────────────────────────────────────── */
-  tarang_ble_process(&s_pipeline);
 
   /* ── Periodic diagnostics (every ~2 seconds) ────────────────────────
    *
@@ -424,25 +174,6 @@ void app_process_action(void)
 #endif
 
   if (current_count - last_diag < diag_interval) {
-    /* Fallback: if no samples collected at all, print a warning periodically
-     * so we know the firmware is alive but the sensor isn't producing data. */
-    static uint32_t stall_counter = 0;
-    if (current_count == 0 && (++stall_counter % 400u) == 0) {
-      printf("\r\n[WARN] No samples collected. Sensor may not be generating interrupts.\r\n");
-#if TARANG_ENABLE_PPG
-      printf("[WARN] PPG found=%d  samples=%lu  pin_PC06=%u  int_count=%lu\r\n",
-             (int)tarang_ppg_is_found(),
-             (unsigned long)tarang_ppg_get_sample_count(),
-             (unsigned)GPIO_PinInGet(gpioPortC, 6),
-             (unsigned long)tarang_ppg_get_interrupt_count());
-#endif
-#if TARANG_ENABLE_IMU
-      printf("[WARN] IMU found=%d  samples=%lu  int_count=%lu\r\n",
-             (int)tarang_imu_is_found(),
-             (unsigned long)tarang_imu_get_sample_count(),
-             (unsigned long)tarang_imu_get_interrupt_count());
-#endif
-    }
     return;
   }
   last_diag = current_count;
@@ -533,29 +264,5 @@ void app_process_action(void)
   }
 #endif
 
-  printf("========================================\r\n");
-
-  /* ── Pipeline diagnostics ────────────────────────────────────────── */
-  {
-    const tarang_diagnostics_t *d = tarang_pipeline_get_diag(&s_pipeline);
-    printf("  [PIPELINE] beats: total=%lu  suspicious=%lu  gate_passed=%lu\r\n",
-           (unsigned long)s_pipeline.total_beats,
-           (unsigned long)s_pipeline.suspicious_beats,
-           (unsigned long)s_pipeline.gate_passed_beats);
-    printf("  [PIPELINE] AI: triggers=%lu  time=%lu us  BLE_pkts=%lu\r\n",
-           (unsigned long)d->ai_trigger_count,
-           (unsigned long)d->ai_time_us,
-           (unsigned long)d->ble_packet_count);
-    if (s_pipeline.engine.total_beats > 0) {
-      uint32_t total = s_pipeline.engine.total_beats;
-      uint32_t pac_pct = s_pipeline.engine.pac_count * 100u / total;
-      uint32_t pvc_pct = s_pipeline.engine.pvc_count * 100u / total;
-      printf("  [PIPELINE] HR=%u bpm  rhythm=0x%02X  PAC=%u%%  PVC=%u%%\r\n",
-             (unsigned)s_pipeline.engine.current_hr,
-             (unsigned)s_pipeline.engine.rhythm_flags,
-             (unsigned)pac_pct,
-             (unsigned)pvc_pct);
-    }
-  }
   printf("========================================\r\n");
 }

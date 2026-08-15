@@ -40,10 +40,10 @@ def get_latest_diagnostics(db: Session = Depends(get_db)):
 
 
 @router.post("/update")
-def update_diagnostics(data: DiagnosticsUpdate, db: Session = Depends(get_db)):
+async def update_diagnostics(data: DiagnosticsUpdate, db: Session = Depends(get_db)):
     """
     BLE Gateway posts device state here after each connection or packet burst.
-    Upserts a single running diagnostics row.
+    Upserts a single running diagnostics row and broadcasts to dashboard WS clients.
     """
     diag = db.query(DeviceDiagnostics).first()
     if not diag:
@@ -55,4 +55,10 @@ def update_diagnostics(data: DiagnosticsUpdate, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(diag)
-    return diag.to_dict()
+
+    dict_data = diag.to_dict()
+    # Import WebSocket manager lazily to avoid circular imports
+    from routers.telemetry import manager
+    await manager.broadcast({"type": "diagnostics", "data": dict_data})
+
+    return dict_data
