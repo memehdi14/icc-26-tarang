@@ -75,23 +75,32 @@ def load_env_file(env_path: Path) -> dict:
 
 def get_airtable_credentials() -> tuple:
     """
-    Resolve Airtable credentials from environment variables or the portfolio .env file.
+    Resolve Airtable credentials from environment variables or .env files.
+    Searches current working directory, script directory, and repository root.
     Returns (api_key, base_id, table_name).
     """
     api_key = AIRTABLE_API_KEY
     base_id = AIRTABLE_BASE_ID
     table_name = AIRTABLE_TABLE_NAME
 
-    # If not set in env, try loading from portfolio .env or local candidates
+    # If not set in env, search relative directories for .env and .env.local
     if not api_key or not base_id:
-        for env_candidate in [
-            Path(r"C:\MMDPublic\Freelance\portfolio\tarang\.env"),
-            Path(r"C:\MMDPublic\Freelance\portfolio\tarang\.env.local"),
-            Path(".env"),
-            Path(__file__).resolve().parent / ".env",
-            Path(__file__).resolve().parents[2] / ".env",
-            PORTFOLIO_ENV_PATH,
-        ]:
+        search_dirs = [Path.cwd()]
+        # Add script directory and all parent directories up to 5 levels (reaching repo root)
+        curr = Path(__file__).resolve().parent
+        for _ in range(5):
+            search_dirs.append(curr)
+            if curr.parent == curr:
+                break
+            curr = curr.parent
+
+        candidate_files = []
+        for d in search_dirs:
+            candidate_files.append(d / ".env")
+            candidate_files.append(d / ".env.local")
+        candidate_files.append(PORTFOLIO_ENV_PATH)
+
+        for env_candidate in candidate_files:
             if env_candidate.exists():
                 env_vars = load_env_file(env_candidate)
                 api_key = api_key or env_vars.get("AIRTABLE_API_KEY", "") or env_vars.get("AIRTABLE_PAT", "") or env_vars.get("NEXT_PUBLIC_AIRTABLE_API_KEY", "")
