@@ -107,6 +107,14 @@ typedef struct {
 
   /* Pipeline initialized flag */
   bool     initialized;
+
+  /* AI Tier Evaluation Running Counters */
+  uint32_t tier0_evals;
+  uint32_t tier1_fires;
+  uint32_t tier2_fires;
+  uint32_t class_n_count;
+  uint32_t class_s_count;
+  uint32_t class_v_count;
 } tarang_pipeline_t;
 
 /*******************************************************************************
@@ -125,6 +133,7 @@ typedef struct {
  * @param[out] pipeline  Pipeline state.
  ******************************************************************************/
 void tarang_pipeline_init(tarang_pipeline_t *pipeline);
+tarang_pipeline_t *tarang_pipeline_get_instance(void);
 
 /***************************************************************************//**
  * @brief Process one detected R-peak through the full 4-tier pipeline.

@@ -20,7 +20,7 @@ if sys.stderr.encoding != 'utf-8':
 
 GATE_MODEL_PATH = "gate_int8.tflite"
 SV_MODEL_PATH   = "sv_int8.tflite"
-INCART_DIR      = Path("C:/MMDPublic/Hackathons/TeamOcelleon/dataset/incartdb")
+INCART_DIR      = Path(os.environ.get("INCART_DIR", str(Path(__file__).resolve().parents[4] / "dataset" / "incartdb")))
 
 # Scaler values from training (Tarang_v15_FINAL_SUBMISSION.ipynb)
 RR_MEAN  = np.array([800.359, 796.738, 57.817, 79.819], dtype=np.float32)

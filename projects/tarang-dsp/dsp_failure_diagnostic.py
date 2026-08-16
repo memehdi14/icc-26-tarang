@@ -26,9 +26,7 @@ import traceback
 from pathlib import Path
 import numpy as np
 
-# ── Setup ──
-INCAR_DIR = r'C:\MMD Public\Hackathons\Team Ocelleon\dataset\incartdb'
-# *** CHANGE THIS to match your INCART data path ***
+INCAR_DIR = os.environ.get("INCART_DIR", str(Path(__file__).resolve().parents[2] / "dataset" / "incartdb"))
 
 OUTPUT_DIR = Path('dsp_diagnostic_output')
 OUTPUT_DIR.mkdir(exist_ok=True)

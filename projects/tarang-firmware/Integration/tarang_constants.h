@@ -23,9 +23,29 @@ extern "C" {
 #endif
 
 /*******************************************************************************
+ * Firmware Version Identifiers
+ ******************************************************************************/
+#define TARANG_FW_VERSION_MAJOR         1
+#define TARANG_FW_VERSION_MINOR         0
+#define TARANG_FW_VERSION_PATCH         0
+#define TARANG_FW_VERSION_STRING        "1.0.0"
+
+/*******************************************************************************
+ * Debug UART Logging Flags (Solution D: gate verbose prints to eliminate UART blocking)
+ ******************************************************************************/
+#ifndef TARANG_DEBUG_VERBOSE
+#define TARANG_DEBUG_VERBOSE            0       /* 1=Verbose per-sample logs, 0=Demo-safe lean output */
+#endif
+
+#ifndef TARANG_DEBUG_RAW_ECG
+#define TARANG_DEBUG_RAW_ECG            0       /* 1=Print raw ADC every 5th buffer, 0=Quiet */
+#endif
+
+/*******************************************************************************
  * ECG Acquisition Parameters (ADR-002)
  ******************************************************************************/
 #define TARANG_ECG_SAMPLE_RATE_HZ       250
+/* NOT CURRENTLY USED — reserved for future batch processing; pipeline currently processes single samples */
 #define TARANG_ECG_FRAME_SIZE           256     /* 1.024s per frame */
 #define TARANG_ECG_SAMPLE_PERIOD_US     4000    /* 1e6 / 250 */
 
@@ -78,8 +98,10 @@ extern "C" {
 #define TARANG_ZSCORE_WINDOW_SAMPLES    (TARANG_ZSCORE_WINDOW_SEC * TARANG_ECG_SAMPLE_RATE_HZ)
 
 /* SPKI lock-in fix parameters */
+/* NOT CURRENTLY USED — actual warmup governed by warmup_samples (8 * 250) in tarang_dsp.c:565 */
 #define TARANG_SPKI_STARTUP_DELAY_SEC   3       /* seconds before threshold locks */
 #define TARANG_SPKI_STARTUP_SAMPLES     (TARANG_SPKI_STARTUP_DELAY_SEC * TARANG_ECG_SAMPLE_RATE_HZ)
+/* NOT CURRENTLY USED — reserved for future adaptive ceiling tuning */
 #define TARANG_SPKI_CEILING_MULT        5.0f    /* 5 × (median + 3×MAD) */
 #define TARANG_PEAK_TIMEOUT_SAMPLES     750     /* 3 seconds, force TH1 reset */
 
@@ -166,6 +188,38 @@ typedef struct __attribute__((packed)) {
   uint16_t sdnn_ms;             /* 2 bytes */
   uint16_t rmssd_ms;            /* 2 bytes */
 } tarang_event_packet_t;        /* 16 bytes total */
+
+/*******************************************************************************
+ * BLE Device Health Telemetry Packet (Low-rate 1Hz channel, 16 bytes packed)
+ ******************************************************************************/
+typedef struct __attribute__((packed)) {
+  uint32_t uptime_s;            /* 4 bytes — device uptime in seconds */
+  uint8_t  ecg_lead_off;        /* 1 byte  — 0=attached, 1=detached/saturated */
+  uint8_t  ecg_sqi;             /* 1 byte  — 0-255 signal quality */
+  uint8_t  ppg_finger_present;  /* 1 byte  — 0=absent, 1=present */
+  uint8_t  imu_ok;              /* 1 byte  — 0=offline, 1=healthy */
+  uint8_t  i2c_failure_count;   /* 1 byte  — consecutive I2C failures (clamped to 255) */
+  uint8_t  dsp_overflow_count;  /* 1 byte  — DSP pending queue overflows */
+  uint8_t  ecg_overrun_count;   /* 1 byte  — DMA overrun count */
+  int8_t   ble_rssi;            /* 1 byte  — RSSI in dBm or 127 if unavailable */
+  uint8_t  battery_pct;         /* 1 byte  — 255 = unavailable / no sensor */
+  uint8_t  status_flags;        /* 1 byte  — reserved status bitfield */
+  uint16_t fw_version_packed;   /* 2 bytes — (major << 8) | minor */
+} tarang_health_packet_t;       /* 16 bytes total */
+
+#define TARANG_BLE_HEALTH_CHAR_UUID "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
+
+/*******************************************************************************
+ * Device Status Flags Bitfield (tarang_health_packet_t.status_flags)
+ ******************************************************************************/
+#define TARANG_STATUS_CHARGING          0x01u   /* Bit 0: 1=External power connected, 0=Battery */
+#define TARANG_STATUS_LOW_POWER_MODE    0x02u   /* Bit 1: 1=EM2 power-saving active, 0=EM0/EM1 */
+#define TARANG_STATUS_LOG_BUFFER_FULL   0x04u   /* Bit 2: 1=Local circular storage log full */
+#define TARANG_STATUS_AI_TIER_ACTIVE    0x08u   /* Bit 3: 1=INT8 AI Cascade engaged on last beat */
+#define TARANG_STATUS_CALIBRATED        0x10u   /* Bit 4: 1=Baseline ECG/PPG calibration locked */
+#define TARANG_STATUS_LEAD_FAULT_LO_POS 0x20u   /* Bit 5: 1=AD8232 LO+ pin asserted */
+#define TARANG_STATUS_LEAD_FAULT_LO_NEG 0x40u   /* Bit 6: 1=AD8232 LO- pin asserted */
+#define TARANG_STATUS_RESERVED_BIT7     0x80u   /* Bit 7: Reserved */
 
 /*******************************************************************************
  * Beat Input (DSP/ML → Clinical Engine interface)

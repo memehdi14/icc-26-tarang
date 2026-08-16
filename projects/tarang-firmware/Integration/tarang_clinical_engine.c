@@ -120,6 +120,7 @@ static uint16_t compute_sdnn(const uint16_t *buf, uint8_t head,
 
   /* Integer square root via Newton's method */
   if (variance == 0) return 0;
+  if (variance >= 0x3FFFFFFFu) variance = 0x3FFFFFFFu;
   uint32_t x = variance;
   uint32_t y = (x + 1) / 2;
   while (y < x) {
@@ -153,6 +154,7 @@ static uint16_t compute_rmssd(const uint16_t *buf, uint8_t head,
 
   /* Integer square root */
   if (mean_sq == 0) return 0;
+  if (mean_sq >= 0x3FFFFFFFu) mean_sq = 0x3FFFFFFFu;
   uint32_t x = mean_sq;
   uint32_t y = (x + 1) / 2;
   while (y < x) {

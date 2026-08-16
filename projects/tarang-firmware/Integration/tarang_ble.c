@@ -4,7 +4,12 @@
  ******************************************************************************/
 #include "tarang_ble.h"
 #include "tarang_time.h"
+#include "tarang_constants.h"
+#include "tarang_ecg.h"
+#include "tarang_ppg.h"
+#include "tarang_imu.h"
 #include <stdio.h>
+#include <string.h>
 
 #if defined(SL_COMPONENT_CATALOG_PRESENT)
 #include "sl_component_catalog.h"
@@ -36,6 +41,58 @@
 static uint8_t tarang_advertising_set_handle = 0xFFu;
 static uint8_t tarang_ble_conn_handle = SL_BT_INVALID_CONNECTION_HANDLE;
 static bool tarang_ble_telemetry_notifications_enabled = false;
+
+void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_packet_t *pkt)
+{
+  (void)pipeline;
+  if (!pkt) return;
+  memset(pkt, 0, sizeof(tarang_health_packet_t));
+
+  uint32_t now_ms = tarang_now_ms();
+  pkt->uptime_s = now_ms / 1000u;
+
+  /* ECG lead-off / signal quality */
+#if TARANG_ENABLE_ECG
+  pkt->ecg_sqi = pipeline ? pipeline->latest_beat_telemetry.signal_quality : 255;
+  pkt->ecg_lead_off = (pkt->ecg_sqi < 30) ? 1 : 0;
+  uint32_t ecg_over = tarang_ecg_get_overrun_count();
+  pkt->ecg_overrun_count = (uint8_t)(ecg_over > 255 ? 255 : ecg_over);
+#else
+  pkt->ecg_lead_off = 1;
+  pkt->ecg_sqi = 0;
+  pkt->ecg_overrun_count = 0;
+#endif
+
+  /* PPG finger presence & I2C failures */
+#if TARANG_ENABLE_PPG
+  pkt->ppg_finger_present = tarang_ppg_is_finger_present() ? 1 : 0;
+  uint32_t ppg_fails = tarang_ppg_get_consecutive_failures();
+  pkt->i2c_failure_count = (uint8_t)(ppg_fails > 255 ? 255 : ppg_fails);
+#else
+  pkt->ppg_finger_present = 0;
+  pkt->i2c_failure_count = 0;
+#endif
+
+  /* IMU health */
+#if TARANG_ENABLE_IMU
+  pkt->imu_ok = tarang_imu_is_healthy() ? 1 : 0;
+#else
+  pkt->imu_ok = 0;
+#endif
+
+  /* DSP overflows */
+#if TARANG_ENABLE_ECG
+  if (pipeline) {
+    uint32_t ovf = tarang_dsp_get_pending_overflow_count(&pipeline->dsp);
+    pkt->dsp_overflow_count = (uint8_t)(ovf > 255 ? 255 : ovf);
+  }
+#endif
+
+  pkt->ble_rssi = 127; /* 127 = unavailable without active RSSI query */
+  pkt->battery_pct = 255; /* 255 = unavailable / no hardware fuel gauge */
+  pkt->status_flags = 0;
+  pkt->fw_version_packed = (uint16_t)((TARANG_FW_VERSION_MAJOR << 8) | TARANG_FW_VERSION_MINOR);
+}
 
 void tarang_ble_init(void)
 {

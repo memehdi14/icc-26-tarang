@@ -38,16 +38,16 @@ AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY", "")
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID", "")
 AIRTABLE_TABLE_NAME = os.environ.get("AIRTABLE_TABLE_NAME", "Volunteers")
 
-# Path to the portfolio tarang .env for auto-loading credentials
-PORTFOLIO_ENV_PATH = Path(r"C:\MMDPublic\Freelance\portfolio\tarang\.env")
+# Path to optional portfolio tarang .env for auto-loading credentials
+PORTFOLIO_ENV_PATH = Path(os.environ.get("TARANG_PORTFOLIO_ENV_PATH", str(Path.home() / ".tarang" / ".env")))
 
-# Path to local participants.json fallback
-LOCAL_PARTICIPANTS_PATH = Path(r"C:\MMDPublic\Freelance\portfolio\tarang\data\participants.json")
+# Path to optional local participants.json fallback
+LOCAL_PARTICIPANTS_PATH = Path(os.environ.get("TARANG_PARTICIPANTS_PATH", str(Path.home() / ".tarang" / "participants.json")))
 
 # ─── Serial Defaults ─────────────────────────────────────────────────────────
 
 DEFAULT_BAUD = 115200
-DEFAULT_PORT = "COM11"
+DEFAULT_PORT = os.environ.get("TARANG_VCOM_PORT", "COM11")
 
 # ─── Output directory: integration_validation/captures/<volunteer_id>/ ────────
 
@@ -82,12 +82,23 @@ def get_airtable_credentials() -> tuple:
     base_id = AIRTABLE_BASE_ID
     table_name = AIRTABLE_TABLE_NAME
 
-    # If not set in env, try loading from portfolio .env
+    # If not set in env, try loading from portfolio .env or local candidates
     if not api_key or not base_id:
-        env_vars = load_env_file(PORTFOLIO_ENV_PATH)
-        api_key = api_key or env_vars.get("AIRTABLE_API_KEY", "")
-        base_id = base_id or env_vars.get("AIRTABLE_BASE_ID", "")
-        table_name = table_name or env_vars.get("AIRTABLE_TABLE_NAME", "Volunteers")
+        for env_candidate in [
+            Path(r"C:\MMDPublic\Freelance\portfolio\tarang\.env"),
+            Path(r"C:\MMDPublic\Freelance\portfolio\tarang\.env.local"),
+            Path(".env"),
+            Path(__file__).resolve().parent / ".env",
+            Path(__file__).resolve().parents[2] / ".env",
+            PORTFOLIO_ENV_PATH,
+        ]:
+            if env_candidate.exists():
+                env_vars = load_env_file(env_candidate)
+                api_key = api_key or env_vars.get("AIRTABLE_API_KEY", "") or env_vars.get("AIRTABLE_PAT", "") or env_vars.get("NEXT_PUBLIC_AIRTABLE_API_KEY", "")
+                base_id = base_id or env_vars.get("AIRTABLE_BASE_ID", "") or env_vars.get("NEXT_PUBLIC_AIRTABLE_BASE_ID", "")
+                table_name = table_name or env_vars.get("AIRTABLE_TABLE_NAME", "") or env_vars.get("NEXT_PUBLIC_AIRTABLE_TABLE_NAME", "Volunteers")
+                if api_key and base_id:
+                    break
 
     return api_key, base_id, table_name
 
@@ -211,21 +222,14 @@ def update_airtable_status(volunteer: dict, csv_path: str, record_count: int, du
 
         url = (
             f"https://api.airtable.com/v0/{base_id}"
-            f"/{urllib.parse.quote(table_name)}"
+            f"/{urllib.parse.quote(table_name)}/{record_id}"
         )
-
-        ts_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        csv_basename = os.path.basename(csv_path)
 
         payload = json.dumps({
             "typecast": True,
-            "records": [{
-                "id": record_id,
-                "fields": {
-                    "Status": "DATA_CAPTURED",
-                    "Last Capture": f"{csv_basename} | {record_count} records | {duration_sec:.1f}s | {ts_now}",
-                },
-            }],
+            "fields": {
+                "Status": "DATA_CAPTURED",
+            },
         }).encode("utf-8")
 
         req = urllib.request.Request(url, data=payload, method="PATCH")
@@ -457,12 +461,37 @@ def main():
     except serial.SerialException as e:
         print(f"[ERROR] Could not open {port}: {e}")
         print("[TIP] Close Simplicity Studio Serial Console or other terminal programs accessing the port.")
-        sys.exit(1)
-
     # ── Step 6: Capture loop ──
     t0 = time.time()
     last_flush = t0
+    last_ui_update = t0
     record_count = 0
+
+    # Live dashboard tracking state
+    ecg_samples = 0
+    ecg_overruns = 0
+    ecg_fs = 250.0
+    last_ecg_sample_time = t0
+    last_ecg_sample_val = 0
+    
+    ppg_status = "STARTING"
+    ppg_samples = 0
+    ppg_red = 0
+    ppg_ir = 0
+    
+    imu_status = "STARTING"
+    imu_samples = 0
+    imu_ax, imu_ay, imu_az = 0, 0, 0
+    
+    ai_tier0 = 0
+    ai_tier1 = 0
+    ai_tier2 = 0
+    class_n = 0
+    class_s = 0
+    class_v = 0
+    last_ai_event = "None (listening for beats...)"
+
+    import re
 
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -481,14 +510,86 @@ def main():
                 elapsed = now - t0
                 record_count += 1
 
-                if args.verbose or not line.startswith("@"):
-                    print(line)
+                # Parse ECG status
+                m_ecg = re.search(r'\[ECG\]\s+halves=\d+\s+total_samples=(\d+)\s+overruns=(\d+)', line)
+                if m_ecg:
+                    cur_s = int(m_ecg.group(1))
+                    dt_s = now - last_ecg_sample_time
+                    if dt_s > 0.5 and last_ecg_sample_val > 0:
+                        ecg_fs = (cur_s - last_ecg_sample_val) / dt_s
+                    last_ecg_sample_time = now
+                    last_ecg_sample_val = cur_s
+                    ecg_samples = cur_s
+                    ecg_overruns = int(m_ecg.group(2))
 
+                # Parse PPG status
+                m_ppg = re.search(r'\[PPG\]\s+samples=(\d+)\s+RED=(\d+)\s+IR=(\d+)\s+sensor=(\w+)', line)
+                if m_ppg:
+                    ppg_samples = int(m_ppg.group(1))
+                    ppg_red = int(m_ppg.group(2))
+                    ppg_ir = int(m_ppg.group(3))
+                    ppg_status = m_ppg.group(4)
+
+                # Parse IMU status
+                m_imu = re.search(r'\[IMU\]\s+samples=(\d+)\s+interrupts=\d+\s+sensor=(\w+)', line)
+                if m_imu:
+                    imu_samples = int(m_imu.group(1))
+                    imu_status = m_imu.group(2)
+
+                m_accel = re.search(r'\[IMU\]\s+accel:\s+ax=([-\d]+)\s+ay=([-\d]+)\s+az=([-\d]+)', line)
+                if m_accel:
+                    imu_ax = int(m_accel.group(1))
+                    imu_ay = int(m_accel.group(2))
+                    imu_az = int(m_accel.group(3))
+
+                # Parse AI Tier events
+                if "[AI] TIER1" in line:
+                    ai_tier1 += 1
+                    last_ai_event = line.strip()
+                elif "[AI] TIER2" in line:
+                    ai_tier2 += 1
+                    last_ai_event = line.strip()
+
+                m_ai_diag1 = re.search(r'\[AI\]\s+tier0_evals=(\d+)\s+tier1_fires=(\d+)\s+tier2_fires=(\d+)', line)
+                if m_ai_diag1:
+                    ai_tier0 = int(m_ai_diag1.group(1))
+                    ai_tier1 = int(m_ai_diag1.group(2))
+                    ai_tier2 = int(m_ai_diag1.group(3))
+
+                m_ai_diag2 = re.search(r'\[AI\]\s+class_n=(\d+)\s+class_s=(\d+)\s+class_v=(\d+)', line)
+                if m_ai_diag2:
+                    class_n = int(m_ai_diag2.group(1))
+                    class_s = int(m_ai_diag2.group(2))
+                    class_v = int(m_ai_diag2.group(3))
+
+                # Write every raw line to CSV
                 writer.writerow([f"{now:.3f}", f"{elapsed:.3f}", line])
+
+                if args.verbose:
+                    print(line)
+                else:
+                    # In-place consolidated ANSI dashboard update once every 0.5s
+                    if now - last_ui_update >= 0.5:
+                        last_ui_update = now
+                        sys.stdout.write("\033[2J\033[H") # Clear screen & move to top
+                        sys.stdout.write("========================================================================\n")
+                        sys.stdout.write(f"  TARANG LIVE CLINICAL CONSOLE — Volunteer: {volunteer['volunteerId']} ({volunteer.get('name', 'N/A')})\n")
+                        sys.stdout.write(f"  Session: {elapsed:.1f}s | Records: {record_count} | Port: {port} @ {baud}\n")
+                        sys.stdout.write("------------------------------------------------------------------------\n")
+                        sys.stdout.write(f"  ECG  : Rate: {ecg_fs:.1f} Hz | Overruns: {ecg_overruns} | Samples: {ecg_samples}\n")
+                        sys.stdout.write(f"  PPG  : Status: {ppg_status:<4} | Samples: {ppg_samples:<6} | RED: {ppg_red:<6} | IR: {ppg_ir}\n")
+                        sys.stdout.write(f"  IMU  : Status: {imu_status:<4} | Samples: {imu_samples:<6} | Accel(g): [{imu_ax/16384.0:+.2f}, {imu_ay/16384.0:+.2f}, {imu_az/16384.0:+.2f}]\n")
+                        sys.stdout.write("------------------------------------------------------------------------\n")
+                        sys.stdout.write(f"  AI   : Tier-0: {ai_tier0:<5} evals | Tier-1 Gate: {ai_tier1:<3} fires | Tier-2 SV: {ai_tier2} fires\n")
+                        sys.stdout.write(f"  Class: Normal (N): {class_n:<4} | S-Ectopic (S): {class_s:<3} | V-Ectopic (V): {class_v}\n")
+                        sys.stdout.write("------------------------------------------------------------------------\n")
+                        sys.stdout.write(f"  Event: {last_ai_event}\n")
+                        sys.stdout.write("========================================================================\n")
+                        sys.stdout.write("  [Press Ctrl+C to stop logging and save session]\n")
+                        sys.stdout.flush()
+
                 if now - last_flush >= 1.0:
                     f.flush()
-                    if not args.verbose:
-                        print(f"[CAPTURE] {volunteer['volunteerId']} | {record_count} records, {elapsed:.1f}s")
                     last_flush = now
 
         except KeyboardInterrupt:

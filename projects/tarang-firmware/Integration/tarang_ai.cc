@@ -8,6 +8,18 @@
 #include "sv_model_data.h"
 #include "rr_scaler.h"
 #include "thresholds.h"
+#include "tarang_model_version.h"
+#include <string_view>
+
+// Compile-time linkage verification across all model artifacts
+static_assert(std::string_view(RR_SCALER_RUN_ID) == std::string_view(TARANG_MODEL_RUN_ID),
+              "Mismatch: rr_scaler.h must match TARANG_MODEL_RUN_ID");
+static_assert(std::string_view(THRESHOLDS_RUN_ID) == std::string_view(TARANG_MODEL_RUN_ID),
+              "Mismatch: thresholds.h must match TARANG_MODEL_RUN_ID");
+static_assert(std::string_view(GATE_MODEL_RUN_ID) == std::string_view(TARANG_MODEL_RUN_ID),
+              "Mismatch: gate_model_data.h must match TARANG_MODEL_RUN_ID");
+static_assert(std::string_view(SV_MODEL_RUN_ID) == std::string_view(TARANG_MODEL_RUN_ID),
+              "Mismatch: sv_model_data.h must match TARANG_MODEL_RUN_ID");
 
 namespace {
   constexpr int kGateTensorArenaSize = 16 * 1024;
@@ -23,7 +35,7 @@ namespace {
   bool ai_initialized = false;
 
   // Shared 10-op resolver definition — both models use identical op set
-  template <int N>
+  template <unsigned int N>
   void register_ops(tflite::MicroMutableOpResolver<N>& resolver) {
     resolver.AddShape();
     resolver.AddStridedSlice();

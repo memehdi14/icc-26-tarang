@@ -44,6 +44,21 @@ export interface TelemetryDiagnostics {
   lastSyncTimestamp: string;
 }
 
+export interface DeviceHealthTelemetry {
+  uptimeS: number;
+  ecgLeadOff: boolean;
+  ecgSqi: number; // 0 - 255
+  ppgFingerPresent: boolean;
+  imuOk: boolean;
+  i2cFailureCount: number;
+  dspOverflowCount: number;
+  ecgOverrunCount: number;
+  bleRssi?: number | null;
+  batteryPct?: number | null;
+  fwVersion: string;
+  sessionId?: string | null;
+}
+
 export interface SystemSettings {
   hrLowThreshold: number;
   hrHighThreshold: number;
