@@ -65,6 +65,9 @@ component:
   - sv
   vendor: silabs
   id: ml_model
+- package: aiml
+  vendor: silabs
+  id: tensorflow_lite_micro
 - package: simplicity_sdk
   vendor: silabs
   id: EFR32MG26B510F3200IM48
@@ -668,4 +671,7 @@ sdk_extension:
 - vendor: silabs
   id: aiml
   version: 3.0.1
+- vendor: silabs
+  id: wiseconnect3_sdk
+  version: 4.1.1
 
