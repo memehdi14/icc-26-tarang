@@ -12,6 +12,12 @@ project(
 # which contains the content of the SLC project
 include(Integration.cmake)
 
+# Ensure EFR32 MVP float16 format is enabled for all C and C++ sources
+target_compile_options(slc PUBLIC
+    $<$<COMPILE_LANGUAGE:C>:-mfp16-format=ieee>
+    $<$<COMPILE_LANGUAGE:CXX>:-mfp16-format=ieee>
+)
+
 add_executable(Integration
     # Add additional sources here
     "${CMAKE_CURRENT_LIST_DIR}/../tarang_ble.c"

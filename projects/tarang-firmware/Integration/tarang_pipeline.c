@@ -49,8 +49,11 @@ static int16_t probability_to_x1000(float probability)
  ******************************************************************************/
 static bool beat_is_suspicious(const tarang_pipeline_t *pipeline,
                                 uint16_t rr_interval_ms,
-                                uint8_t signal_quality)
+                                uint8_t signal_quality,
+                                const char **reason_out)
 {
+  if (reason_out) *reason_out = "normal";
+
   /* Need at least 2 RR intervals to compute prematurity */
   if (pipeline->rr_history_count < 2) return false;
 
@@ -64,7 +67,8 @@ static bool beat_is_suspicious(const tarang_pipeline_t *pipeline,
 
   if (rr_mean_5 > 0) {
     /* rr_interval / rr_mean_5 < 0.85  →  rr_interval * 100 < 85 * rr_mean_5 */
-    if ((uint32_t)rr_interval_ms * 100 < 85 * rr_mean_5) {
+    if ((uint32_t)rr_interval_ms * TARANG_PREMATURITY_RATIO_DENOM < (uint32_t)TARANG_PREMATURITY_RATIO_NUM * rr_mean_5) {
+      if (reason_out) *reason_out = "prematurity";
       return true;
     }
   }
@@ -74,27 +78,33 @@ static bool beat_is_suspicious(const tarang_pipeline_t *pipeline,
     uint16_t sdnn = pipeline->engine.sdnn_ms;
     uint32_t mean_rr = rr_mean_5;  /* approximate */
     /* CoV > 0.12  →  sdnn * 100 > 12 * mean_rr */
-    if (mean_rr > 0 && (uint32_t)sdnn * 100 > 12 * mean_rr) {
+    uint32_t cov_pct = (uint32_t)(TARANG_AFIB_COV_THRESHOLD * 100.0f + 0.5f);
+    if (mean_rr > 0 && (uint32_t)sdnn * 100 > cov_pct * mean_rr) {
+      if (reason_out) *reason_out = "cov";
       return true;
     }
   }
 
   /* 3. HR extremes */
-  if (pipeline->engine.current_hr > 120) return true;
-  if (pipeline->engine.current_hr > 0 && pipeline->engine.current_hr < 45) {
+  if (pipeline->engine.current_hr > TARANG_TACHYCARDIA_BPM || (pipeline->engine.current_hr > 0 && pipeline->engine.current_hr < TARANG_BRADYCARDIA_BPM)) {
+    if (reason_out) *reason_out = "hr_extreme";
     return true;
   }
 
   /* 4. Compensatory pause after ectopic */
   if (pipeline->engine.last_beat_class != TARANG_BEAT_N && rr_mean_5 > 0) {
     /* rr_interval > 1.5 × mean  →  rr_interval * 2 > 3 * mean */
-    if ((uint32_t)rr_interval_ms * 2 > 3 * rr_mean_5) {
+    if ((uint32_t)rr_interval_ms * TARANG_COMPENSATORY_PAUSE_DENOM > (uint32_t)TARANG_COMPENSATORY_PAUSE_NUM * rr_mean_5) {
+      if (reason_out) *reason_out = "pause";
       return true;
     }
   }
 
   /* 5. Poor signal quality */
-  if (signal_quality < TARANG_SQI_MIN) return true;
+  if (signal_quality < TARANG_SQI_MIN) {
+    if (reason_out) *reason_out = "sqi";
+    return true;
+  }
 
   return false;  /* All checks pass — likely normal sinus */
 }
@@ -194,8 +204,16 @@ static void compute_rr_features(const tarang_pipeline_t *pipeline,
  * Public API
  ******************************************************************************/
 
+static tarang_pipeline_t s_global_pipeline;
+
+tarang_pipeline_t *tarang_pipeline_get_instance(void)
+{
+  return &s_global_pipeline;
+}
+
 void tarang_pipeline_init(tarang_pipeline_t *pipeline)
 {
+  if (!pipeline) pipeline = &s_global_pipeline;
   memset(pipeline, 0, sizeof(tarang_pipeline_t));
 
   /* Initialize DSP chain (Pan-Tompkins, all filters) */
@@ -257,57 +275,117 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
   pipeline->diag.frames_processed++;
 
   /* ── TIER 0: Heuristic gate ─────────────────────────────────────────── */
+  pipeline->tier0_evals++;
   uint8_t beat_class = TARANG_BEAT_N;
   uint8_t confidence = 255;  /* maximum confidence for heuristic-classified N */
-  bool suspicious = beat_is_suspicious(pipeline, rr_interval_ms, signal_quality);
+  const char *suspicious_reason = "normal";
+  bool suspicious = beat_is_suspicious(pipeline, rr_interval_ms, signal_quality, &suspicious_reason);
   bool gate_ran = false;
   bool sv_ran = false;
   float gate_prob = 0.0f;
   float p_v = 0.0f;
   float p_s = 0.0f;
 
+  /* ── ISSUE-1 FIX: Update circuit breaker state ───────────────────────── */
+  /* Update rolling window */
+  if (pipeline->circuit_breaker_count < CIRCUIT_BREAKER_WINDOW) {
+    pipeline->circuit_breaker_ring[pipeline->circuit_breaker_idx] = suspicious ? 1 : 0;
+    if (suspicious) pipeline->circuit_breaker_suspicious_count++;
+    pipeline->circuit_breaker_count++;
+  } else {
+    /* Window full — evict oldest, add newest */
+    uint8_t evicted = pipeline->circuit_breaker_ring[pipeline->circuit_breaker_idx];
+    if (evicted) pipeline->circuit_breaker_suspicious_count--;
+    pipeline->circuit_breaker_ring[pipeline->circuit_breaker_idx] = suspicious ? 1 : 0;
+    if (suspicious) pipeline->circuit_breaker_suspicious_count++;
+  }
+  pipeline->circuit_breaker_idx = (pipeline->circuit_breaker_idx + 1) % CIRCUIT_BREAKER_WINDOW;
+
+  /* Check if circuit breaker should trip (>20% suspicious over 30 beats) */
+  if (pipeline->circuit_breaker_count >= CIRCUIT_BREAKER_WINDOW) {
+    uint8_t threshold = (CIRCUIT_BREAKER_WINDOW * TARANG_CIRCUIT_BREAKER_MAX_SUSP_PCT) / 100;  /* 20% of 30 = 6 */
+    bool should_trip = pipeline->circuit_breaker_suspicious_count > threshold;
+    if (should_trip && !pipeline->circuit_breaker_tripped) {
+      printf("[PIPELINE] ⚠ Circuit breaker TRIPPED: %u/%u beats suspicious (>20%%). "
+             "Disabling Tier-1 CNN until recovery.\r\n",
+             pipeline->circuit_breaker_suspicious_count, CIRCUIT_BREAKER_WINDOW);
+      pipeline->circuit_breaker_tripped = true;
+    } else if (!should_trip && pipeline->circuit_breaker_tripped) {
+      printf("[PIPELINE] ✓ Circuit breaker RESET: %u/%u beats suspicious (<20%%). "
+             "Re-enabling Tier-1 CNN.\r\n",
+             pipeline->circuit_breaker_suspicious_count, CIRCUIT_BREAKER_WINDOW);
+      pipeline->circuit_breaker_tripped = false;
+    }
+  }
+
   if (suspicious) {
     pipeline->suspicious_beats++;
     pipeline->diag.ai_trigger_count++;
 
-    /* ── TIER 1: Gate CNN ───────────────────────────────────────────── */
-    float rr_features[TARANG_RR_FEATURE_COUNT];
-    compute_rr_features(pipeline, rr_interval_ms, rr_features);
+    /* ── TIER 1: Gate CNN (disabled if circuit breaker tripped) ───────── */
+    if (!pipeline->circuit_breaker_tripped) {
+      float rr_features[TARANG_RR_FEATURE_COUNT];
+      compute_rr_features(pipeline, rr_interval_ms, rr_features);
 
-    uint32_t t0 = tarang_now_ms();
-    gate_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
-    gate_prob = tarang_ai_gate(beat_window_130, rr_features);
-    uint32_t t1 = tarang_now_ms();
-    pipeline->diag.ai_time_us += (t1 - t0) * 1000;
+      uint32_t t0 = tarang_now_ms();
+      gate_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
+      gate_prob = tarang_ai_gate(beat_window_130, rr_features);
+      uint32_t t1 = tarang_now_ms();
+      pipeline->diag.ai_time_us += (t1 - t0) * 1000;
+      pipeline->tier1_fires++;
 
-    if (gate_prob > TARANG_GATE_THRESHOLD) {
-      pipeline->gate_passed_beats++;
+      printf("[AI] TIER1 gate_prob_x10k=%lu suspicious_reason=%s\r\n",
+             (unsigned long)(gate_prob * 10000.0f), suspicious_reason);
 
-      /* ── TIER 2: SV Head CNN ────────────────────────────────────── */
-      uint32_t t2 = tarang_now_ms();
-      sv_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
-      tarang_ai_sv_head(beat_window_130, rr_features, &p_v, &p_s);
-      uint32_t t3 = tarang_now_ms();
-      pipeline->diag.ai_time_us += (t3 - t2) * 1000;
+      if (gate_prob > TARANG_GATE_THRESHOLD) {
+        pipeline->gate_passed_beats++;
+        pipeline->tier2_fires++;
 
-      if (p_v > TARANG_V_THRESHOLD) {
-        beat_class = TARANG_BEAT_V;
-        confidence = (uint8_t)(p_v * 255.0f);
-      } else if (p_s > TARANG_S_THRESHOLD) {
-        beat_class = TARANG_BEAT_S;
-        confidence = (uint8_t)(p_s * 255.0f);
+        /* ── TIER 2: SV Head CNN ────────────────────────────────── */
+        uint32_t t2 = tarang_now_ms();
+        sv_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
+        tarang_ai_sv_head(beat_window_130, rr_features, &p_v, &p_s);
+        uint32_t t3 = tarang_now_ms();
+        pipeline->diag.ai_time_us += (t3 - t2) * 1000;
+
+        char class_char = 'N';
+        if (p_v > TARANG_V_THRESHOLD) {
+          beat_class = TARANG_BEAT_V;
+          confidence = (uint8_t)(p_v * 255.0f);
+          class_char = 'V';
+        } else if (p_s > TARANG_S_THRESHOLD) {
+          beat_class = TARANG_BEAT_S;
+          confidence = (uint8_t)(p_s * 255.0f);
+          class_char = 'S';
+        } else {
+          /* Gate was wrong — happens, not an error */
+          beat_class = TARANG_BEAT_N;
+          confidence = 200;
+          class_char = 'N';
+        }
+        printf("[AI] TIER2 p_v_x10k=%lu p_s_x10k=%lu beat_class=%c\r\n",
+               (unsigned long)(p_v * 10000.0f), (unsigned long)(p_s * 10000.0f), class_char);
       } else {
-        /* Gate was wrong — happens, not an error */
+        /* Gate rejected — classify as N */
         beat_class = TARANG_BEAT_N;
-        confidence = 200;
+        confidence = (uint8_t)((1.0f - gate_prob) * 255.0f);
       }
     } else {
-      /* Gate rejected — classify as N */
+      /* Circuit breaker tripped — skip CNN, classify as N via Tier-0 only */
       beat_class = TARANG_BEAT_N;
-      confidence = (uint8_t)((1.0f - gate_prob) * 255.0f);
+      confidence = 255;
     }
   }
   /* If not suspicious: beat_class = N, confidence = 255 (already set) */
+
+  /* Update running class counters */
+  if (beat_class == TARANG_BEAT_V) {
+    pipeline->class_v_count++;
+  } else if (beat_class == TARANG_BEAT_S) {
+    pipeline->class_s_count++;
+  } else {
+    pipeline->class_n_count++;
+  }
 
   /* ── TIER 3: Clinical Event Engine (ALWAYS runs) ────────────────────── */
   tarang_beat_input_t beat_input;
@@ -355,6 +433,12 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
 {
   if (!pipeline->initialized) return;
   pipeline->latest_sample_timestamp_ms = timestamp_ms;
+
+  static uint32_t s_pipeline_sample_counter = 0;
+  s_pipeline_sample_counter++;
+  if (s_pipeline_sample_counter % 500 == 0) {
+    printf("[AI] pipeline receiving samples, count=%lu\r\n", (unsigned long)s_pipeline_sample_counter);
+  }
 
   /* Run the full DSP chain on this single ADC sample.
    * DSP internally manages:

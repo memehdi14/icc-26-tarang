@@ -206,6 +206,9 @@ typedef struct {
   float warmup_mwi_sum;
   int   warmup_mwi_count;
 
+  /* Pending beat overflow diagnostic counter */
+  uint32_t pending_overflow_count;
+
   /* Latest intermediate values for validation telemetry. */
   tarang_dsp_debug_sample_t debug_sample;
 } tarang_dsp_state_t;
@@ -213,6 +216,13 @@ typedef struct {
 /*******************************************************************************
  * Public API
  ******************************************************************************/
+
+/***************************************************************************//**
+ * @brief Get total number of pending beat buffer overflows.
+ * @param[in] state  DSP state struct.
+ * @return Count of dropped beats due to full pending queue.
+ ******************************************************************************/
+uint32_t tarang_dsp_get_pending_overflow_count(const tarang_dsp_state_t *state);
 
 /***************************************************************************//**
  * @brief Initialize DSP state. Designs all filters, zeroes all state.

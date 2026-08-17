@@ -19,8 +19,8 @@
 #define SL_SUPPRESS_DEPRECATION_WARNINGS_SDK_2026_6
 
 #include "tarang_ecg.h"
+#include "tarang_pipeline.h"
 #include "tarang_time.h"
-#include "tarang_debug_config.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -57,12 +57,9 @@ static volatile bool      half0Ready        = false;
 static volatile bool      half1Ready        = false;
 static volatile uint32_t  ecg_overrun_count = 0;
 static volatile uint32_t  halves_completed  = 0;
-static volatile bool      first_half_seen   = false;
+/* first_half_seen removed — was declared but never used */
 static volatile uint32_t  half0Pending      = 0;
 static volatile uint32_t  half1Pending      = 0;
-static volatile tarang_sensor_health_t ecg_health = TARANG_SENSOR_DISABLED;
-
-#define ECG_STALE_TIMEOUT_MS  5000u
 
 /***************************************************************************//**
  * LETIMER Interrupt — sample_count bookkeeping only.
@@ -112,7 +109,6 @@ static bool ecgDmaCallback(unsigned int channel, unsigned int sequenceNo, void *
  ******************************************************************************/
 void tarang_ecg_init(void)
 {
-  ecg_health = TARANG_SENSOR_STARTING;
   /**********************************************************************
    * 1. CMU - clocks
    **********************************************************************/
@@ -143,11 +139,11 @@ void tarang_ecg_init(void)
   letimerInit.debugRun = true;
   letimerInit.comp0Top = true;
   letimerInit.repMode  = letimerRepeatFree;
-  letimerInit.topValue = 131;   // ~250 Hz at LFRCO/32768
+  letimerInit.topValue = 130;   // 250.137 Hz at LFRCO (32768 / (130 + 1))
   letimerInit.ufoa0    = letimerUFOAPulse;
 
   LETIMER_Init(LETIMER0, &letimerInit);
-  LETIMER_CompareSet(LETIMER0, 0, 131);
+  LETIMER_CompareSet(LETIMER0, 0, 130);
 
   LETIMER_IntEnable(LETIMER0, LETIMER_IEN_UF);
   NVIC_EnableIRQ(LETIMER0_IRQn);
@@ -224,57 +220,67 @@ void tarang_ecg_init(void)
   LETIMER_Enable(LETIMER0, true);
 }
 
+static bool s_raw_streaming_enabled = false;
+
+void tarang_ecg_set_raw_streaming(bool enable)
+{
+  s_raw_streaming_enabled = enable;
+}
+
+bool tarang_ecg_get_raw_streaming(void)
+{
+  return s_raw_streaming_enabled;
+}
+
 /***************************************************************************//**
  * ECG process action — check ping-pong halves.
  * Outputs compact telemetry stream for plotting without blocking CPU.
  ******************************************************************************/
 void tarang_ecg_process(void)
 {
-  static uint32_t last_halves_seen = 0;
-  static uint32_t last_progress_ms = 0;
+  bool drain_h0 = false;
+  bool drain_h1 = false;
+
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  if (half0Ready) {
+    half0Ready   = false;
+    half0Pending = 0;
+    drain_h0     = true;
+  }
+  if (half1Ready) {
+    half1Ready   = false;
+    half1Pending = 0;
+    drain_h1     = true;
+  }
+  CORE_EXIT_ATOMIC();
+
+  tarang_pipeline_t *pipeline = tarang_pipeline_get_instance();
   uint32_t now_ms = tarang_now_ms();
 
-  if (last_progress_ms == 0u) {
-    last_progress_ms = now_ms;
-  }
-
-  if (halves_completed != last_halves_seen) {
-    tarang_sensor_health_t previous = ecg_health;
-    last_halves_seen = halves_completed;
-    last_progress_ms = now_ms;
-    ecg_health = TARANG_SENSOR_OK;
-    if (previous == TARANG_SENSOR_STALE ||
-        previous == TARANG_SENSOR_UNAVAILABLE) {
-      printf("[ECG] RECOVERED - DMA samples are flowing again\r\n");
-    }
-  } else if ((uint32_t)(now_ms - last_progress_ms) >= ECG_STALE_TIMEOUT_MS &&
-             ecg_health != TARANG_SENSOR_STALE) {
-    ecg_health = TARANG_SENSOR_STALE;
-    printf("[ECG] STALE - no completed DMA half for 5 seconds; app remains alive\r\n");
-  }
-
-  /* Clear half-ready flags */
-  if (half0Ready) { 
-    half0Ready = false; 
-    half0Pending = 0;
-  }
-  if (half1Ready) { 
-    half1Ready = false;
-    half1Pending = 0;
-  }
-
-#if !TARANG_DEBUG_TELEMETRY
-  /* Stream ALL samples at full native 250 Hz rate whenever a half-buffer completes */
-  static uint32_t last_halves_printed = 0;
-  if (halves_completed != last_halves_printed) {
-    uint32_t start_idx = (halves_completed & 1U) ? ECG_HALF_SAMPLES : 0;
+  if (drain_h0 && pipeline) {
     for (uint32_t i = 0; i < ECG_HALF_SAMPLES; i++) {
-      uint32_t raw_val = ecg_buffer[start_idx + i] & 0x00FFFFFFu;
-      printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
+      uint32_t offset_ms = ((ECG_HALF_SAMPLES - 1u - i) * 1000u) / TARANG_ECG_SAMPLE_RATE_HZ;
+      uint32_t sample_ts = (now_ms >= offset_ms) ? (now_ms - offset_ms) : 0u;
+      uint32_t raw_val = ecg_buffer[i] & 0x00FFFFFFu;
+      tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts);
+      if (s_raw_streaming_enabled) {
+        printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
+      }
     }
-    last_halves_printed = halves_completed;
   }
-#endif
+
+  if (drain_h1 && pipeline) {
+    for (uint32_t i = ECG_HALF_SAMPLES; i < ECG_BUFFER_SIZE; i++) {
+      uint32_t offset_ms = ((ECG_BUFFER_SIZE - 1u - i) * 1000u) / TARANG_ECG_SAMPLE_RATE_HZ;
+      uint32_t sample_ts = (now_ms >= offset_ms) ? (now_ms - offset_ms) : 0u;
+      uint32_t raw_val = ecg_buffer[i] & 0x00FFFFFFu;
+      tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts);
+      if (s_raw_streaming_enabled) {
+        printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
+      }
+    }
+  }
 }
 
 /*******************************************************************************
@@ -312,10 +318,23 @@ uint32_t tarang_ecg_get_halves_completed(void)
 
 tarang_sensor_health_t tarang_ecg_get_health(void)
 {
-  return ecg_health;
+  return (sample_count > 0) ? TARANG_SENSOR_OK : TARANG_SENSOR_STARTING;
 }
 
 bool tarang_ecg_is_valid(void)
 {
-  return tarang_sensor_health_is_valid(ecg_health);
+  return (sample_count > 0);
+}
+
+bool tarang_ecg_is_lead_off(void)
+{
+#if TARANG_ECG_LO_PINS_WIRED
+  /* Read physical LO+ and LO- pins from AD8232 */
+  bool lo_plus = (GPIO_PinInGet(TARANG_ECG_LO_PLUS_PORT, TARANG_ECG_LO_PLUS_PIN) != 0);
+  bool lo_minus = (GPIO_PinInGet(TARANG_ECG_LO_MINUS_PORT, TARANG_ECG_LO_MINUS_PIN) != 0);
+  return lo_plus || lo_minus;
+#else
+  /* Evaluated in pipeline via ADC rail saturation (< 50 or > 4045 on 12-bit) / SQI < 30 */
+  return false;
+#endif
 }

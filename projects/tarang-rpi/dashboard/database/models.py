@@ -21,8 +21,9 @@ class TelemetryEvent(Base):
     __tablename__ = "telemetry_events"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), nullable=True, index=True)
     timestamp_ms = Column(BigInteger, nullable=False, index=True)
-    received_at = Column(DateTime, default=func.now(), nullable=False)
+    received_at = Column(DateTime, default=func.now(), nullable=False, index=True)
     beat_class = Column(SmallInteger, nullable=False, default=0)       # 0=N, 1=PAC, 2=PVC, 3=Q
     confidence = Column(SmallInteger, nullable=False, default=0)       # 0–255
     rr_interval_ms = Column(Integer, nullable=False, default=0)
@@ -36,6 +37,7 @@ class TelemetryEvent(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "session_id": self.session_id,
             "timestamp_ms": self.timestamp_ms,
             "received_at": self.received_at.isoformat() if self.received_at else None,
             "beat_class": self.beat_class,
@@ -117,6 +119,44 @@ class DeviceDiagnostics(Base):
             "ppgI2cHealth": self.ppg_health,
             "imuFifoHealth": self.imu_health,
             "lastSyncTimestamp": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class DeviceHealthEvent(Base):
+    """Stores periodic 1Hz device health telemetry snapshots."""
+    __tablename__ = "device_health_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), nullable=True, index=True)
+    received_at = Column(DateTime, default=func.now(), nullable=False, index=True)
+    uptime_s = Column(BigInteger, nullable=False, default=0)
+    ecg_lead_off = Column(Boolean, nullable=False, default=False)
+    ecg_sqi = Column(SmallInteger, nullable=False, default=255)
+    ppg_finger_present = Column(Boolean, nullable=False, default=False)
+    imu_ok = Column(Boolean, nullable=False, default=False)
+    i2c_failure_count = Column(SmallInteger, nullable=False, default=0)
+    dsp_overflow_count = Column(SmallInteger, nullable=False, default=0)
+    ecg_overrun_count = Column(SmallInteger, nullable=False, default=0)
+    ble_rssi = Column(SmallInteger, nullable=True, default=-60)
+    battery_pct = Column(SmallInteger, nullable=True, default=None)
+    fw_version = Column(String(30), default="1.0.0")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "sessionId": self.session_id,
+            "receivedAt": self.received_at.isoformat() if self.received_at else None,
+            "uptimeS": self.uptime_s,
+            "ecgLeadOff": self.ecg_lead_off,
+            "ecgSqi": self.ecg_sqi,
+            "ppgFingerPresent": self.ppg_finger_present,
+            "imuOk": self.imu_ok,
+            "i2cFailureCount": self.i2c_failure_count,
+            "dspOverflowCount": self.dsp_overflow_count,
+            "ecgOverrunCount": self.ecg_overrun_count,
+            "bleRssi": self.ble_rssi,
+            "batteryPct": self.battery_pct,
+            "fwVersion": self.fw_version,
         }
 
 

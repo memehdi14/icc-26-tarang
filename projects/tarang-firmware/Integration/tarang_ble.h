@@ -35,6 +35,11 @@ bool tarang_ble_is_connected(void);
  ******************************************************************************/
 bool tarang_ble_is_notifications_enabled(void);
 
+/***************************************************************************//**
+ * @brief Build a 16-byte packed device health packet.
+ ******************************************************************************/
+void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_packet_t *pkt);
+
 #ifdef __cplusplus
 }
 #endif

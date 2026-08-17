@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from database.connection import init_db, SessionLocal
 from database.models import Patient, DeviceDiagnostics, SystemSetting
 
-from routers import telemetry, patients, diagnostics, settings as settings_router
+from routers import telemetry, patients, diagnostics, settings as settings_router, health as health_router
 
 
 # ── Seed default data on first run ───────────────────────────────────────────
@@ -110,6 +110,7 @@ app.include_router(telemetry.router)
 app.include_router(patients.router)
 app.include_router(diagnostics.router)
 app.include_router(settings_router.router)
+app.include_router(health_router.router)
 
 # Mount WebSocket endpoint at /ws/telemetry (separate from REST prefix)
 app.add_api_websocket_route("/ws/telemetry", telemetry.websocket_telemetry)

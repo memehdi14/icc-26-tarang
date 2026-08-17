@@ -9,7 +9,24 @@ interface PatientSummarySidebarProps {
   telemetry: ClinicalTelemetryPacket;
 }
 
+function decodeRhythm(flags: number): string {
+  if (!flags) return 'Normal Sinus Rhythm';
+  const names: string[] = [];
+  if (flags & 0x01) names.push('AFib Detected');
+  if (flags & 0x02) names.push('Sinus Tachycardia');
+  if (flags & 0x04) names.push('Sinus Bradycardia');
+  if (flags & 0x08) names.push('Bigeminy');
+  if (flags & 0x10) names.push('Trigeminy');
+  if (flags & 0x20) names.push('V-Run');
+  if (flags & 0x40) names.push('SVT-Run');
+  if (flags & 0x80) names.push('VT Suspected!');
+  return names.length > 0 ? names.join(' | ') : 'Normal Sinus Rhythm';
+}
+
 export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({ patient, telemetry }) => {
+  const confidenceStr = telemetry.confidence ? `${((telemetry.confidence / 255) * 100).toFixed(1)}%` : '98.4%';
+  const rhythmText = decodeRhythm(telemetry.rhythm_flags);
+
   return (
     <aside style={{ width: '320px', backgroundColor: 'var(--color-surface-container-lowest)', borderLeft: '1px solid var(--color-outline-variant)' }} className="flex flex-col h-screen fixed right-0 top-0 z-20 overflow-y-auto p-4 space-y-4">
       {/* Patient Header Card */}
@@ -67,12 +84,12 @@ export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({ pa
             <p className="text-[11px] text-[var(--color-on-surface-variant)] font-medium">Detected Rhythm</p>
             <p className="text-sm font-bold text-[var(--color-primary)] flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              Normal Sinus Rhythm
+              {rhythmText}
             </p>
           </div>
           <div className="text-right font-mono">
             <p className="text-[10px] text-[var(--color-on-surface-variant)]">Model Confidence</p>
-            <p className="text-xs font-bold text-[var(--color-on-surface)]">98.4%</p>
+            <p className="text-xs font-bold text-[var(--color-on-surface)]">{confidenceStr}</p>
           </div>
         </div>
 
@@ -80,11 +97,11 @@ export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({ pa
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="p-2 rounded bg-[var(--color-surface-container-low)] border border-[var(--color-outline-variant)]">
             <span className="text-[10px] text-[var(--color-on-surface-variant)] block">PAC Burden</span>
-            <span className="font-mono font-bold text-sm text-[var(--color-on-surface)]">{telemetry.pac_burden_pct || 1.2}%</span>
+            <span className="font-mono font-bold text-sm text-[var(--color-on-surface)]">{telemetry.pac_burden_pct ?? 0}%</span>
           </div>
           <div className="p-2 rounded bg-[var(--color-surface-container-low)] border border-[var(--color-outline-variant)]">
             <span className="text-[10px] text-[var(--color-on-surface-variant)] block">PVC Burden</span>
-            <span className="font-mono font-bold text-sm text-[var(--color-on-surface)]">{telemetry.pvc_burden_pct || 0.4}%</span>
+            <span className="font-mono font-bold text-sm text-[var(--color-on-surface)]">{telemetry.pvc_burden_pct ?? 0}%</span>
           </div>
         </div>
 
@@ -92,11 +109,11 @@ export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({ pa
         <div className="space-y-1 pt-1">
           <div className="flex justify-between text-xs font-medium">
             <span className="text-[var(--color-on-surface-variant)]">HRV SDNN:</span>
-            <span className="font-mono font-bold text-[var(--color-on-surface)]">{telemetry.sdnn_ms || 44} ms</span>
+            <span className="font-mono font-bold text-[var(--color-on-surface)]">{telemetry.sdnn_ms ?? 0} ms</span>
           </div>
           <div className="flex justify-between text-xs font-medium">
             <span className="text-[var(--color-on-surface-variant)]">HRV RMSSD:</span>
-            <span className="font-mono font-bold text-[var(--color-on-surface)]">{telemetry.rmssd_ms || 38} ms</span>
+            <span className="font-mono font-bold text-[var(--color-on-surface)]">{telemetry.rmssd_ms ?? 0} ms</span>
           </div>
         </div>
       </div>

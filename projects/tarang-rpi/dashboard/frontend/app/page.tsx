@@ -154,6 +154,7 @@ export default function Home() {
   const [backendOnline, setBackendOnline] = useState(false);
 
   const [telemetry, setTelemetry] = useState<ClinicalTelemetryPacket>(DEFAULT_TELEMETRY);
+  const [eventLog, setEventLog] = useState<ClinicalTelemetryPacket[]>([]);
   const [patient, setPatient] = useState<PatientInfo>(DEFAULT_PATIENT);
   const [diagnostics, setDiagnostics] = useState<TelemetryDiagnostics>(DEFAULT_DIAGNOSTICS);
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
@@ -195,6 +196,15 @@ export default function Home() {
         if (tRes.ok) {
           const tData = await tRes.json();
           if (!tData.message) setTelemetry(mapApiTelemetry(tData));
+        }
+
+        // History events
+        const hRes = await fetch(`${apiBase}/api/telemetry/history?minutes=5`);
+        if (hRes.ok) {
+          const hData = await hRes.json();
+          if (Array.isArray(hData)) {
+            setEventLog(hData.map((e: Record<string, unknown>) => mapApiTelemetry(e)));
+          }
         }
 
         setBackendOnline(true);
@@ -245,8 +255,18 @@ export default function Home() {
       ws.onmessage = (event) => {
         try {
           const raw = JSON.parse(event.data) as Record<string, unknown>;
-          setTelemetry(mapApiTelemetry(raw));
-          setBleConnected(true);
+          if (raw.type === 'diagnostics' && raw.data) {
+            const mappedDiag = mapApiDiagnostics(raw.data as Record<string, unknown>);
+            setDiagnostics(mappedDiag);
+            setBleConnected(mappedDiag.bleConnected);
+          } else {
+            const rawPacket = (raw.data && raw.type === 'telemetry') ? (raw.data as Record<string, unknown>) : raw;
+            const mappedPacket = mapApiTelemetry(rawPacket);
+            setTelemetry(mappedPacket);
+            setEventLog(prev => [mappedPacket, ...prev.slice(0, 49)]);
+            setBleConnected(true);
+          }
+          setBackendOnline(true);
         } catch {
           console.warn('[Tarang WS] Invalid JSON received');
         }
@@ -311,7 +331,7 @@ export default function Home() {
         className="transition-all duration-200"
       >
         {activeTab === 'workstation' && (
-          <WorkstationView telemetry={telemetry} patient={patient} />
+          <WorkstationView telemetry={telemetry} patient={patient} eventLog={eventLog} />
         )}
 
         {activeTab === 'diagnostics' && (

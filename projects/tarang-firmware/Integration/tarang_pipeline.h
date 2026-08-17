@@ -81,6 +81,17 @@ typedef struct {
   uint32_t suspicious_beats;
   uint32_t gate_passed_beats;
 
+  /* ISSUE-1 FIX: Circuit breaker for runaway suspicious rate.
+   * Tracks last 30 beats to detect if >20% are suspicious.
+   * When circuit breaker trips, Tier-1 CNN is disabled until rate recovers.
+   * This prevents power budget destruction if DSP tuning fails. */
+  #define CIRCUIT_BREAKER_WINDOW 30
+  uint8_t  circuit_breaker_ring[CIRCUIT_BREAKER_WINDOW];
+  uint8_t  circuit_breaker_idx;
+  uint8_t  circuit_breaker_count;
+  uint8_t  circuit_breaker_suspicious_count;
+  bool     circuit_breaker_tripped;
+
   /* Deferred AI beat queue — filled during ECG processing,
    * drained by tarang_pipeline_run_deferred() in the super loop */
   tarang_pending_beat_t pending_beats[TARANG_MAX_PENDING_BEATS];
@@ -96,6 +107,14 @@ typedef struct {
 
   /* Pipeline initialized flag */
   bool     initialized;
+
+  /* AI Tier Evaluation Running Counters */
+  uint32_t tier0_evals;
+  uint32_t tier1_fires;
+  uint32_t tier2_fires;
+  uint32_t class_n_count;
+  uint32_t class_s_count;
+  uint32_t class_v_count;
 } tarang_pipeline_t;
 
 /*******************************************************************************
@@ -114,6 +133,7 @@ typedef struct {
  * @param[out] pipeline  Pipeline state.
  ******************************************************************************/
 void tarang_pipeline_init(tarang_pipeline_t *pipeline);
+tarang_pipeline_t *tarang_pipeline_get_instance(void);
 
 /***************************************************************************//**
  * @brief Process one detected R-peak through the full 4-tier pipeline.

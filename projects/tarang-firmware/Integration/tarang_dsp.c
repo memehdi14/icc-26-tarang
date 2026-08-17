@@ -261,6 +261,28 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
   bool peak_detected = (th->prev_mwi_idx >= 0) &&
                         (mwi_val < th->prev_mwi - hysteresis);
 
+  /* ISSUE-1 FIX: Hard 300ms refractory backstop — reject ANY peak <300ms
+   * after last confirmed R-peak, BEFORE threshold/slope checks run.
+   * This is the primary defense against T-wave double-triggers.
+   * 300ms at 250Hz = 75 samples. At 200 BPM (fastest physiologic rate),
+   * RR interval is still 300ms, so this never rejects a true beat. */
+  #define HARD_REFRACTORY_MS 300
+  #define HARD_REFRACTORY_SAMPLES ((HARD_REFRACTORY_MS * TARANG_ECG_SAMPLE_RATE_HZ) / 1000)
+  if (peak_detected && th->last_R_idx >= 0) {
+    int dt = th->prev_mwi_idx - th->last_R_idx;
+    if (dt < HARD_REFRACTORY_SAMPLES) {
+      /* Reject this peak unconditionally — it's physiologically impossible
+       * to be a true R-peak. Update noise stats but do NOT accept it. */
+      if (th->prev_mwi > th->TH2) {
+        th->NPKI = 0.125f * th->prev_mwi + 0.875f * th->NPKI;
+        th->TH1 = th->NPKI + 0.25f * (th->SPKI - th->NPKI);
+        th->TH2 = 0.5f * th->TH1;
+      }
+      /* Intentionally skip all candidate buffering and threshold checks */
+      peak_detected = false;
+    }
+  }
+
   if (peak_detected) {
     float peak_val = th->prev_mwi;
     int   peak_idx = th->prev_mwi_idx;
@@ -311,13 +333,15 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
     /* Primary threshold check on PEAK value */
     if (accepted < 0 && peak_val > th->TH1 &&
         th->refractory_remaining == 0) {
-      /* T-wave rejection */
+      /* ISSUE-1 FIX: Re-tuned T-wave rejection — tighter slope ratio (0.3×)
+       * and wider window (40-120 samples = 160-480ms) to catch T-waves
+       * that occur later in the cycle (common at slower HR). */
       bool twave_ok = true;
       if (th->last_R_slope > 0.0f &&
-          slope_est < 0.5f * th->last_R_slope) {
+          slope_est < 0.3f * th->last_R_slope) {
         if (th->last_R_idx >= 0) {
           int dt = peak_idx - th->last_R_idx;
-          if (dt >= 50 && dt <= 100) twave_ok = false;
+          if (dt >= 40 && dt <= 120) twave_ok = false;
         }
       }
 
@@ -347,7 +371,9 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
     if (th->SPKI < 0.01f) th->SPKI = 0.01f;
     th->TH1 = th->NPKI + 0.25f * (th->SPKI - th->NPKI);
     th->TH2 = 0.5f * th->TH1;
-    th->last_R_idx = idx - (TARANG_PEAK_TIMEOUT_SAMPLES / 2);
+    /* FIX: Reset last_R_idx to current index, not half-timeout back
+     * (prevents runaway decay loop) */
+    th->last_R_idx = idx;
   }
 
   /* Update state for next call */
@@ -534,8 +560,9 @@ void tarang_dsp_init(tarang_dsp_state_t *state)
   state->thresh.spki_max_step_ratio = 3.0f;
   state->thresh.default_rr_samples = TARANG_ECG_SAMPLE_RATE_HZ; /* 1s = 60bpm */
 
-  /* Warm-up: 2 seconds of signal for threshold initialization */
-  state->warmup_samples = 2 * TARANG_ECG_SAMPLE_RATE_HZ;
+  /* Warm-up: 8 seconds of signal for threshold initialization
+   * (fixes premature threshold lock-in from startup transients) */
+  state->warmup_samples = 8 * TARANG_ECG_SAMPLE_RATE_HZ;
 
   printf("[DSP] Initialized: fs=%dHz, MWI_N=%d, refractory=%d, "
          "norm_window=%d, detection_delay=%d\r\n",
@@ -616,6 +643,12 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
       }
       if (spki_init <= npki_init) spki_init = npki_init * 2.0f;
 
+      /* FIX: Absolute SPKI ceiling to prevent catastrophic startup values */
+      float spki_ceiling = npki_init * 10.0f;
+      if (spki_init > spki_ceiling) {
+        spki_init = spki_ceiling;
+      }
+
       state->thresh.SPKI = spki_init;
       state->thresh.NPKI = npki_init;
       state->thresh.TH1 = npki_init + 0.25f * (spki_init - npki_init);
@@ -627,10 +660,9 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
       state->warmed_up = true;
       state->debug_sample.warmed_up = true;
 
-      printf("[DSP] Warm-up complete: SPKI=%d NPKI=%d TH1=%d (x1000)\r\n",
-             (int)(spki_init * 1000.0f),
-             (int)(npki_init * 1000.0f),
-             (int)(state->thresh.TH1 * 1000.0f));
+      /* FIX: Use %.4f format to show actual float values, not clipped-to-int */
+      printf("[DSP] Warm-up complete: SPKI=%.4f NPKI=%.4f TH1=%.4f\r\n",
+             spki_init, npki_init, state->thresh.TH1);
     } else {
       state->sample_idx++;
       return false;
@@ -645,14 +677,21 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
   /* ── Step 10-12: If peak detected, add to pending ───────────────── */
   if (accepted_idx >= 0) {
     /* Find an empty pending slot */
+    bool slot_found = false;
     for (int i = 0; i < DSP_MAX_PENDING; i++) {
       if (!state->pending[i].active) {
         state->pending[i].mwi_peak_idx = accepted_idx;
         state->pending[i].mwi_peak_val = state->thresh.SPKI; /* approximation */
         state->pending[i].spki_at_detection = state->thresh.SPKI;
         state->pending[i].active = true;
+        slot_found = true;
         break;
       }
+    }
+    if (!slot_found) {
+      state->pending_overflow_count++;
+      printf("[DSP] WARNING: Pending beat queue overflow! (dropped count=%lu)\r\n",
+             (unsigned long)state->pending_overflow_count);
     }
   }
 
@@ -683,4 +722,9 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
 
   state->sample_idx++;
   return false;
+}
+
+uint32_t tarang_dsp_get_pending_overflow_count(const tarang_dsp_state_t *state)
+{
+  return state ? state->pending_overflow_count : 0u;
 }

@@ -82,7 +82,7 @@ def simple_dc_remove(data, window=15):
 
 # ─── Regex parsers for each firmware printf line ──────────────────────────────
 
-RE_ECG_RAW   = re.compile(r"\[ECG\]\s+raw=(\d+)")
+RE_ECG_RAW   = re.compile(r"\[?ECG\]\s+raw=(\d+)")
 RE_ECG_DIAG  = re.compile(
     r"\[ECG\]\s+halves=(\d+)\s+total_samples=(\d+)\s+overruns=(\d+)"
 )
@@ -595,43 +595,92 @@ def plot_csv(csv_path):
     imu_gyro_t, imu_gx, imu_gy, imu_gz = [], [], [], []
 
     with open(csv_path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        lines = [line for line in f if not line.strip().startswith("#")]
+        reader = csv.DictReader(lines)
         for row in reader:
-            try:
-                t = float(row["relative_sec"])
-            except (ValueError, KeyError):
-                continue
-            sensor = row.get("sensor", "")
+            if "raw_line" in row:
+                try:
+                    t = float(row.get("elapsed_sec", 0))
+                except (ValueError, TypeError):
+                    t = 0.0
+                line = row.get("raw_line", "")
 
-            if sensor == "ECG_RAW":
-                try:
+                m = RE_ECG_RAW.search(line)
+                if m and not RE_ECG_DIAG.search(line):
                     ecg_t.append(t)
-                    ecg_v.append(float(row["ch1_val"]))
-                except (ValueError, KeyError):
-                    pass
-            elif sensor == "PPG":
-                try:
+                    ecg_v.append(float(m.group(1)))
+                    continue
+
+                m = RE_PPG.search(line)
+                if m:
                     ppg_t.append(t)
-                    ppg_red.append(float(row["ch1_val"]))
-                    ppg_ir.append(float(row["ch2_val"]))
-                except (ValueError, KeyError):
-                    pass
-            elif sensor == "IMU_ACCEL":
-                try:
+                    ppg_red.append(float(m.group(2)))
+                    ppg_ir.append(float(m.group(3)))
+                    continue
+
+                m = RE_IMU_COMBO.search(line)
+                if m:
                     imu_accel_t.append(t)
-                    imu_ax.append(float(row["ch1_val"]))
-                    imu_ay.append(float(row["ch2_val"]))
-                    imu_az.append(float(row["ch3_val"]))
-                except (ValueError, KeyError):
-                    pass
-            elif sensor == "IMU_GYRO":
-                try:
+                    imu_ax.append(float(m.group(1)))
+                    imu_ay.append(float(m.group(2)))
+                    imu_az.append(float(m.group(3)))
                     imu_gyro_t.append(t)
-                    imu_gx.append(float(row["ch1_val"]))
-                    imu_gy.append(float(row["ch2_val"]))
-                    imu_gz.append(float(row["ch3_val"]))
+                    imu_gx.append(float(m.group(4)))
+                    imu_gy.append(float(m.group(5)))
+                    imu_gz.append(float(m.group(6)))
+                    continue
+
+                m = RE_IMU_ACCEL.search(line)
+                if m:
+                    imu_accel_t.append(t)
+                    imu_ax.append(float(m.group(1)))
+                    imu_ay.append(float(m.group(2)))
+                    imu_az.append(float(m.group(3)))
+                    continue
+
+                m = RE_IMU_GYRO.search(line)
+                if m:
+                    imu_gyro_t.append(t)
+                    imu_gx.append(float(m.group(1)))
+                    imu_gy.append(float(m.group(2)))
+                    imu_gz.append(float(m.group(3)))
+                    continue
+            else:
+                try:
+                    t = float(row["relative_sec"])
                 except (ValueError, KeyError):
-                    pass
+                    continue
+                sensor = row.get("sensor", "")
+
+                if sensor == "ECG_RAW":
+                    try:
+                        ecg_t.append(t)
+                        ecg_v.append(float(row["ch1_val"]))
+                    except (ValueError, KeyError):
+                        pass
+                elif sensor == "PPG":
+                    try:
+                        ppg_t.append(t)
+                        ppg_red.append(float(row["ch1_val"]))
+                        ppg_ir.append(float(row["ch2_val"]))
+                    except (ValueError, KeyError):
+                        pass
+                elif sensor == "IMU_ACCEL":
+                    try:
+                        imu_accel_t.append(t)
+                        imu_ax.append(float(row["ch1_val"]))
+                        imu_ay.append(float(row["ch2_val"]))
+                        imu_az.append(float(row["ch3_val"]))
+                    except (ValueError, KeyError):
+                        pass
+                elif sensor == "IMU_GYRO":
+                    try:
+                        imu_gyro_t.append(t)
+                        imu_gx.append(float(row["ch1_val"]))
+                        imu_gy.append(float(row["ch2_val"]))
+                        imu_gz.append(float(row["ch3_val"]))
+                    except (ValueError, KeyError):
+                        pass
 
     has_ecg  = len(ecg_t) > 0
     has_ppg  = len(ppg_t) > 0

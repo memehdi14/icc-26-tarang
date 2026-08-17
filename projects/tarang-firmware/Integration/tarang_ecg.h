@@ -44,6 +44,16 @@ uint32_t  tarang_ecg_get_overrun_count(void);
 uint32_t  tarang_ecg_get_halves_completed(void);
 tarang_sensor_health_t tarang_ecg_get_health(void);
 bool      tarang_ecg_is_valid(void);
+bool      tarang_ecg_is_lead_off(void);
+void      tarang_ecg_set_raw_streaming(bool enable);
+bool      tarang_ecg_get_raw_streaming(void);
+
+/* AD8232 Hardware Lead-Off GPIO Pin Configuration */
+#define TARANG_ECG_LO_PLUS_PORT   gpioPortA
+#define TARANG_ECG_LO_PLUS_PIN    4
+#define TARANG_ECG_LO_MINUS_PORT  gpioPortA
+#define TARANG_ECG_LO_MINUS_PIN   5
+#define TARANG_ECG_LO_PINS_WIRED  0   /* 1 if physical LO+/LO- jumper wires installed, 0 for software SQI/rail detection */
 
 #ifdef __cplusplus
 }
