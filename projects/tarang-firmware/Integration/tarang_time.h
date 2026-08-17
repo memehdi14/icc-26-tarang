@@ -43,6 +43,21 @@ static inline uint32_t tarang_now_ms(void)
   return sl_sleeptimer_tick_to_ms(sl_sleeptimer_get_tick_count());
 }
 
+/***************************************************************************//**
+ * @brief Get boot session identifier.
+ * Returns a stable 32-bit random identifier generated per power-on session.
+ ******************************************************************************/
+static inline uint32_t tarang_get_session_id(void)
+{
+  static uint32_t s_session_id = 0;
+  if (s_session_id == 0) {
+    uint32_t seed = sl_sleeptimer_get_tick_count() ^ 0x5A5AA5A5u;
+    if (seed == 0) seed = 0x12345678u;
+    s_session_id = seed;
+  }
+  return s_session_id;
+}
+
 #ifdef __cplusplus
 }
 #endif

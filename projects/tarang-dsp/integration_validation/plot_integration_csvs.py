@@ -36,6 +36,8 @@ def parse_csv_log(filepath, max_lines=40000):
     ecg_t, ecg_val = [], []
     ppg_t, ppg_red, ppg_ir = [], [], []
     imu_t, imu_ax, imu_ay, imu_az = [], [], [], []
+    imu_gx, imu_gy, imu_gz = [], [], []
+    ai_events = [] # list of dicts: {'t': t, 'tier': 1|2, 'gate_prob': f, 'p_v': f, 'p_s': f, 'beat_class': c, 'reason': s}
 
     line_count = 0
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
@@ -81,6 +83,47 @@ def parse_csv_log(filepath, max_lines=40000):
                         imu_ax.append(int(m_imu.group(1)))
                         imu_ay.append(int(m_imu.group(2)))
                         imu_az.append(int(m_imu.group(3)))
+                    m_gyro = re.search(r"gx=(-?\d+)\s+gy=(-?\d+)\s+gz=(-?\d+)", raw_line)
+                    if m_gyro:
+                        imu_gx.append(int(m_gyro.group(1)))
+                        imu_gy.append(int(m_gyro.group(2)))
+                        imu_gz.append(int(m_gyro.group(3)))
+
+                elif "[AI]" in raw_line:
+                    # Match both formats: gate_prob=0.1234 (float printf) and gate_prob_x10k=1234 (nano.specs int)
+                    m_t1 = re.search(r"TIER1\s+gate_prob=([0-9.]+)\s+suspicious_reason=(\w+)", raw_line)
+                    m_t1_x10k = re.search(r"TIER1\s+gate_prob_x10k=(\d+)\s+suspicious_reason=(\w+)", raw_line)
+                    if m_t1:
+                        ai_events.append({
+                            't': t_sec, 'tier': 1,
+                            'gate_prob': float(m_t1.group(1)),
+                            'reason': m_t1.group(2),
+                            'beat_class': 'N'
+                        })
+                    elif m_t1_x10k:
+                        ai_events.append({
+                            't': t_sec, 'tier': 1,
+                            'gate_prob': int(m_t1_x10k.group(1)) / 10000.0,
+                            'reason': m_t1_x10k.group(2),
+                            'beat_class': 'N'
+                        })
+
+                    m_t2 = re.search(r"TIER2\s+p_v=([0-9.]+)\s+p_s=([0-9.]+)\s+beat_class=(\w)", raw_line)
+                    m_t2_x10k = re.search(r"TIER2\s+p_v_x10k=(\d+)\s+p_s_x10k=(\d+)\s+beat_class=(\w)", raw_line)
+                    if m_t2:
+                        ai_events.append({
+                            't': t_sec, 'tier': 2,
+                            'p_v': float(m_t2.group(1)),
+                            'p_s': float(m_t2.group(2)),
+                            'beat_class': m_t2.group(3)
+                        })
+                    elif m_t2_x10k:
+                        ai_events.append({
+                            't': t_sec, 'tier': 2,
+                            'p_v': int(m_t2_x10k.group(1)) / 10000.0,
+                            'p_s': int(m_t2_x10k.group(2)) / 10000.0,
+                            'beat_class': m_t2_x10k.group(3)
+                        })
 
             # Format 2: timestamp, relative_sec, sensor ...
             elif "relative_sec" in header_str or "sensor" in header_str:
@@ -121,7 +164,9 @@ def parse_csv_log(filepath, max_lines=40000):
         'filename': os.path.basename(filepath),
         'ecg': {'t': np.array(ecg_t), 'val': np.array(ecg_val)},
         'ppg': {'t': np.array(ppg_t), 'red': np.array(ppg_red), 'ir': np.array(ppg_ir)},
-        'imu': {'t': np.array(imu_t), 'ax': np.array(imu_ax), 'ay': np.array(imu_ay), 'az': np.array(imu_az)}
+        'imu': {'t': np.array(imu_t), 'ax': np.array(imu_ax), 'ay': np.array(imu_ay), 'az': np.array(imu_az),
+                'gx': np.array(imu_gx), 'gy': np.array(imu_gy), 'gz': np.array(imu_gz)},
+        'ai_events': ai_events
     }
 
 def analyze_dataset(data):
@@ -172,8 +217,11 @@ def analyze_dataset(data):
     return stats
 
 def main():
-    csv_files = sorted(glob.glob(os.path.join(INTEGRATION_DIR, "*.csv")))
-    print(f"[INFO] Found {len(csv_files)} CSV files in {INTEGRATION_DIR}\n")
+    CAPTURES_DIR = os.path.join(SCRIPT_DIR, "captures")
+    csv_files = sorted(glob.glob(os.path.join(INTEGRATION_DIR, "*.csv")) +
+                       glob.glob(os.path.join(CAPTURES_DIR, "**", "*.csv"), recursive=True) +
+                       glob.glob(os.path.join(SCRIPT_DIR, "*.csv")))
+    print(f"[INFO] Found {len(csv_files)} CSV files in search paths\n")
 
     datasets = []
     summary_stats = []
@@ -420,7 +468,144 @@ def main():
     plt.close()
     print(f"[SAVED] {plot5_path}")
 
+    plot_raw_waveforms_with_ai(datasets)
     generate_markdown_report(summary_stats)
+
+def load_firmware_thresholds():
+    """Dynamically parses canonical ML thresholds from tarang_constants.h."""
+    constants_path = os.path.abspath(os.path.join(SCRIPT_DIR, "../../tarang-firmware/Integration/tarang_constants.h"))
+    gate_thr = 0.2500
+    v_thr = 0.6000
+    s_thr = 0.3500
+    if os.path.exists(constants_path):
+        with open(constants_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if "#define TARANG_GATE_THRESHOLD" in line:
+                    m = re.search(r"TARANG_GATE_THRESHOLD\s+([0-9.]+)", line)
+                    if m: gate_thr = float(m.group(1))
+                elif "#define TARANG_V_THRESHOLD" in line:
+                    m = re.search(r"TARANG_V_THRESHOLD\s+([0-9.]+)", line)
+                    if m: v_thr = float(m.group(1))
+                elif "#define TARANG_S_THRESHOLD" in line:
+                    m = re.search(r"TARANG_S_THRESHOLD\s+([0-9.]+)", line)
+                    if m: s_thr = float(m.group(1))
+    return gate_thr, v_thr, s_thr
+
+def plot_raw_waveforms_with_ai(datasets):
+    """
+    Renders full raw multi-sensor waveforms (ECG, PPG, IMU) with overlaid AI classification markers.
+    """
+    valid_ds = [d for d in datasets if len(d['ecg']['t']) > 0 or len(d['imu']['t']) > 0]
+    if not valid_ds:
+        return
+
+    gate_thr, v_thr, s_thr = load_firmware_thresholds()
+
+    best_data = max(valid_ds, key=lambda x: len(x['ecg']['t']))
+    ecg = best_data['ecg']
+    ppg = best_data['ppg']
+    imu = best_data['imu']
+    ai_events = best_data.get('ai_events', [])
+
+    fig, axes = plt.subplots(4, 1, figsize=(16, 12), facecolor='#0D1117', sharex=True)
+    fig.suptitle(f"TARANG Multi-Sensor Raw Telemetry & Clinical AI Cascade — {best_data['filename']}",
+                 fontsize=14, fontweight='bold', color='#00FF41', y=0.98)
+
+    # 1. ECG Raw Waveform + AI Markers
+    ax_ecg = axes[0]
+    ax_ecg.set_facecolor('#0B141A')
+    if len(ecg['t']) > 0:
+        t_ecg = ecg['t'] - ecg['t'][0]
+        # ECG in mV (assuming 12-bit ADC / 3.3V reference)
+        ecg_mv = (ecg['val'] / 4095.0) * 3300.0
+        ax_ecg.plot(t_ecg, ecg_mv, color='#00FF41', linewidth=1.1, label='Raw ECG (mV)', alpha=0.9)
+        
+        # Overlay AI markers
+        n_marked = 0
+        s_marked = 0
+        v_marked = 0
+        for ev in ai_events:
+            t_ev = ev['t'] - ecg['t'][0]
+            if t_ev < 0 or t_ev > t_ecg[-1]:
+                continue
+            idx = np.argmin(np.abs(t_ecg - t_ev))
+            y_val = ecg_mv[idx]
+            cls = ev.get('beat_class', 'N')
+            if cls == 'V':
+                ax_ecg.scatter(t_ev, y_val, color='#FF1744', s=70, marker='v', zorder=5, label='Tier-2 PVC (V)' if v_marked == 0 else "")
+                v_marked += 1
+            elif cls == 'S':
+                ax_ecg.scatter(t_ev, y_val, color='#FFD700', s=70, marker='^', zorder=5, label='Tier-2 PAC (S)' if s_marked == 0 else "")
+                s_marked += 1
+            else:
+                ax_ecg.scatter(t_ev, y_val, color='#00E676', s=35, marker='o', zorder=4, label='Tier-0 Normal (N)' if n_marked == 0 else "")
+                n_marked += 1
+
+    ax_ecg.set_title("1. Raw ECG Potential & AI Clinical Gating Events", fontsize=11, color='#00FF41', loc='left')
+    ax_ecg.set_ylabel("Voltage (mV)", fontsize=9, color='#BBBBBB')
+    ax_ecg.legend(loc='upper right', fontsize=8, facecolor='#111827', edgecolor='#333333')
+    ax_ecg.grid(True, linestyle='--', alpha=0.25)
+
+    # 2. PPG Optical Channels
+    ax_ppg = axes[1]
+    ax_ppg.set_facecolor('#1A0B14')
+    if len(ppg['t']) > 0 and (np.max(ppg['red']) > 0 or np.max(ppg['ir']) > 0):
+        t_ppg = ppg['t'] - ecg['t'][0] if len(ecg['t']) > 0 else ppg['t'] - ppg['t'][0]
+        ax_ppg.plot(t_ppg, ppg['red'], color='#FF5252', label='RED Optical (660nm)', alpha=0.85)
+        ax_ppg.plot(t_ppg, ppg['ir'], color='#FF4081', label='IR Optical (880nm)', alpha=0.85)
+        ax_ppg.legend(loc='upper right', fontsize=8, facecolor='#111827', edgecolor='#333333')
+    else:
+        ax_ppg.text(0.5, 0.5, "PPG Sensor Offline / Detached (I2C Inactive)",
+                   transform=ax_ppg.transAxes, ha='center', va='center', color='#888888', fontsize=11)
+    ax_ppg.set_title("2. Dual-Wavelength Optical PPG Photoplethysmogram", fontsize=11, color='#FF5252', loc='left')
+    ax_ppg.set_ylabel("Counts", fontsize=9, color='#BBBBBB')
+    ax_ppg.grid(True, linestyle='--', alpha=0.25)
+
+    # 3. IMU 3-Axis Accelerometer & Gyro
+    ax_imu = axes[2]
+    ax_imu.set_facecolor('#0B0F19')
+    if len(imu['t']) > 0:
+        t_imu = imu['t'] - ecg['t'][0] if len(ecg['t']) > 0 else imu['t'] - imu['t'][0]
+        ax_imu.plot(t_imu, imu['ax'] / 16384.0, color='#00E676', label='Accel X (g)', alpha=0.8)
+        ax_imu.plot(t_imu, imu['ay'] / 16384.0, color='#FFEA00', label='Accel Y (g)', alpha=0.8)
+        ax_imu.plot(t_imu, imu['az'] / 16384.0, color='#7C4DFF', label='Accel Z (g)', alpha=0.8)
+        ax_imu.legend(loc='upper right', fontsize=8, facecolor='#111827', edgecolor='#333333', ncol=3)
+    ax_imu.set_title("3. IMU 3-Axis Accelerometer (Motion & Posture Artifacts)", fontsize=11, color='#FFEA00', loc='left')
+    ax_imu.set_ylabel("Accel (g)", fontsize=9, color='#BBBBBB')
+    ax_imu.grid(True, linestyle='--', alpha=0.25)
+
+    # 4. AI Gate Probability & Threshold Line
+    ax_ai = axes[3]
+    ax_ai.set_facecolor('#111827')
+    t_ai = []
+    p_ai = []
+    for ev in ai_events:
+        if 'gate_prob' in ev:
+            t_ai.append(ev['t'] - ecg['t'][0] if len(ecg['t']) > 0 else ev['t'])
+            p_ai.append(ev['gate_prob'])
+    
+    if len(t_ai) > 0:
+        ax_ai.step(t_ai, p_ai, where='post', color='#00E5FF', linewidth=1.5, label='Tier-1 P(abnormal)')
+        ax_ai.scatter(t_ai, p_ai, color='#00E5FF', s=30)
+    else:
+        # Default baseline if no suspicious beats triggered Gate CNN
+        if len(ecg['t']) > 0:
+            t_span = [0, t_ecg[-1]]
+            ax_ai.plot(t_span, [0.0, 0.0], color='#00E5FF', linestyle=':', label='P(abnormal) Baseline (<0.05 at rest)')
+
+    ax_ai.axhline(gate_thr, color='#FF1744', linestyle='--', linewidth=1.2, label=f'GATE_THR ({gate_thr:.2f} Escalation Trigger)')
+    ax_ai.set_ylim(-0.05, 1.05)
+    ax_ai.set_title("4. AI Gate Probability (Tier-1 CNN Inference Timeline)", fontsize=11, color='#00E5FF', loc='left')
+    ax_ai.set_xlabel("Elapsed Time (s)", fontsize=10, color='#E0E0E0')
+    ax_ai.set_ylabel("Probability", fontsize=9, color='#BBBBBB')
+    ax_ai.legend(loc='upper right', fontsize=8, facecolor='#111827', edgecolor='#333333')
+    ax_ai.grid(True, linestyle='--', alpha=0.25)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    raw_plot_path = os.path.join(PLOTS_DIR, "raw_waveforms_with_ai.png")
+    plt.savefig(raw_plot_path, dpi=180)
+    plt.close()
+    print(f"[SAVED] {raw_plot_path}")
 
 def generate_markdown_report(summary_stats):
     report_path = os.path.join(SCRIPT_DIR, "validation_report.md")

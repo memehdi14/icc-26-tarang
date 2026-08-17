@@ -7,10 +7,10 @@ REST endpoints + WebSocket for real-time clinical telemetry.
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -56,16 +56,17 @@ manager = ConnectionManager()
 # ── Pydantic Schemas ──────────────────────────────────────────────────────────
 
 class TelemetryIngest(BaseModel):
-    timestamp_ms: int
-    beat_class: int = 0
-    confidence: int = 0
-    rr_interval_ms: int = 0
-    rhythm_flags: int = 0
-    pac_burden_pct: float = 0.0
-    pvc_burden_pct: float = 0.0
-    current_hr: int = 0
-    sdnn_ms: int = 0
-    rmssd_ms: int = 0
+    session_id: Optional[str] = None
+    timestamp_ms: int = Field(ge=0)
+    beat_class: int = Field(default=0, ge=0, le=3)
+    confidence: int = Field(default=0, ge=0, le=255)
+    rr_interval_ms: int = Field(default=0, ge=0, le=65535)
+    rhythm_flags: int = Field(default=0, ge=0, le=255)
+    pac_burden_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+    pvc_burden_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+    current_hr: int = Field(default=0, ge=0, le=255)
+    sdnn_ms: int = Field(default=0, ge=0, le=65535)
+    rmssd_ms: int = Field(default=0, ge=0, le=65535)
 
 
 # ── REST Endpoints ────────────────────────────────────────────────────────────
@@ -82,17 +83,15 @@ def get_latest_telemetry(db: Session = Depends(get_db)):
 @router.get("/history")
 def get_telemetry_history(
     minutes: int = Query(default=5, ge=1, le=60),
+    session_id: Optional[str] = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """Return telemetry events from the last N minutes."""
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=minutes)
-    events = (
-        db.query(TelemetryEvent)
-        .filter(TelemetryEvent.received_at >= cutoff)
-        .order_by(desc(TelemetryEvent.id))
-        .limit(500)
-        .all()
-    )
+    query = db.query(TelemetryEvent).filter(TelemetryEvent.received_at >= cutoff)
+    if session_id:
+        query = query.filter(TelemetryEvent.session_id == session_id)
+    events = query.order_by(desc(TelemetryEvent.id)).limit(500).all()
     return [e.to_dict() for e in events]
 
 
@@ -103,6 +102,7 @@ async def ingest_telemetry(packet: TelemetryIngest, db: Session = Depends(get_db
     Stores to DB and broadcasts to all WebSocket dashboard clients.
     """
     event = TelemetryEvent(
+        session_id=packet.session_id,
         timestamp_ms=packet.timestamp_ms,
         beat_class=packet.beat_class,
         confidence=packet.confidence,

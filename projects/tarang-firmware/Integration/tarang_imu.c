@@ -305,17 +305,23 @@ static void mpu6050_gpio_callback(uint8_t pin)
  ******************************************************************************/
 void tarang_imu_init(void)
 {
+  tarang_imu_init_ex(false);
+}
+
+bool tarang_imu_init_ex(bool is_runtime_retry)
+{
   imu_health = TARANG_SENSOR_STARTING;
   imu_last_sample_ms = tarang_now_ms();
   imu_last_recovery_ms = imu_last_sample_ms;
-  printf("[IMU] Starting MPU6050 initialization...\r\n");
+  printf("[IMU] Starting MPU6050 initialization (retry=%d)...\r\n", (int)is_runtime_retry);
   
   uint8_t whoami = 0;
   bool read_ok = false;
+  int max_attempts = is_runtime_retry ? 1 : 3;
 
-  /* Retry WHO_AM_I read a few times */
-  for (int attempt = 1; attempt <= 3; attempt++) {
-    printf("[IMU] WHO_AM_I attempt %d/3...\r\n", attempt);
+  /* Retry WHO_AM_I read */
+  for (int attempt = 1; attempt <= max_attempts; attempt++) {
+    printf("[IMU] WHO_AM_I attempt %d/%d...\r\n", attempt, max_attempts);
     
     if (MPU6050_ReadRegister(MPU6050_WHO_AM_I, &whoami)) {
       read_ok = true;
@@ -324,15 +330,17 @@ void tarang_imu_init(void)
     }
     
     printf("[IMU] WHO_AM_I read failed\r\n");
-    if (attempt < 3) {
+    if (attempt < max_attempts) {
       printf("[IMU] Retrying after delay...\r\n");
-      for (volatile uint32_t i = 0; i < 100 * 4000u; i++) { }  // 100ms delay
+      for (volatile uint32_t i = 0; i < 20 * 4000u; i++) { }  // 20ms delay on boot retry
     }
   }
 
   if (!read_ok) {
-    printf("[IMU] Failed to read WHO_AM_I after 3 attempts\r\n");
-    return;
+    printf("[IMU] Failed to read WHO_AM_I after %d attempts\r\n", max_attempts);
+    mpu_found = false;
+    imu_health = TARANG_SENSOR_UNAVAILABLE;
+    return false;
   }
 
   mpu_whoami = whoami;
@@ -482,6 +490,7 @@ void tarang_imu_init(void)
       printf("[IMU] MPU6050 init complete. WHO_AM_I=0x%02X wakeup=%d accel=%d gyro=%d dlpf=%d sr=%d int=%d\r\n",
              mpu_whoami, wakeup_ok, accel_config_ok, gyro_config_ok,
              config_ok, sample_rate_ok, int_enable_ok);
+      return config_ok;
   }
   else
   {
@@ -495,6 +504,7 @@ void tarang_imu_init(void)
     GPIOINT_CallbackRegister(MPU6050_INT_PIN, mpu6050_gpio_callback);
     GPIO_ExtIntConfig(MPU6050_INT_PORT, MPU6050_INT_PIN,
                       MPU6050_INT_LINE, true, false, true);
+    return false;
   }
 }
 
@@ -707,4 +717,9 @@ tarang_sensor_health_t tarang_imu_get_health(void)
 bool tarang_imu_is_valid(void)
 {
   return tarang_sensor_health_is_valid(imu_health);
+}
+
+bool tarang_imu_is_healthy(void)
+{
+  return mpu_found && (imu_health == TARANG_SENSOR_OK || imu_health == TARANG_SENSOR_STARTING);
 }

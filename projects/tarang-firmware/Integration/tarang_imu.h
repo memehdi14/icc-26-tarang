@@ -23,6 +23,7 @@ extern "C" {
  * @note Call GPIOINT_Init() and CMU_ClockEnable(cmuClock_GPIO) BEFORE this.
  ******************************************************************************/
 void tarang_imu_init(void);
+bool tarang_imu_init_ex(bool is_runtime_retry);
 
 /***************************************************************************//**
  * IMU process action — call from app_process_action().
@@ -44,6 +45,7 @@ uint32_t tarang_imu_get_sample_count(void);
 uint32_t tarang_imu_get_interrupt_count(void);
 tarang_sensor_health_t tarang_imu_get_health(void);
 bool     tarang_imu_is_valid(void);
+bool     tarang_imu_is_healthy(void);
 
 #ifdef __cplusplus
 }

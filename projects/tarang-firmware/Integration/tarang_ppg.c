@@ -119,7 +119,7 @@ static void ppg_delay_ms(uint32_t ms)
 }
 
 /* 9-pulse I2C bus clear procedure to release any stuck I2C slave holding SDA low */
-static void i2c_bus_clear(void)
+void tarang_i2c_bus_clear(void)
 {
     printf("[PPG] I2C bus clear: checking SDA/SCL state...\r\n");
     
@@ -158,6 +158,21 @@ static void i2c_bus_clear(void)
     sl_i2cspm_init_instances();
     ppg_delay_ms(10);
     printf("[PPG] I2CSPM re-initialized\r\n");
+}
+
+/* Fast non-blocking I2C slave probe (<0.2 ms execution time) */
+bool tarang_i2c_quick_ping(uint8_t addr)
+{
+    I2C_TransferSeq_TypeDef seq;
+    uint8_t dummy = 0;
+
+    seq.addr = (uint16_t)(addr << 1);
+    seq.flags = I2C_FLAG_WRITE;
+    seq.buf[0].data = &dummy;
+    seq.buf[0].len = 0;
+
+    I2C_TransferReturn_TypeDef ret = I2CSPM_Transfer(sl_i2cspm_mikroe, &seq);
+    return (ret == i2cTransferDone);
 }
 
 static bool max30102_configure_sensor(void)
@@ -311,13 +326,14 @@ void tarang_ppg_init(bool bus_already_clear)
 
     /* ── Step 0: Clear I2C bus (in case slave was holding SDA low) ────── */
     if (!bus_already_clear) {
-      i2c_bus_clear();
+      tarang_i2c_bus_clear();
     }
 
     /* ── Step 1: Configure MAX30102 sensor registers with retry ──────── */
     bool config_ok = false;
-    for (int attempt = 1; attempt <= 3; attempt++) {
-        printf("[PPG] Config attempt %d/3...\r\n", attempt);
+    int max_attempts = bus_already_clear ? 1 : 3;
+    for (int attempt = 1; attempt <= max_attempts; attempt++) {
+        printf("[PPG] Config attempt %d/%d...\r\n", attempt, max_attempts);
         
         if (max30102_configure_sensor()) {
             config_ok = true;
@@ -328,10 +344,10 @@ void tarang_ppg_init(bool bus_already_clear)
         write_failures++;
         printf("[PPG] Config failed (i2c_ret=%d)\r\n", (int)last_ppg_i2c_ret);
         
-        if (attempt < 3) {
+        if (attempt < max_attempts) {
             printf("[PPG] Retrying after delay...\r\n");
-            ppg_delay_ms(100);
-            i2c_bus_clear();  // Try clearing bus again
+            ppg_delay_ms(20);
+            tarang_i2c_bus_clear();  // Try clearing bus again
         }
     }
 
@@ -570,4 +586,14 @@ tarang_sensor_health_t tarang_ppg_get_health(void)
 bool tarang_ppg_is_valid(void)
 {
     return tarang_sensor_health_is_valid(ppg_health);
+}
+
+bool tarang_ppg_is_finger_present(void)
+{
+    return max30102_found && (ir_sample > 8000u) && (ppg_health == TARANG_SENSOR_OK);
+}
+
+uint32_t tarang_ppg_get_consecutive_failures(void)
+{
+    return consecutive_i2c_failures;
 }

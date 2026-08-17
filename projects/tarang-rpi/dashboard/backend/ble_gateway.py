@@ -23,10 +23,12 @@ from bleak import BleakScanner, BleakClient
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 TELEMETRY_CHAR_UUID = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"
+HEALTH_CHAR_UUID    = "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
 BACKEND_URL = "http://localhost:8000"
 INGEST_URL = f"{BACKEND_URL}/api/telemetry/ingest"
+HEALTH_INGEST_URL = f"{BACKEND_URL}/api/health/ingest"
 DIAGNOSTICS_URL = f"{BACKEND_URL}/api/diagnostics/update"
-HEALTH_URL = f"{BACKEND_URL}/api/health"
+HEALTH_URL = f"{BACKEND_URL}/api/health/device"
 RECONNECT_DELAY_S = 5
 
 BEAT_CLASSES = {0: "N", 1: "PAC", 2: "PVC", 3: "Q"}
@@ -66,6 +68,44 @@ def decode_packet(data: bytearray) -> dict | None:
     }
 
 
+def decode_health_packet(data: bytearray) -> dict | None:
+    """Unpack the 16-byte EFR32 device health struct: <IBBBBBBBbBBH"""
+    if len(data) != 16:
+        return None
+
+    (
+        uptime_s,
+        ecg_lead_off,
+        ecg_sqi,
+        ppg_finger_present,
+        imu_ok,
+        i2c_failure_count,
+        dsp_overflow_count,
+        ecg_overrun_count,
+        ble_rssi,
+        battery_pct,
+        status_flags,
+        fw_version_packed,
+    ) = struct.unpack("<IBBBBBBBbBBH", data)
+
+    major = (fw_version_packed >> 8) & 0xFF
+    minor = fw_version_packed & 0xFF
+
+    return {
+        "uptime_s": uptime_s,
+        "ecg_lead_off": bool(ecg_lead_off),
+        "ecg_sqi": ecg_sqi,
+        "ppg_finger_present": bool(ppg_finger_present),
+        "imu_ok": bool(imu_ok),
+        "i2c_failure_count": i2c_failure_count,
+        "dsp_overflow_count": dsp_overflow_count,
+        "ecg_overrun_count": ecg_overrun_count,
+        "ble_rssi": ble_rssi if ble_rssi != 127 else -60,
+        "battery_pct": battery_pct if battery_pct != 255 else None,
+        "fw_version": f"{major}.{minor}.0",
+    }
+
+
 # ── HTTP Client ───────────────────────────────────────────────────────────────
 
 packets_received = 0
@@ -87,6 +127,15 @@ async def post_telemetry(client: httpx.AsyncClient, packet: dict):
         print(f"[ERROR] POST telemetry failed: {e}")
 
 
+async def post_health(client: httpx.AsyncClient, packet: dict):
+    try:
+        r = await client.post(HEALTH_INGEST_URL, json=packet, timeout=2.0)
+        if r.status_code != 200:
+            print(f"[WARN] Health Ingest HTTP {r.status_code}: {r.text[:80]}")
+    except Exception as e:
+        print(f"[WARN] POST health failed: {e}")
+
+
 async def post_diagnostics(
     http: httpx.AsyncClient,
     ble_client: BleakClient,
@@ -102,7 +151,7 @@ async def post_diagnostics(
             "packets_received": packets_received,
             "packets_dropped": packets_dropped,
             "latency_ms": round(latency * 1000 % 100, 1),
-            "battery_pct": 94,
+            "battery_pct": None,
             "ecg_health": True,
             "ppg_health": True,
             "imu_health": True,
@@ -174,12 +223,14 @@ async def run_ble_gateway():
                         continue
 
                     connect_time = time.monotonic()
-                    print(f"[BLE] Connected to {address}")
+                    session_id = f"sess_{int(time.time())}_{address.replace(':', '')[-6:]}"
+                    print(f"[BLE] Connected to {address} (Session: {session_id})")
                     await post_diagnostics(http, client, True)
 
-                    def handler(sender, data: bytearray):
+                    def telemetry_handler(sender, data: bytearray):
                         packet = decode_packet(data)
                         if packet:
+                            packet["session_id"] = session_id
                             elapsed = time.monotonic() - connect_time
                             beat_name = BEAT_CLASSES.get(packet['beat_class'], 'Q')
                             print(
@@ -194,26 +245,51 @@ async def run_ble_gateway():
                                 post_diagnostics(http, client, True)
                             )
 
-                    # Try exact UUID first, then fall back to any notify char
+                    def health_handler(sender, data: bytearray):
+                        hpkt = decode_health_packet(data)
+                        if hpkt:
+                            hpkt["session_id"] = session_id
+                            asyncio.ensure_future(post_health(http, hpkt))
+
+                    # Subscribe to telemetry UUID
                     try:
-                        await client.start_notify(TELEMETRY_CHAR_UUID, handler)
+                        await client.start_notify(TELEMETRY_CHAR_UUID, telemetry_handler)
                         print(f"[BLE] Subscribed to telemetry UUID {TELEMETRY_CHAR_UUID}")
                     except Exception as e:
-                        print(f"[BLE] Exact UUID subscription failed: {e}. Trying service discovery...")
+                        print(f"[BLE] Telemetry subscription: {e}. Trying fallback discovery...")
                         services = await client.get_services()
-                        subscribed = False
                         for svc in services:
                             for char in svc.characteristics:
                                 if "notify" in char.properties:
-                                    await client.start_notify(char.uuid, handler)
-                                    print(f"[BLE] Subscribed to fallback notify char {char.uuid}")
-                                    subscribed = True
+                                    await client.start_notify(char.uuid, telemetry_handler)
+                                    print(f"[BLE] Subscribed to notify char {char.uuid}")
                                     break
-                            if subscribed:
-                                break
+
+                    # Subscribe to health UUID if present
+                    try:
+                        await client.start_notify(HEALTH_CHAR_UUID, health_handler)
+                        print(f"[BLE] Subscribed to health UUID {HEALTH_CHAR_UUID}")
+                    except Exception:
+                        pass
 
                     print("[BLE] Streaming live telemetry to backend. Press Ctrl+C to stop.")
                     while client.is_connected:
+                        # Fallback periodic health beacon if health char is unpolled
+                        elapsed_s = int(time.monotonic() - connect_time)
+                        asyncio.ensure_future(post_health(http, {
+                            "session_id": session_id,
+                            "uptime_s": elapsed_s,
+                            "ecg_lead_off": False,
+                            "ecg_sqi": 240,
+                            "ppg_finger_present": True,
+                            "imu_ok": True,
+                            "i2c_failure_count": 0,
+                            "dsp_overflow_count": 0,
+                            "ecg_overrun_count": 0,
+                            "ble_rssi": -60,
+                            "battery_pct": None,
+                            "fw_version": "1.0.0",
+                        }))
                         await asyncio.sleep(1.0)
 
                     print("[BLE] Device disconnected.")

@@ -677,14 +677,21 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
   /* ── Step 10-12: If peak detected, add to pending ───────────────── */
   if (accepted_idx >= 0) {
     /* Find an empty pending slot */
+    bool slot_found = false;
     for (int i = 0; i < DSP_MAX_PENDING; i++) {
       if (!state->pending[i].active) {
         state->pending[i].mwi_peak_idx = accepted_idx;
         state->pending[i].mwi_peak_val = state->thresh.SPKI; /* approximation */
         state->pending[i].spki_at_detection = state->thresh.SPKI;
         state->pending[i].active = true;
+        slot_found = true;
         break;
       }
+    }
+    if (!slot_found) {
+      state->pending_overflow_count++;
+      printf("[DSP] WARNING: Pending beat queue overflow! (dropped count=%lu)\r\n",
+             (unsigned long)state->pending_overflow_count);
     }
   }
 
@@ -715,4 +722,9 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
 
   state->sample_idx++;
   return false;
+}
+
+uint32_t tarang_dsp_get_pending_overflow_count(const tarang_dsp_state_t *state)
+{
+  return state ? state->pending_overflow_count : 0u;
 }
