@@ -181,6 +181,14 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
     case sl_bt_evt_system_boot_id:
       printf("TARANG BLE BOOT OK\r\n");
 
+      /* Configure Security Manager for bonding & encryption with Just Works (No I/O) */
+      sc = sl_bt_sm_configure(0x08, sl_bt_sm_io_capability_noinputnooutput);
+      app_assert_status(sc);
+
+      /* Allow bonding requests */
+      sc = sl_bt_sm_set_bondable_mode(1);
+      app_assert_status(sc);
+
       /* Create advertising set */
       sc = sl_bt_advertiser_create_set(&tarang_advertising_set_handle);
       app_assert_status(sc);
@@ -241,6 +249,33 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
           sl_bt_legacy_advertiser_connectable);
       app_assert_status(sc);
       break;
+
+    case sl_bt_evt_sm_confirm_bonding_id:
+    {
+      uint8_t conn = evt->data.evt_sm_confirm_bonding.connection;
+      printf("[BLE][SM] Confirming bonding request on connection=0x%02X (Just Works)\r\n", conn);
+      sc = sl_bt_sm_bonding_confirm(conn, 1);
+      if (sc != SL_STATUS_OK) {
+        printf("[BLE][SM] Bonding confirm failed: 0x%04lX\r\n", (unsigned long)sc);
+      }
+      break;
+    }
+
+    case sl_bt_evt_sm_bonded_id:
+    {
+      uint8_t conn = evt->data.evt_sm_bonded.connection;
+      uint8_t bond = evt->data.evt_sm_bonded.bonding;
+      printf("[BLE][SM] SUCCESS: Device bonded! Connection=0x%02X BondHandle=0x%02X\r\n", conn, bond);
+      break;
+    }
+
+    case sl_bt_evt_sm_bonding_failed_id:
+    {
+      uint8_t conn = evt->data.evt_sm_bonding_failed.connection;
+      uint16_t reason = evt->data.evt_sm_bonding_failed.reason;
+      printf("[BLE][SM] WARNING: Bonding failed! Connection=0x%02X Reason=0x%04X\r\n", conn, (unsigned)reason);
+      break;
+    }
 
     case sl_bt_evt_gatt_server_characteristic_status_id:
     {
