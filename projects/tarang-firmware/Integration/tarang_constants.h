@@ -119,6 +119,15 @@ extern "C" {
 #define TARANG_RR_FEAT_LOCAL_HR         3
 
 /*******************************************************************************
+ * Tier-0 Trigger Heuristic Thresholds (frozen)
+ ******************************************************************************/
+#define TARANG_PREMATURITY_RATIO_NUM    85      /* rr_interval / rr_mean_5 < 0.85 (85/100) */
+#define TARANG_PREMATURITY_RATIO_DENOM  100
+#define TARANG_COMPENSATORY_PAUSE_NUM   3       /* rr_interval > 1.5 * mean (3/2) */
+#define TARANG_COMPENSATORY_PAUSE_DENOM 2
+#define TARANG_CIRCUIT_BREAKER_MAX_SUSP_PCT 20  /* 20% max suspicious beats before trip */
+
+/*******************************************************************************
  * ML Thresholds (ADR-005, event-gated)
  ******************************************************************************/
 /* LOCKED thresholds from validation Step 4
@@ -144,7 +153,9 @@ extern "C" {
 
 /* AFib thresholds (published, validated on MIT-BIH AFDB) */
 #define TARANG_AFIB_COV_THRESHOLD       0.12f
+#define TARANG_AFIB_COV_THRESHOLD_PCT   12u     /* CoV > 12% */
 #define TARANG_AFIB_PRR50_THRESHOLD     0.10f
+#define TARANG_AFIB_PRR50_THRESHOLD_PCT 10u     /* pRR50 > 10% */
 #define TARANG_AFIB_RMSSD_THRESHOLD_MS  30.0f
 #define TARANG_AFIB_MIN_RR_MS           600     /* exclude extreme brady */
 #define TARANG_AFIB_MAX_RR_MS           1000    /* exclude extreme tachy */

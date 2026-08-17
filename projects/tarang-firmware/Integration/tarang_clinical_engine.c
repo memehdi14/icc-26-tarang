@@ -269,19 +269,30 @@ static void check_rhythm_patterns(tarang_clinical_engine_t *engine)
                               engine->pattern_count - 6 + i);
   }
 
-  /* Bigeminy: N-V-N-V-N-V */
-  if (p[0] == TARANG_BEAT_N && p[1] == TARANG_BEAT_V &&
-      p[2] == TARANG_BEAT_N && p[3] == TARANG_BEAT_V &&
-      p[4] == TARANG_BEAT_N && p[5] == TARANG_BEAT_V) {
+  /* Bigeminy: N-V-N-V-N-V or V-N-V-N-V-N */
+  bool is_bigeminy = (p[0] == TARANG_BEAT_N && p[1] == TARANG_BEAT_V &&
+                      p[2] == TARANG_BEAT_N && p[3] == TARANG_BEAT_V &&
+                      p[4] == TARANG_BEAT_N && p[5] == TARANG_BEAT_V) ||
+                     (p[0] == TARANG_BEAT_V && p[1] == TARANG_BEAT_N &&
+                      p[2] == TARANG_BEAT_V && p[3] == TARANG_BEAT_N &&
+                      p[4] == TARANG_BEAT_V && p[5] == TARANG_BEAT_N);
+  if (is_bigeminy) {
     engine->rhythm_flags |= TARANG_RHYTHM_BIGEMINY;
   } else {
     engine->rhythm_flags &= ~TARANG_RHYTHM_BIGEMINY;
   }
 
-  /* Trigeminy: N-N-V-N-N-V */
-  if (p[0] == TARANG_BEAT_N && p[1] == TARANG_BEAT_N &&
-      p[2] == TARANG_BEAT_V && p[3] == TARANG_BEAT_N &&
-      p[4] == TARANG_BEAT_N && p[5] == TARANG_BEAT_V) {
+  /* Trigeminy: N-N-V-N-N-V, N-V-N-N-V-N, or V-N-N-V-N-N */
+  bool is_trigeminy = (p[0] == TARANG_BEAT_N && p[1] == TARANG_BEAT_N &&
+                       p[2] == TARANG_BEAT_V && p[3] == TARANG_BEAT_N &&
+                       p[4] == TARANG_BEAT_N && p[5] == TARANG_BEAT_V) ||
+                      (p[0] == TARANG_BEAT_N && p[1] == TARANG_BEAT_V &&
+                       p[2] == TARANG_BEAT_N && p[3] == TARANG_BEAT_N &&
+                       p[4] == TARANG_BEAT_V && p[5] == TARANG_BEAT_N) ||
+                      (p[0] == TARANG_BEAT_V && p[1] == TARANG_BEAT_N &&
+                       p[2] == TARANG_BEAT_N && p[3] == TARANG_BEAT_V &&
+                       p[4] == TARANG_BEAT_N && p[5] == TARANG_BEAT_N);
+  if (is_trigeminy) {
     engine->rhythm_flags |= TARANG_RHYTHM_TRIGEMINY;
   } else {
     engine->rhythm_flags &= ~TARANG_RHYTHM_TRIGEMINY;
@@ -361,12 +372,12 @@ static void check_afib(tarang_clinical_engine_t *engine)
                                 engine->rr_count, TARANG_RR_WINDOW_SIZE);
 
   /* CoV check: SDNN * 100 / mean_rr > 12 (avoids float division) */
-  bool cov_met = ((uint32_t)sdnn * 100 > (uint32_t)(TARANG_AFIB_COV_THRESHOLD * 100.0f) * mean_rr);
+  bool cov_met = ((uint32_t)sdnn * 100 > (uint32_t)TARANG_AFIB_COV_THRESHOLD_PCT * mean_rr);
 
   /* pRR50 check */
   uint8_t prr50_pct = compute_prr50(engine->rr_buffer, engine->rr_head,
                                      engine->rr_count, TARANG_RR_WINDOW_SIZE);
-  bool prr50_met = (prr50_pct > (uint8_t)(TARANG_AFIB_PRR50_THRESHOLD * 100.0f));
+  bool prr50_met = (prr50_pct > TARANG_AFIB_PRR50_THRESHOLD_PCT);
 
   /* RMSSD check */
   uint16_t rmssd = compute_rmssd(engine->rr_buffer, engine->rr_head,

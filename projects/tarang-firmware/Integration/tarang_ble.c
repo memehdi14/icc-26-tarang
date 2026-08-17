@@ -141,11 +141,6 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
     uint32_t now_ms = tarang_now_ms();
     last_periodic_notify_ms = now_ms;
 
-    /* Clear pending flags ONLY when we actually send — not before */
-    pipeline->beat_telemetry_pending = false;
-    pipeline->engine.rhythm_changed = false;
-    pipeline->engine.significant_event = false;
-
     tarang_event_packet_t pkt;
     tarang_pipeline_get_packet(pipeline, &pkt);
 
@@ -156,8 +151,13 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
         (const uint8_t *)&pkt);
 
     if (sc != SL_STATUS_OK) {
-      printf("[BLE] Notification failed: 0x%04lX\r\n", (unsigned long)sc);
+      printf("[BLE] Notification failed: 0x%04lX (will retry on next tick)\r\n", (unsigned long)sc);
     } else {
+      /* Clear pending flags ONLY when successfully dispatched over BLE */
+      pipeline->beat_telemetry_pending = false;
+      pipeline->engine.rhythm_changed = false;
+      pipeline->engine.significant_event = false;
+
       printf("[BLE] Telemetry notification sent! (16 bytes, HR=%u rhythm=0x%02X class=%u)\r\n",
              (unsigned)pkt.current_hr, (unsigned)pkt.rhythm_flags, (unsigned)pkt.beat_class);
     }

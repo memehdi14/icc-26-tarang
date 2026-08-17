@@ -67,7 +67,7 @@ static bool beat_is_suspicious(const tarang_pipeline_t *pipeline,
 
   if (rr_mean_5 > 0) {
     /* rr_interval / rr_mean_5 < 0.85  →  rr_interval * 100 < 85 * rr_mean_5 */
-    if ((uint32_t)rr_interval_ms * 100 < 85 * rr_mean_5) {
+    if ((uint32_t)rr_interval_ms * TARANG_PREMATURITY_RATIO_DENOM < (uint32_t)TARANG_PREMATURITY_RATIO_NUM * rr_mean_5) {
       if (reason_out) *reason_out = "prematurity";
       return true;
     }
@@ -78,14 +78,15 @@ static bool beat_is_suspicious(const tarang_pipeline_t *pipeline,
     uint16_t sdnn = pipeline->engine.sdnn_ms;
     uint32_t mean_rr = rr_mean_5;  /* approximate */
     /* CoV > 0.12  →  sdnn * 100 > 12 * mean_rr */
-    if (mean_rr > 0 && (uint32_t)sdnn * 100 > 12 * mean_rr) {
+    uint32_t cov_pct = (uint32_t)(TARANG_AFIB_COV_THRESHOLD * 100.0f + 0.5f);
+    if (mean_rr > 0 && (uint32_t)sdnn * 100 > cov_pct * mean_rr) {
       if (reason_out) *reason_out = "cov";
       return true;
     }
   }
 
   /* 3. HR extremes */
-  if (pipeline->engine.current_hr > 120 || (pipeline->engine.current_hr > 0 && pipeline->engine.current_hr < 45)) {
+  if (pipeline->engine.current_hr > TARANG_TACHYCARDIA_BPM || (pipeline->engine.current_hr > 0 && pipeline->engine.current_hr < TARANG_BRADYCARDIA_BPM)) {
     if (reason_out) *reason_out = "hr_extreme";
     return true;
   }
@@ -93,7 +94,7 @@ static bool beat_is_suspicious(const tarang_pipeline_t *pipeline,
   /* 4. Compensatory pause after ectopic */
   if (pipeline->engine.last_beat_class != TARANG_BEAT_N && rr_mean_5 > 0) {
     /* rr_interval > 1.5 × mean  →  rr_interval * 2 > 3 * mean */
-    if ((uint32_t)rr_interval_ms * 2 > 3 * rr_mean_5) {
+    if ((uint32_t)rr_interval_ms * TARANG_COMPENSATORY_PAUSE_DENOM > (uint32_t)TARANG_COMPENSATORY_PAUSE_NUM * rr_mean_5) {
       if (reason_out) *reason_out = "pause";
       return true;
     }
@@ -302,7 +303,7 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
 
   /* Check if circuit breaker should trip (>20% suspicious over 30 beats) */
   if (pipeline->circuit_breaker_count >= CIRCUIT_BREAKER_WINDOW) {
-    uint8_t threshold = (CIRCUIT_BREAKER_WINDOW * 20) / 100;  /* 20% of 30 = 6 */
+    uint8_t threshold = (CIRCUIT_BREAKER_WINDOW * TARANG_CIRCUIT_BREAKER_MAX_SUSP_PCT) / 100;  /* 20% of 30 = 6 */
     bool should_trip = pipeline->circuit_breaker_suspicious_count > threshold;
     if (should_trip && !pipeline->circuit_breaker_tripped) {
       printf("[PIPELINE] ⚠ Circuit breaker TRIPPED: %u/%u beats suspicious (>20%%). "

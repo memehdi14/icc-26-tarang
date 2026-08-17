@@ -31,6 +31,7 @@
 #include "tarang_ecg.h"
 #include "tarang_ppg.h"
 #include "tarang_imu.h"
+#include "tarang_ble.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -57,13 +58,25 @@ static void delay_ms(uint32_t ms)
 #define TARANG_ENABLE_ECG   1
 #define TARANG_ENABLE_PPG   1
 #define TARANG_ENABLE_IMU   1
+#define TARANG_ENABLE_BLE   1
 #define TARANG_ENABLE_RAW_ECG_STREAM 1
+
+#ifndef TARANG_RUN_BOOT_TESTS
+#define TARANG_RUN_BOOT_TESTS 1
+#endif
 
 /***************************************************************************//**
  * Initialize application.
  ******************************************************************************/
 void app_init(void)
 {
+#if TARANG_RUN_BOOT_TESTS
+  /* === PHASE 1 & 2 VERIFICATION TEST AT BOOT === */
+  extern void test_ml_model_multi_input(void);
+  test_ml_model_multi_input();
+  /* === END BOOT TEST === */
+#endif
+
   /*
    * CRITICAL: Prevent the power manager from entering EM2/EM3.
    * EM2 shuts down I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
@@ -132,6 +145,11 @@ void app_init(void)
   printf("[INIT] IMU: DISABLED\r\n");
 #endif
 
+#if TARANG_ENABLE_BLE
+  printf("[INIT] BLE: Initializing Telemetry Service...\r\n");
+  tarang_ble_init();
+#endif
+
   printf("==========================================\r\n");
   printf("[INIT] Done. Diagnostics every ~2 sec.\r\n");
   printf("==========================================\r\n");
@@ -155,6 +173,11 @@ void app_process_action(void)
 #endif
 #if TARANG_ENABLE_IMU
   tarang_imu_process();
+#endif
+
+  /* ── BLE Telemetry Dispatch ─────────────────────────────────────────── */
+#if TARANG_ENABLE_BLE
+  tarang_ble_process(tarang_pipeline_get_instance());
 #endif
 
   uint32_t current_count = 0;

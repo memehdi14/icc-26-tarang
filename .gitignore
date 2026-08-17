@@ -40,6 +40,9 @@ dataset/
 **/cmake_gcc/
 !**/cmake_gcc/CMakeLists.txt
 **/config/
+!projects/tarang-firmware/Integration/config/
+!projects/tarang-firmware/Integration/config/**
+*.bak
 **/*.pintool
 
 

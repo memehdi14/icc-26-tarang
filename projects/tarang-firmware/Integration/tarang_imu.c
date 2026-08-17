@@ -490,6 +490,7 @@ bool tarang_imu_init_ex(bool is_runtime_retry)
       printf("[IMU] MPU6050 init complete. WHO_AM_I=0x%02X wakeup=%d accel=%d gyro=%d dlpf=%d sr=%d int=%d\r\n",
              mpu_whoami, wakeup_ok, accel_config_ok, gyro_config_ok,
              config_ok, sample_rate_ok, int_enable_ok);
+      return config_ok;
   }
   else
   {
@@ -503,6 +504,7 @@ bool tarang_imu_init_ex(bool is_runtime_retry)
     GPIOINT_CallbackRegister(MPU6050_INT_PIN, mpu6050_gpio_callback);
     GPIO_ExtIntConfig(MPU6050_INT_PORT, MPU6050_INT_PIN,
                       MPU6050_INT_LINE, true, false, true);
+    return false;
   }
 }
 

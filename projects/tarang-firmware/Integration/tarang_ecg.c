@@ -260,8 +260,10 @@ void tarang_ecg_process(void)
 
   if (drain_h0 && pipeline) {
     for (uint32_t i = 0; i < ECG_HALF_SAMPLES; i++) {
+      uint32_t offset_ms = ((ECG_HALF_SAMPLES - 1u - i) * 1000u) / TARANG_ECG_SAMPLE_RATE_HZ;
+      uint32_t sample_ts = (now_ms >= offset_ms) ? (now_ms - offset_ms) : 0u;
       uint32_t raw_val = ecg_buffer[i] & 0x00FFFFFFu;
-      tarang_pipeline_process_ecg_sample(pipeline, raw_val, now_ms);
+      tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts);
       if (s_raw_streaming_enabled) {
         printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
       }
@@ -270,8 +272,10 @@ void tarang_ecg_process(void)
 
   if (drain_h1 && pipeline) {
     for (uint32_t i = ECG_HALF_SAMPLES; i < ECG_BUFFER_SIZE; i++) {
+      uint32_t offset_ms = ((ECG_BUFFER_SIZE - 1u - i) * 1000u) / TARANG_ECG_SAMPLE_RATE_HZ;
+      uint32_t sample_ts = (now_ms >= offset_ms) ? (now_ms - offset_ms) : 0u;
       uint32_t raw_val = ecg_buffer[i] & 0x00FFFFFFu;
-      tarang_pipeline_process_ecg_sample(pipeline, raw_val, now_ms);
+      tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts);
       if (s_raw_streaming_enabled) {
         printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
       }
