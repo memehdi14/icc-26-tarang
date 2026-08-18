@@ -186,7 +186,7 @@ async def find_device():
     if BLE_ADDRESS:
         return BLE_ADDRESS
     print("[BLE] Scanning for TARANG device...")
-    devices = await BleakScanner.discover(timeout=5.0)
+    devices = await BleakScanner.discover(timeout=10.0)
     for d in devices:
         name = d.name or ""
         if any(kw in name.upper() for kw in ("TARANG", "EFR32", "SILABS")):
@@ -271,19 +271,8 @@ async def run_ble_gateway():
                 continue
 
             address = device.address if hasattr(device, 'address') else str(device)
-            
-            # 1. Deterministic Central-Initiated Bonding before GATT discovery
-            bonded = await ensure_device_bonded(address)
-            if not bonded:
-                print(f"[BLE][Security] Pairing incomplete. Backing off for {pair_backoff_delay}s to avoid SMP lockout...")
-                await asyncio.sleep(pair_backoff_delay)
-                pair_backoff_delay = min(pair_backoff_delay * 2, 60)
-                continue
-            
-            # Reset backoff on successful bond
-            pair_backoff_delay = 5
 
-            print(f"[BLE] Connecting to {address}...")
+            print(f"[BLE] Connecting directly to {address}...")
             try:
                 # Use address to let Bleak resolve the fresh DBus path
                 async with BleakClient(address, timeout=20.0) as client:

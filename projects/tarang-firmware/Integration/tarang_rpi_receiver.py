@@ -89,8 +89,8 @@ def notification_handler(sender: int, data: bytearray):
 
 
 async def main():
-    print("Scanning for TARANG BLE device...")
-    devices = await BleakScanner.discover()
+    print("Scanning for TARANG BLE device (10s)...")
+    devices = await BleakScanner.discover(timeout=10.0)
     target_device = None
 
     for d in devices:
@@ -114,7 +114,7 @@ async def main():
     address = getattr(target_device, "address", target_device)
     print(f"\nConnecting to TARANG at {address}...")
 
-    async with BleakClient(address) as client:
+    async with BleakClient(address, timeout=20.0) as client:
         if not client.is_connected:
             print("Failed to connect.")
             return

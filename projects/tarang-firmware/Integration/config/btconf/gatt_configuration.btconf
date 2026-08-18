@@ -8,7 +8,7 @@
 
     <!--Device Name-->
     <characteristic const="false" id="device_name" name="Device Name" sourceId="org.bluetooth.characteristic.gap.device_name" uuid="2A00">
-      <value length="6" type="utf-8" variable_length="false">TARANG</value>
+      <value length="16" type="utf-8" variable_length="true">TARANG</value>
       <properties>
         <read authenticated="false" bonded="false" encrypted="false"/>
         <write authenticated="false" bonded="false" encrypted="false"/>
@@ -55,16 +55,16 @@
     <characteristic const="false" id="telemetry_data" name="Telemetry Data" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66a">
       <value length="16" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
 
     <!--Device Health-->
     <characteristic const="false" id="device_health" name="Device Health" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77b">
-      <value length="20" type="hex" variable_length="false">00</value>
+      <value length="16" type="hex" variable_length="false">00</value>
       <properties>
-        <read authenticated="false" bonded="true" encrypted="true"/>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <read authenticated="false" bonded="false" encrypted="false"/>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
 
@@ -72,7 +72,7 @@
     <characteristic const="false" id="ecg_waveform" name="ECG Waveform" sourceId="" uuid="c5da9988-1111-4b5c-b00e-ef96b24ee77b">
       <value length="244" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
 
@@ -80,15 +80,15 @@
     <characteristic const="false" id="ppg_waveform" name="PPG Waveform" sourceId="" uuid="c5da9988-2222-4b5c-b00e-ef96b24ee77b">
       <value length="244" type="hex" variable_length="true">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
 
     <!--IMU Waveform-->
-    <characteristic const="false" id="imu_waveform" name="IMU Waveform" sourceId="" uuid="c5da9988-2222-4b5c-b00e-ef96b24ee77b">
+    <characteristic const="false" id="imu_waveform" name="IMU Waveform" sourceId="" uuid="c5da9988-3333-4b5c-b00e-ef96b24ee77b">
       <value length="244" type="hex" variable_length="true">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
   </service>

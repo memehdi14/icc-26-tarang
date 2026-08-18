@@ -82,10 +82,19 @@ component:
   id: bluetooth_feature_connection_role_peripheral
 - package: simplicity_sdk
   vendor: silabs
+  id: bluetooth_feature_gap
+- package: simplicity_sdk
+  vendor: silabs
+  id: bluetooth_feature_gatt
+- package: simplicity_sdk
+  vendor: silabs
   id: bluetooth_feature_gatt_server
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_feature_legacy_advertiser
+- package: simplicity_sdk
+  vendor: silabs
+  id: bluetooth_feature_system
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_stack

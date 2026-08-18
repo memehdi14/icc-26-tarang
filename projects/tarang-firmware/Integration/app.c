@@ -55,6 +55,18 @@
 #include "sl_power_manager.h"
 #endif
 
+/*******************************************************************************
+ * TEST MODE - Change these to select which sensors are active.
+ ******************************************************************************/
+#define TARANG_ENABLE_ECG   0
+#define TARANG_ENABLE_PPG   0
+#define TARANG_ENABLE_IMU   0
+#define TARANG_ENABLE_BLE   1
+#define TARANG_ENABLE_RAW_ECG_STREAM 0
+#define TARANG_ANY_SENSOR_ENABLED \
+  (TARANG_ENABLE_ECG || TARANG_ENABLE_PPG || TARANG_ENABLE_IMU)
+
+#if TARANG_ANY_SENSOR_ENABLED
 /* Sleeptimer handle for periodic 10ms wakeup */
 static sl_sleeptimer_timer_handle_t wakeup_timer;
 static void wakeup_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
@@ -70,17 +82,7 @@ static void delay_ms(uint32_t ms)
 {
   for (volatile uint32_t i = 0; i < ms * 4000u; i++) { }
 }
-
-/*******************************************************************************
- * TEST MODE — Change these to select which sensors are active.
- * For individual testing, enable only one at a time.
- * For full integration, enable all three.
- ******************************************************************************/
-#define TARANG_ENABLE_ECG   1
-#define TARANG_ENABLE_PPG   1
-#define TARANG_ENABLE_IMU   1
-#define TARANG_ENABLE_BLE   1
-#define TARANG_ENABLE_RAW_ECG_STREAM 1
+#endif
 
 #ifndef TARANG_RUN_BOOT_TESTS
 #define TARANG_RUN_BOOT_TESTS 0   /* Set to 1 to run AI/ML boot test — adds ~100ms startup delay */
@@ -97,7 +99,7 @@ void app_init(void)
    * EM1 keeps all peripherals alive while still saving power.
    * Must be set BEFORE any peripheral usage (including boot tests).
    */
-#if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
+#if defined(SL_CATALOG_POWER_MANAGER_PRESENT) && TARANG_ANY_SENSOR_ENABLED
   sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
 #endif
 
@@ -119,13 +121,12 @@ void app_init(void)
          TARANG_ENABLE_RAW_ECG_STREAM ? "(RAW_STREAM) " : "");
   printf("==========================================\r\n");
 
-  /*
-   * GPIO clock — ensure enabled before sensor init.
-   * NOTE: GPIOINT_Init() is already called by autogen sl_driver_init()
-   * in sl_event_handler.c, so we do NOT call it again here.
-   */
+#if TARANG_ANY_SENSOR_ENABLED
+  /* GPIOINT_Init() is already called by autogen sl_driver_init(). */
   CMU_ClockEnable(cmuClock_GPIO, true);
+#endif
 
+#if TARANG_ENABLE_PPG || TARANG_ENABLE_IMU
   /*
    * CRITICAL: Give I2C sensors time to power up after flash/reset.
    * MAX30102 and MPU6050 both need ~50-100ms for stable power-on.
@@ -193,6 +194,9 @@ void app_init(void)
              (int)ret);
     }
   }
+#else
+  printf("[INIT] Sensor bus setup skipped (BLE-only mode).\r\n");
+#endif
 
 #if TARANG_ENABLE_ECG
   printf("[INIT] ECG: Starting LETIMER+PRS+IADC+DMADRV...\r\n");
@@ -232,18 +236,14 @@ void app_init(void)
   printf("[INIT] Done. Diagnostics every ~2 sec.\r\n");
   printf("==========================================\r\n");
 
-  /*
-   * Start a 10ms periodic wakeup timer. This wakes the CPU from EM1
-   * every 10ms so the super loop can check sensor data_ready flags.
-   * GPIO sensor interrupts ALSO wake the CPU — this timer is a
-   * guaranteed fallback that ensures the system never sleeps forever.
-   */
+#if TARANG_ANY_SENSOR_ENABLED
+  /* Wake the sensor-processing super loop every 10 ms. */
   uint32_t ticks = sl_sleeptimer_ms_to_tick(10);
-  sl_sleeptimer_start_periodic_timer(&wakeup_timer,
-                                     ticks,
-                                     wakeup_callback,
-                                     NULL, 0, 0);
-  printf("[INIT] 10ms wakeup timer started.\r\n");
+  sl_status_t timer_status = sl_sleeptimer_start_periodic_timer(
+      &wakeup_timer, ticks, wakeup_callback, NULL, 0, 0);
+  printf("[INIT] 10ms wakeup timer: 0x%08lX\r\n",
+         (unsigned long)timer_status);
+#endif
 }
 
 /***************************************************************************//**

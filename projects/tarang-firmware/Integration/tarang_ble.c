@@ -55,6 +55,18 @@
 #define SL_BT_INVALID_CONNECTION_HANDLE 0xFFu
 #endif
 
+static bool tarang_ble_status_ok(const char *operation, sl_status_t status)
+{
+  if (status == SL_STATUS_OK) {
+    printf("[BLE][OK] %s\r\n", operation);
+    return true;
+  }
+
+  printf("[BLE][ERROR] %s failed: 0x%08lX\r\n",
+         operation, (unsigned long)status);
+  return false;
+}
+
 /******************************************************************************
  *                           STATIC STATE
  ******************************************************************************/
@@ -231,26 +243,17 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
 
   switch (SL_BT_MSG_ID(evt->header)) {
 
-    /* ── System Boot: configure security, create adv set, start 30s window ── */
+    /* ── System Boot: configure timing & start connectable advertising ── */
     case sl_bt_evt_system_boot_id:
     {
       printf("TARANG BLE BOOT OK\r\n");
 
-      /* Configure Security Manager: Just Works (No I/O) auto-accept bonding */
-      sc = sl_bt_sm_configure(0x00, sl_bt_sm_io_capability_noinputnooutput);
-      app_assert_status(sc);
-
-      /* Allow bonding requests */
-      sc = sl_bt_sm_set_bondable_mode(1);
-      app_assert_status(sc);
-
-      /* Set default connection timing: min=20ms, max=100ms, timeout=3000ms */
-      sc = sl_bt_connection_set_default_parameters(16, 80, 0, 300, 0, 0xFFFF);
-      app_assert_status(sc);
-
       /* Create advertising set */
       sc = sl_bt_advertiser_create_set(&tarang_advertising_set_handle);
-      app_assert_status(sc);
+      if (!tarang_ble_status_ok("create advertising set", sc)) break;
+
+      /* Disable bonding — RPi/bleak connects via plain BLE without pairing */
+      sl_bt_sm_set_bondable_mode(0);
 
       /* ── Dynamic Device Name: TARANG-<last 4 hex of MAC> ──────────── */
       {
@@ -261,9 +264,13 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
           char name_buf[16];
           snprintf(name_buf, sizeof(name_buf), "TARANG-%02X%02X",
                    address.addr[1], address.addr[0]);
-          sl_bt_gatt_server_write_attribute_value(
+          sc = sl_bt_gatt_server_write_attribute_value(
               gattdb_device_name, 0, strlen(name_buf), (const uint8_t *)name_buf);
-          printf("[BLE] Device name: %s\r\n", name_buf);
+          if (tarang_ble_status_ok("write device name", sc)) {
+            printf("[BLE] Device name: %s\r\n", name_buf);
+          }
+        } else {
+          tarang_ble_status_ok("get identity address", sc);
         }
       }
 
@@ -271,7 +278,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       sc = sl_bt_legacy_advertiser_generate_data(
           tarang_advertising_set_handle,
           sl_bt_advertiser_general_discoverable);
-      app_assert_status(sc);
+      if (!tarang_ble_status_ok("generate advertising data", sc)) break;
 
       /* ── Continuous Connectable Advertising ──────────────────────── */
       sc = sl_bt_advertiser_set_timing(
@@ -280,13 +287,13 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
           160,    /* max interval: 160 × 0.625ms = 100ms */
           0,      /* DURATION: 0 = Continuous until connected */
           0);     /* max events: 0 = no event count limit */
-      app_assert_status(sc);
+      if (!tarang_ble_status_ok("set advertising timing", sc)) break;
 
       /* Start connectable advertising */
       sc = sl_bt_legacy_advertiser_start(
           tarang_advertising_set_handle,
           sl_bt_legacy_advertiser_connectable);
-      app_assert_status(sc);
+      if (!tarang_ble_status_ok("start connectable advertising", sc)) break;
 
       printf("[BLE] Connectable advertising started (Ready for RPi Hub).\r\n");
       break;
@@ -296,8 +303,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
     case sl_bt_evt_connection_opened_id:
     {
       tarang_ble_conn_handle = evt->data.evt_connection_opened.connection;
-      printf("[BLE] Connection opened! Handle=0x%02X (Waiting for Central SMP request)\r\n",
-             tarang_ble_conn_handle);
+      printf("[BLE] Connection opened! Handle=0x%02X\r\n", tarang_ble_conn_handle);
 
       /* Reset dispatch timers */
       last_telemetry_notify_ms = 0;
@@ -345,14 +351,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
     {
       uint8_t conn = evt->data.evt_sm_bonded.connection;
       uint8_t bond = evt->data.evt_sm_bonded.bonding;
-      printf("[BLE][SM] SUCCESS: Device bonded! Connection=0x%02X BondHandle=0x%02X\r\n", conn, bond);
-
-      /* Log security level for verification */
-      uint8_t sec_mode;
-      sc = sl_bt_sm_get_bonding_details(bond, NULL, NULL, &sec_mode, NULL);
-      if (sc == SL_STATUS_OK) {
-        printf("[BLE][SM] Security mode: %u (1=unauthenticated, 2=authenticated)\r\n", sec_mode);
-      }
+      printf("[BLE][SM] Bonded! Connection=0x%02X BondHandle=0x%02X\r\n", conn, bond);
       break;
     }
 
