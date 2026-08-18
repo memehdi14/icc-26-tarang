@@ -233,16 +233,25 @@ async def ensure_device_bonded(address: str):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        pair_stdout, _ = await asyncio.wait_for(pair_proc.communicate(), timeout=10.0)
+        pair_stdout, _ = await asyncio.wait_for(pair_proc.communicate(), timeout=12.0)
         output = pair_stdout.decode(errors="ignore")
         if "Pairing successful" in output or "Paired: yes" in output:
             print(f"[BLE][Security] ✅ Central-side pairing & bonding successful.")
             return True
         else:
-            print(f"[BLE][Security] Pairing status: {output.strip()}")
+            print(f"[BLE][Security] Pairing failed/stalled: {output.strip()}")
+            # Clean up stale/half-bonded cache in BlueZ so next attempt is clean
+            print(f"[BLE][Security] Clearing stale cache via 'bluetoothctl remove {address}'...")
+            await asyncio.create_subprocess_exec("bluetoothctl", "remove", address)
+            await asyncio.sleep(1.0)
             return False
     except Exception as e:
         print(f"[BLE][Security] Pre-pair check note: {e}")
+        # Clean up stale cache on exception
+        try:
+            await asyncio.create_subprocess_exec("bluetoothctl", "remove", address)
+        except Exception:
+            pass
         return False
 
 

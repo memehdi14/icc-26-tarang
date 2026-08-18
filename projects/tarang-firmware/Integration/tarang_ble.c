@@ -236,8 +236,8 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
     {
       printf("TARANG BLE BOOT OK\r\n");
 
-      /* Configure Security Manager: Just Works (No I/O) bonding */
-      sc = sl_bt_sm_configure(0x08, sl_bt_sm_io_capability_noinputnooutput);
+      /* Configure Security Manager: Just Works (No I/O) auto-accept bonding */
+      sc = sl_bt_sm_configure(0x00, sl_bt_sm_io_capability_noinputnooutput);
       app_assert_status(sc);
 
       /* Allow bonding requests */
@@ -288,27 +288,12 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       break;
     }
 
-    /* ── Connection Opened: stop advertising, set connection params ──── */
+    /* ── Connection Opened: record handle & reset timers ──── */
     case sl_bt_evt_connection_opened_id:
     {
       tarang_ble_conn_handle = evt->data.evt_connection_opened.connection;
-      printf("[BLE] Connection opened! Handle=0x%02X\r\n", tarang_ble_conn_handle);
-
-      /* Stop advertising while connected */
-      sl_bt_advertiser_stop(tarang_advertising_set_handle);
-
-      /* Request 20ms connection interval for high-throughput telemetry */
-      sc = sl_bt_connection_set_parameters(
-          tarang_ble_conn_handle,
-          16,       /* min CI 20ms */
-          16,       /* max CI 20ms */
-          0,        /* slave latency */
-          100,      /* supervision timeout */
-          0,        /* ce_len min */
-          0xFFFF);  /* ce_len max */
-      if (sc != SL_STATUS_OK) {
-        printf("[BLE] Connection param request status: 0x%04lX\r\n", (unsigned long)sc);
-      }
+      printf("[BLE] Connection opened! Handle=0x%02X (Waiting for Central SMP request)\r\n",
+             tarang_ble_conn_handle);
 
       /* Reset dispatch timers */
       last_telemetry_notify_ms = 0;
