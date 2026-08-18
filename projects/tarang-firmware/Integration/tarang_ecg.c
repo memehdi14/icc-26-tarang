@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "em_cmu.h"
 #include "em_iadc.h"
@@ -33,7 +34,8 @@
 #include "em_gpio.h"
 #include "em_emu.h"
 #include "em_core.h"
-#include "dmadrv.h"
+#include "em_ldma.h"
+#include "sl_dma_manager.h"
 
 /*******************************************************************************
  ******************************* DEFINES **************************************
@@ -50,14 +52,16 @@
 // 32-bit: matches SINGLEFIFODATA register width moved natively by DMA.
 static uint32_t ecg_buffer[ECG_BUFFER_SIZE];
 
-static unsigned int ecgDmaChannel;
+static uint8_t ecg_dma_channel = 0;
+
+// 2 linked descriptors for continuous hardware ping-pong
+static LDMA_Descriptor_t ecg_dma_desc[2];
 
 static volatile uint32_t sample_count       = 0;
 static volatile bool      half0Ready        = false;
 static volatile bool      half1Ready        = false;
 static volatile uint32_t  ecg_overrun_count = 0;
 static volatile uint32_t  halves_completed  = 0;
-/* first_half_seen removed — was declared but never used */
 static volatile uint32_t  half0Pending      = 0;
 static volatile uint32_t  half1Pending      = 0;
 
@@ -77,31 +81,26 @@ void LETIMER0_IRQHandler(void)
 }
 
 /***************************************************************************//**
- * DMADRV completion callback — called every time one half of ecg_buffer
- * finishes filling. Even sequenceNo → half 0, odd → half 1.
- * Returning true keeps the ping-pong going forever.
+ * DMA Channel IRQ Handler — called by sl_dma_manager on LDMA interrupt.
  ******************************************************************************/
-static bool ecgDmaCallback(unsigned int channel, unsigned int sequenceNo, void *userParam)
+static void ecg_dma_irq_handler(void)
 {
-  (void)channel;
-  (void)userParam;
-
   halves_completed++;
 
-  if ((sequenceNo & 1U) == 0U)
+  /* Even halves completed (0, 2, 4...) -> desc[0] filled half 0 */
+  if ((halves_completed & 1U) == 1U)
   {
     if (half0Pending > 0U) { ecg_overrun_count++; }
     half0Ready = true;
     half0Pending++;
   }
+  /* Odd halves completed (1, 3, 5...) -> desc[1] filled half 1 */
   else
   {
     if (half1Pending > 0U) { ecg_overrun_count++; }
     half1Ready = true;
     half1Pending++;
   }
-
-  return true;   // keep streaming forever
 }
 
 /***************************************************************************//**
@@ -197,27 +196,47 @@ void tarang_ecg_init(void)
   IADC_initSingle(IADC0, &initSingle, &singleInput);
 
   /**********************************************************************
-   * 6. DMADRV - continuous ping-pong transfer, IADC0 FIFO → RAM
+   * 6. Direct Hardware LDMA Ping-Pong Transfer: IADC0 FIFO → RAM
    **********************************************************************/
-  DMADRV_Init();
-  DMADRV_AllocateChannel(&ecgDmaChannel, NULL);
+  sl_status_t st_alloc = sl_dma_manager_allocate_channel(NULL, &ecg_dma_channel);
+  printf("[ECG-DIAG] sl_dma_manager_allocate_channel st=0x%04lX, ch=%u\r\n",
+         (unsigned long)st_alloc, (unsigned)ecg_dma_channel);
 
-  DMADRV_PeripheralMemoryPingPong(
-      ecgDmaChannel,
-      dmadrvPeripheralSignal_IADC0_IADC_SINGLE,
-      &ecg_buffer[0],                    // dst0 -- first half
-      &ecg_buffer[ECG_HALF_SAMPLES],     // dst1 -- second half
-      (void *)&(IADC0->SINGLEFIFODATA),  // src  -- IADC single FIFO
-      true,                              // dstInc: increment through each half
-      ECG_HALF_SAMPLES,                  // len
-      dmadrvDataSize4,                   // 32-bit
-      ecgDmaCallback,
-      NULL);
+  sl_status_t st_cb = sl_dma_manager_register_channel_irq_callback(NULL, ecg_dma_channel, ecg_dma_irq_handler);
+  printf("[ECG-DIAG] sl_dma_manager_register_callback st=0x%04lX\r\n", (unsigned long)st_cb);
+
+  // Descriptor 0: First half (samples 0 .. ECG_HALF_SAMPLES-1) -> Links to desc[1]
+  ecg_dma_desc[0] = (LDMA_Descriptor_t) LDMA_DESCRIPTOR_LINKREL_P2M_WORD(
+      &(IADC0->SINGLEFIFODATA),
+      &ecg_buffer[0],
+      ECG_HALF_SAMPLES,
+      1);
+  ecg_dma_desc[0].xfer.doneIfs = 1; // Assert interrupt on half-complete
+
+  // Descriptor 1: Second half (samples ECG_HALF_SAMPLES .. ECG_BUFFER_SIZE-1) -> Links to desc[0]
+  ecg_dma_desc[1] = (LDMA_Descriptor_t) LDMA_DESCRIPTOR_LINKREL_P2M_WORD(
+      &(IADC0->SINGLEFIFODATA),
+      &ecg_buffer[ECG_HALF_SAMPLES],
+      ECG_HALF_SAMPLES,
+      -1);
+  ecg_dma_desc[1].xfer.doneIfs = 1; // Assert interrupt on half-complete
+
+  LDMA_TransferCfg_t transferCfg;
+  memset(&transferCfg, 0, sizeof(transferCfg));
+  transferCfg.ldmaReqSel = ldmaPeripheralSignal_IADC0_IADC_SINGLE;
+
+  LDMA_StartTransfer(ecg_dma_channel, &transferCfg, &ecg_dma_desc[0]);
+
+  printf("[ECG-DIAG] Direct LDMA Ping-Pong Started on ch=%u\r\n", (unsigned)ecg_dma_channel);
 
   /**********************************************************************
    * 7. LETIMER enable - START LAST
    **********************************************************************/
   LETIMER_Enable(LETIMER0, true);
+
+  /* Diagnostic register read immediately following initialization */
+  printf("[ECG-DIAG] IADC0->STATUS = 0x%08lX\r\n", (unsigned long)IADC0->STATUS);
+  printf("[ECG-DIAG] IADC0->SINGLEFIFOCFG = 0x%08lX\r\n", (unsigned long)IADC0->SINGLEFIFOCFG);
 }
 
 static bool s_raw_streaming_enabled = false;
@@ -233,14 +252,22 @@ bool tarang_ecg_get_raw_streaming(void)
 }
 
 /***************************************************************************//**
- * ECG process action — check ping-pong halves.
- * Outputs compact telemetry stream for plotting without blocking CPU.
+ * ECG process action — drain completed DMA half-buffers.
+ *
+ * Each DMA half holds ECG_HALF_SAMPLES (64) raw ADC values.
+ * At 250 Hz, a half completes every 256ms.
+ * Every sample is fed into the DSP+AI pipeline AND optionally printed.
+ *
+ * Serial budget at 115200 baud (11520 B/s):
+ *   64 samples × ~18 bytes ("[ECG] raw=3923\r\n") = ~1152 bytes per half
+ *   Two halves per 512ms = ~4500 B/s ← 39% of bandwidth
  ******************************************************************************/
 void tarang_ecg_process(void)
 {
   bool drain_h0 = false;
   bool drain_h1 = false;
 
+  /* Atomically snapshot and clear flags to avoid race with DMA ISR */
   CORE_DECLARE_IRQ_STATE;
   CORE_ENTER_ATOMIC();
   if (half0Ready) {
@@ -258,11 +285,13 @@ void tarang_ecg_process(void)
   tarang_pipeline_t *pipeline = tarang_pipeline_get_instance();
   uint32_t now_ms = tarang_now_ms();
 
+  /* Drain half 0: samples [0 .. ECG_HALF_SAMPLES-1] */
   if (drain_h0 && pipeline) {
     for (uint32_t i = 0; i < ECG_HALF_SAMPLES; i++) {
       uint32_t offset_ms = ((ECG_HALF_SAMPLES - 1u - i) * 1000u) / TARANG_ECG_SAMPLE_RATE_HZ;
       uint32_t sample_ts = (now_ms >= offset_ms) ? (now_ms - offset_ms) : 0u;
-      uint32_t raw_val = ecg_buffer[i] & 0x00FFFFFFu;
+      /* 12-bit ADC data mask: ensures clean 0..4095 range and strips any metadata bits */
+      uint32_t raw_val = ecg_buffer[i] & 0x0FFFu;
       tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts);
       if (s_raw_streaming_enabled) {
         printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
@@ -270,11 +299,13 @@ void tarang_ecg_process(void)
     }
   }
 
+  /* Drain half 1: samples [ECG_HALF_SAMPLES .. ECG_BUFFER_SIZE-1] */
   if (drain_h1 && pipeline) {
     for (uint32_t i = ECG_HALF_SAMPLES; i < ECG_BUFFER_SIZE; i++) {
       uint32_t offset_ms = ((ECG_BUFFER_SIZE - 1u - i) * 1000u) / TARANG_ECG_SAMPLE_RATE_HZ;
       uint32_t sample_ts = (now_ms >= offset_ms) ? (now_ms - offset_ms) : 0u;
-      uint32_t raw_val = ecg_buffer[i] & 0x00FFFFFFu;
+      /* 12-bit ADC data mask: ensures clean 0..4095 range and strips any metadata bits */
+      uint32_t raw_val = ecg_buffer[i] & 0x0FFFu;
       tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts);
       if (s_raw_streaming_enabled) {
         printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
@@ -329,12 +360,10 @@ bool tarang_ecg_is_valid(void)
 bool tarang_ecg_is_lead_off(void)
 {
 #if TARANG_ECG_LO_PINS_WIRED
-  /* Read physical LO+ and LO- pins from AD8232 */
   bool lo_plus = (GPIO_PinInGet(TARANG_ECG_LO_PLUS_PORT, TARANG_ECG_LO_PLUS_PIN) != 0);
   bool lo_minus = (GPIO_PinInGet(TARANG_ECG_LO_MINUS_PORT, TARANG_ECG_LO_MINUS_PIN) != 0);
   return lo_plus || lo_minus;
 #else
-  /* Evaluated in pipeline via ADC rail saturation (< 50 or > 4045 on 12-bit) / SQI < 30 */
   return false;
 #endif
 }

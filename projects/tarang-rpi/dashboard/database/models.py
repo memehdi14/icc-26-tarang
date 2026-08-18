@@ -6,7 +6,7 @@ Tables: telemetry_events, patients, device_diagnostics, system_settings
 
 from sqlalchemy import (
     Column, Integer, BigInteger, SmallInteger, Float, String, Boolean,
-    DateTime, JSON, Text, func
+    DateTime, JSON, Text, ForeignKey, func
 )
 from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime
@@ -81,6 +81,64 @@ class Patient(Base):
             "blood_type": self.blood_type,
             "allergies": self.allergies or [],
             "medical_history": self.medical_history or [],
+        }
+
+
+class Device(Base):
+    """A wearable device that can be assigned to a patient."""
+    __tablename__ = "devices"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    device_id = Column(String(64), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False, default="Tarang Wearable")
+    mac_address = Column(String(20), unique=True, nullable=True, index=True)
+    firmware_version = Column(String(50), nullable=True)
+    status = Column(String(20), nullable=False, default="available", index=True)
+    assigned_patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True, index=True)
+    last_seen_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "device_id": self.device_id,
+            "name": self.name,
+            "mac_address": self.mac_address,
+            "firmware_version": self.firmware_version,
+            "status": self.status,
+            "assigned_patient_id": self.assigned_patient_id,
+            "last_seen_at": self.last_seen_at.isoformat() if self.last_seen_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class MonitoringSession(Base):
+    """A bounded monitoring period linking one patient and wearable."""
+    __tablename__ = "monitoring_sessions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), unique=True, nullable=False, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
+    device_id = Column(String(64), ForeignKey("devices.device_id"), nullable=True, index=True)
+    status = Column(String(20), nullable=False, default="active", index=True)
+    bed = Column(String(50), nullable=True)
+    notes = Column(Text, nullable=True)
+    started_at = Column(DateTime, default=func.now(), nullable=False, index=True)
+    ended_at = Column(DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "session_id": self.session_id,
+            "patient_id": self.patient_id,
+            "device_id": self.device_id,
+            "status": self.status,
+            "bed": self.bed,
+            "notes": self.notes,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "ended_at": self.ended_at.isoformat() if self.ended_at else None,
         }
 
 

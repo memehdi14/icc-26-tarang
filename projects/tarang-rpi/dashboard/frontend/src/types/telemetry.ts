@@ -1,6 +1,6 @@
 export interface ClinicalTelemetryPacket {
   timestamp_ms: number;
-  beat_class: 0 | 1 | 2; // 0 = Normal, 1 = PAC (Premature Atrial), 2 = PVC (Premature Ventricular)
+  beat_class: 0 | 1 | 2 | 3; // 0 = Normal, 1 = PAC, 2 = PVC, 3 = Unclassified
   confidence: number; // 0 - 255
   rr_interval_ms: number;
   rhythm_flags: number; // Bitmask: 0x01 Normal, 0x02 Brady, 0x04 Tachy, 0x08 Arrhythmia
@@ -69,4 +69,31 @@ export interface SystemSettings {
   gridDensity: 'dense' | 'standard' | 'relaxed';
   audioAlertsEnabled: boolean;
   attendingDoctor: string;
+}
+
+export type InitializationStageId =
+  | 'connecting'
+  | 'sensor_detected'
+  | 'signal_initializing'
+  | 'calibrating'
+  | 'ai_ready'
+  | 'ready'
+  | 'disconnected'
+  | 'error';
+
+export interface InitializationStageInfo {
+  id: InitializationStageId;
+  title: string;
+  description: string;
+  completed: boolean;
+  current: boolean;
+}
+
+export interface DeviceStatusMessage {
+  type: 'device_status';
+  status: InitializationStageId;
+  progress?: number;
+  message?: string;
+  uptime_s?: number;
+  ecg_sqi?: number;
 }

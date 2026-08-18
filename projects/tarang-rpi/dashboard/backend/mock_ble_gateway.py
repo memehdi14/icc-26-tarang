@@ -16,11 +16,13 @@ Run (with backend already started):
 """
 
 import asyncio
+import os
 import random
 import time
 import httpx
 
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = os.getenv("TARANG_BACKEND_URL", "http://localhost:8000").rstrip("/")
+SESSION_ID = os.getenv("TARANG_SESSION_ID")
 INGEST_URL = f"{BACKEND_URL}/api/telemetry/ingest"
 DIAGNOSTICS_URL = f"{BACKEND_URL}/api/diagnostics/update"
 INTERVAL_S = 1.0
@@ -75,6 +77,7 @@ async def generate_packet(state: dict) -> dict:
     state["pvc_burden"] = round(max(0.0, min(5.0, state["pvc_burden"] + random.uniform(-0.03, 0.06))), 1)
 
     return {
+        "session_id": SESSION_ID,
         "timestamp_ms": int(time.time() * 1000),
         "beat_class": beat_class,
         "confidence": confidence,

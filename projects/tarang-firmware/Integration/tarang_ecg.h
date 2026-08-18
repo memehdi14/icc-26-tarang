@@ -30,7 +30,8 @@ void tarang_ecg_init(void);
 
 /***************************************************************************//**
  * ECG process action — call from app_process_action().
- * Checks ping-pong half-buffer flags and prints data when ready.
+ * Checks ping-pong half-buffer flags, feeds samples to DSP pipeline,
+ * and optionally prints raw data when streaming is enabled.
  * Returns immediately if no half is ready.
  ******************************************************************************/
 void tarang_ecg_process(void);

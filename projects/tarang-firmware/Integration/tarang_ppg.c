@@ -14,8 +14,6 @@
  ******************************************************************************/
 
 #include "tarang_ppg.h"
-#include "tarang_time.h"
-#include "tarang_debug_config.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -64,8 +62,6 @@
 
 #define MAX30102_MAX_DRAIN_PER_SERVICE  8u
 #define MAX30102_RECOVERY_THRESHOLD     4u
-#define MAX30102_STALE_TIMEOUT_MS        2000u
-#define MAX30102_RECOVERY_INTERVAL_MS    5000u
 
 /*******************************************************************************
  * Hardware Pin Definition — MAX30102 INT connected to PC06
@@ -102,9 +98,6 @@ static volatile uint8_t  int_status2      = 0u;
 static volatile bool     max30102_found   = false;
 static volatile uint32_t consecutive_i2c_failures = 0u;
 static volatile uint32_t recovery_attempts = 0u;
-static volatile tarang_sensor_health_t ppg_health = TARANG_SENSOR_DISABLED;
-static volatile uint32_t ppg_last_sample_ms = 0u;
-static volatile uint32_t ppg_last_recovery_ms = 0u;
 
 static volatile I2C_TransferReturn_TypeDef last_ppg_i2c_ret = i2cTransferDone;
 
@@ -119,7 +112,7 @@ static void ppg_delay_ms(uint32_t ms)
 }
 
 /* 9-pulse I2C bus clear procedure to release any stuck I2C slave holding SDA low */
-void tarang_i2c_bus_clear(void)
+static void i2c_bus_clear(void)
 {
     printf("[PPG] I2C bus clear: checking SDA/SCL state...\r\n");
     
@@ -154,25 +147,12 @@ void tarang_i2c_bus_clear(void)
     sda_state = GPIO_PinInGet(gpioPortC, 7);
     printf("[PPG] After clear: SCL=%d SDA=%d\r\n", scl_state, sda_state);
 
-    // Re-init I2CSPM peripheral
-    sl_i2cspm_init_instances();
+    // NOTE: Do NOT call sl_i2cspm_init_instances() here — it's already
+    // initialized by autogen sl_driver_init() and app.c. Re-initializing
+    // would reset the shared I2C peripheral and corrupt any in-progress
+    // transactions on the shared bus (IMU uses the same I2C1).
     ppg_delay_ms(10);
-    printf("[PPG] I2CSPM re-initialized\r\n");
-}
-
-/* Fast non-blocking I2C slave probe (<0.2 ms execution time) */
-bool tarang_i2c_quick_ping(uint8_t addr)
-{
-    I2C_TransferSeq_TypeDef seq;
-    uint8_t dummy = 0;
-
-    seq.addr = (uint16_t)(addr << 1);
-    seq.flags = I2C_FLAG_WRITE;
-    seq.buf[0].data = &dummy;
-    seq.buf[0].len = 0;
-
-    I2C_TransferReturn_TypeDef ret = I2CSPM_Transfer(sl_i2cspm_mikroe, &seq);
-    return (ret == i2cTransferDone);
+    printf("[PPG] I2C bus clear done (no peripheral re-init)\r\n");
 }
 
 static bool max30102_configure_sensor(void)
@@ -213,7 +193,6 @@ static bool max30102_configure_sensor(void)
 static void max30102_recover(void)
 {
     recovery_attempts++;
-    ppg_last_recovery_ms = tarang_now_ms();
 
     /*
      * NOTE: Do NOT call sl_i2cspm_init_instances() here at runtime.
@@ -225,7 +204,6 @@ static void max30102_recover(void)
     if (max30102_configure_sensor()) {
         consecutive_i2c_failures = 0u;
         max30102_found = true;
-        ppg_health = TARANG_SENSOR_STARTING;
         ppg_data_ready = false;
         max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
         max30102_read_reg(MAX30102_INT_STATUS2, (uint8_t *)&int_status2);
@@ -239,8 +217,7 @@ static void max30102_recover(void)
                (unsigned long)recovery_attempts);
     } else {
         max30102_found = false;
-        ppg_health = TARANG_SENSOR_UNAVAILABLE;
-        printf("[PPG] RECOVERY FAILED ret=%d attempt=%lu; retrying later\r\n",
+        printf("[PPG] RECOVERY FAILED ret=%d attempt=%lu\r\n",
                (int)last_ppg_i2c_ret,
                (unsigned long)recovery_attempts);
     }
@@ -314,26 +291,20 @@ static void max30102_gpio_callback(uint8_t pin)
 /*******************************************************************************
  * tarang_ppg_init
  ******************************************************************************/
-void tarang_ppg_init(bool bus_already_clear)
+void tarang_ppg_init(void)
 {
-    ppg_health = TARANG_SENSOR_STARTING;
-    ppg_last_sample_ms = tarang_now_ms();
-    ppg_last_recovery_ms = ppg_last_sample_ms;
     printf("\r\n");
     printf("====================================\r\n");
     printf("MAX30102 INTERRUPT-DRIVEN TARANG PPG\r\n");
     printf("====================================\r\n");
 
     /* ── Step 0: Clear I2C bus (in case slave was holding SDA low) ────── */
-    if (!bus_already_clear) {
-      tarang_i2c_bus_clear();
-    }
+    i2c_bus_clear();
 
     /* ── Step 1: Configure MAX30102 sensor registers with retry ──────── */
     bool config_ok = false;
-    int max_attempts = bus_already_clear ? 1 : 3;
-    for (int attempt = 1; attempt <= max_attempts; attempt++) {
-        printf("[PPG] Config attempt %d/%d...\r\n", attempt, max_attempts);
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        printf("[PPG] Config attempt %d/3...\r\n", attempt);
         
         if (max30102_configure_sensor()) {
             config_ok = true;
@@ -344,32 +315,29 @@ void tarang_ppg_init(bool bus_already_clear)
         write_failures++;
         printf("[PPG] Config failed (i2c_ret=%d)\r\n", (int)last_ppg_i2c_ret);
         
-        if (attempt < max_attempts) {
+        if (attempt < 3) {
             printf("[PPG] Retrying after delay...\r\n");
-            ppg_delay_ms(20);
-            tarang_i2c_bus_clear();  // Try clearing bus again
+            ppg_delay_ms(100);
+            i2c_bus_clear();  // Try clearing bus again
         }
     }
 
     if (!config_ok) {
         printf("[PPG] SENSOR CONFIG FAILED after 3 attempts\r\n");
-        max30102_found = false;
-        ppg_health = TARANG_SENSOR_UNAVAILABLE;
+        return;
     }
 
-    if (config_ok) {
-        uint8_t rb_int1 = 0, rb_mode = 0;
-        max30102_read_reg(MAX30102_INT_ENABLE1, &rb_int1);
-        max30102_read_reg(MAX30102_MODE_CONFIG, &rb_mode);
-        printf("[PPG] readback: INT_ENABLE1=0x%02X MODE_CONFIG=0x%02X ok=%d\r\n",
-               rb_int1, rb_mode, (int)config_ok);
+    uint8_t rb_int1 = 0, rb_mode = 0;
+    max30102_read_reg(MAX30102_INT_ENABLE1, &rb_int1);
+    max30102_read_reg(MAX30102_MODE_CONFIG, &rb_mode);
+    printf("[PPG] readback: INT_ENABLE1=0x%02X MODE_CONFIG=0x%02X ok=%d\r\n",
+           rb_int1, rb_mode, (int)config_ok);
 
-        /* Clear pending interrupt status after sensor config, before GPIO service. */
-        max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
-        max30102_read_reg(MAX30102_INT_STATUS2, (uint8_t *)&int_status2);
-        printf("[PPG] INT_STATUS1=0x%02X INT_STATUS2=0x%02X (cleared)\r\n",
-               int_status1, int_status2);
-    }
+    /* Clear pending interrupt status after sensor config, before GPIO service. */
+    max30102_read_reg(MAX30102_INT_STATUS1, (uint8_t *)&int_status1);
+    max30102_read_reg(MAX30102_INT_STATUS2, (uint8_t *)&int_status2);
+    printf("[PPG] INT_STATUS1=0x%02X INT_STATUS2=0x%02X (cleared)\r\n",
+           int_status1, int_status2);
 
     /* ── Step 2: Configure PC06 as interrupt input ───────────────────── */
 
@@ -395,7 +363,7 @@ void tarang_ppg_init(bool bus_already_clear)
         ppg_data_ready = true;
     }
 
-    max30102_found = config_ok;
+    max30102_found = true;
 
     printf("[PPG] PC06 interrupt armed. Falling edge -> PPG_RDY @ 100Hz\r\n");
     printf("[PPG] Init complete. Waiting for samples...\r\n");
@@ -406,26 +374,6 @@ void tarang_ppg_init(bool bus_already_clear)
  ******************************************************************************/
 void tarang_ppg_process(void)
 {
-    uint32_t now_ms = tarang_now_ms();
-
-    if ((uint32_t)(now_ms - ppg_last_sample_ms) >= MAX30102_STALE_TIMEOUT_MS &&
-        (ppg_health == TARANG_SENSOR_OK ||
-         ppg_health == TARANG_SENSOR_STARTING)) {
-        ppg_health = TARANG_SENSOR_STALE;
-        printf("[PPG] STALE - no fresh sample for 2 seconds; ECG pipeline continues\r\n");
-    }
-
-    if ((ppg_health == TARANG_SENSOR_STALE ||
-         ppg_health == TARANG_SENSOR_UNAVAILABLE) &&
-        (uint32_t)(now_ms - ppg_last_recovery_ms) >=
-            MAX30102_RECOVERY_INTERVAL_MS) {
-        max30102_recover();
-    }
-
-    if (ppg_health == TARANG_SENSOR_UNAVAILABLE) {
-        return;
-    }
-
     uint8_t fifo_data[6];
     bool service_sensor = false;
     uint8_t drained = 0u;
@@ -453,7 +401,6 @@ void tarang_ppg_process(void)
     if (!(ok1 && ok2)) {
         read_failures++;
         consecutive_i2c_failures++;
-        ppg_health = TARANG_SENSOR_UNAVAILABLE;
         printf("[PPG] I2C FAIL status1=%d status2=%d ret=%d fail=%lu\r\n",
                ok1, ok2, (int)last_ppg_i2c_ret,
                (unsigned long)consecutive_i2c_failures);
@@ -509,6 +456,7 @@ void tarang_ppg_process(void)
         ir_sample  = ((uint32_t)fifo_data[3] << 16u)
                    | ((uint32_t)fifo_data[4] <<  8u)
                    |  (uint32_t)fifo_data[5];
+
         red_sample &= 0x0003FFFFu;
         ir_sample  &= 0x0003FFFFu;
 
@@ -524,9 +472,8 @@ void tarang_ppg_process(void)
         }
 
         ppg_sample_count++;
-        ppg_last_sample_ms = now_ms;
-        ppg_health = TARANG_SENSOR_OK;
         drained++;
+        status_has_data = false;
     }
 
     consecutive_i2c_failures = 0u;
@@ -539,15 +486,14 @@ void tarang_ppg_process(void)
         ppg_data_ready = true;
     }
 
-#if !TARANG_DEBUG_TELEMETRY
-    /* Print EVERY sample at native 100 Hz sample rate */
-    printf("[PPG] cnt=%lu int=%lu RED=%lu IR=%lu drained=%u\r\n",
-           (unsigned long)ppg_sample_count,
-           (unsigned long)interrupt_count,
-           (unsigned long)red_sample,
-           (unsigned long)ir_sample,
-           (unsigned int)drained);
-#endif
+    if ((drained > 1u) || ((ppg_sample_count != 0u) && ((ppg_sample_count % 100u) == 0u))) {
+        printf("[PPG] cnt=%lu int=%lu RED=%lu IR=%lu drained=%u\r\n",
+               (unsigned long)ppg_sample_count,
+               (unsigned long)interrupt_count,
+               (unsigned long)red_sample,
+               (unsigned long)ir_sample,
+               (unsigned int)drained);
+    }
 }
 
 /*******************************************************************************
@@ -578,22 +524,14 @@ bool tarang_ppg_is_found(void)
     return max30102_found;
 }
 
-tarang_sensor_health_t tarang_ppg_get_health(void)
-{
-    return ppg_health;
-}
-
-bool tarang_ppg_is_valid(void)
-{
-    return tarang_sensor_health_is_valid(ppg_health);
-}
-
 bool tarang_ppg_is_finger_present(void)
 {
-    return max30102_found && (ir_sample > 8000u) && (ppg_health == TARANG_SENSOR_OK);
+    /* Stub: no finger presence detection in PR #24 driver */
+    return (ppg_sample_count > 0 && max30102_found);
 }
 
 uint32_t tarang_ppg_get_consecutive_failures(void)
 {
-    return consecutive_i2c_failures;
+    /* Stub: no failure tracking in PR #24 driver */
+    return max30102_found ? 0 : 1;
 }

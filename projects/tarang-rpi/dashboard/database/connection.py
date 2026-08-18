@@ -6,7 +6,7 @@ Change DATABASE_URL to postgresql://... for production.
 """
 
 import os
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 from .models import Base
 
@@ -23,6 +23,16 @@ engine = create_engine(
     echo=False,
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
 )
+
+
+if DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def configure_sqlite(dbapi_connection, _connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -16,9 +16,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from database.connection import init_db, SessionLocal
-from database.models import Patient, DeviceDiagnostics, SystemSetting
+from database.models import Device, Patient, DeviceDiagnostics, SystemSetting
 
-from routers import telemetry, patients, diagnostics, settings as settings_router, health as health_router
+from routers import (
+    telemetry,
+    patients,
+    diagnostics,
+    devices,
+    sessions,
+    integrations,
+    settings as settings_router,
+    health as health_router,
+)
 
 
 # ── Seed default data on first run ───────────────────────────────────────────
@@ -60,6 +69,15 @@ def seed_defaults():
                 battery_pct=0,
             ))
 
+        if not db.query(Device).first():
+            db.add(Device(
+                device_id="tarang-efr32-demo",
+                name="EFR32MG26 Tarang Wearable",
+                mac_address="70:B3:D5:70:9A:C4",
+                firmware_version="v1.0.0-EFR32MG26",
+                status="available",
+            ))
+
         # Default system settings
         if not db.query(SystemSetting).first():
             db.add(SystemSetting())
@@ -90,16 +108,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow Next.js dev server and same-origin RPi access
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("TARANG_CORS_ORIGINS", "*").split(",")
+    if origin.strip()
+]
+
+# Wildcard mode is convenient on a hackathon LAN. Set TARANG_CORS_ORIGINS to
+# comma-separated frontend origins before exposing the service externally.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",   # Next.js dev server
-        "http://127.0.0.1:3000",
-        "http://0.0.0.0:3000",
-        "*",                       # Allow all during hackathon; restrict in production
-    ],
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials="*" not in CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -111,6 +131,9 @@ app.include_router(patients.router)
 app.include_router(diagnostics.router)
 app.include_router(settings_router.router)
 app.include_router(health_router.router)
+app.include_router(devices.router)
+app.include_router(sessions.router)
+app.include_router(integrations.router)
 
 # Mount WebSocket endpoint at /ws/telemetry (separate from REST prefix)
 app.add_api_websocket_route("/ws/telemetry", telemetry.websocket_telemetry)

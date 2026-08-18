@@ -6,8 +6,10 @@ import { WorkstationView } from '../src/components/WorkstationView';
 import { PatientSummarySidebar } from '../src/components/PatientSummarySidebar';
 import { DiagnosticsView } from '../src/components/DiagnosticsView';
 import { SettingsView } from '../src/components/SettingsView';
+import { DeviceInitialization } from '../src/components/DeviceInitialization';
 import {
   ClinicalTelemetryPacket,
+  DeviceHealthTelemetry,
   PatientInfo,
   TelemetryDiagnostics,
   SystemSettings,
@@ -96,11 +98,26 @@ const DEFAULT_SETTINGS: SystemSettings = {
   attendingDoctor: 'Dr. Aris',
 };
 
+const DEFAULT_DEVICE_HEALTH: DeviceHealthTelemetry = {
+  uptimeS: 0,
+  ecgLeadOff: false,
+  ecgSqi: 255,
+  ppgFingerPresent: false,
+  imuOk: false,
+  i2cFailureCount: 0,
+  dspOverflowCount: 0,
+  ecgOverrunCount: 0,
+  bleRssi: null,
+  batteryPct: null,
+  fwVersion: '1.0.0',
+  sessionId: null,
+};
+
 // ── Telemetry packet from API (snake_case) → frontend type (camelCase) ────────
 function mapApiTelemetry(raw: Record<string, unknown>): ClinicalTelemetryPacket {
   return {
     timestamp_ms: (raw.timestamp_ms as number) ?? Date.now(),
-    beat_class: (raw.beat_class as 0 | 1 | 2) ?? 0,
+    beat_class: (raw.beat_class as 0 | 1 | 2 | 3) ?? 0,
     confidence: (raw.confidence as number) ?? 0,
     rr_interval_ms: (raw.rr_interval_ms as number) ?? 0,
     rhythm_flags: (raw.rhythm_flags as number) ?? 0,
@@ -109,6 +126,23 @@ function mapApiTelemetry(raw: Record<string, unknown>): ClinicalTelemetryPacket 
     current_hr: (raw.current_hr as number) ?? 0,
     sdnn_ms: (raw.sdnn_ms as number) ?? 0,
     rmssd_ms: (raw.rmssd_ms as number) ?? 0,
+  };
+}
+
+function mapApiDeviceHealth(raw: Record<string, unknown>): DeviceHealthTelemetry {
+  return {
+    uptimeS: (raw.uptimeS as number) ?? 0,
+    ecgLeadOff: (raw.ecgLeadOff as boolean) ?? false,
+    ecgSqi: (raw.ecgSqi as number) ?? 255,
+    ppgFingerPresent: (raw.ppgFingerPresent as boolean) ?? false,
+    imuOk: (raw.imuOk as boolean) ?? false,
+    i2cFailureCount: (raw.i2cFailureCount as number) ?? 0,
+    dspOverflowCount: (raw.dspOverflowCount as number) ?? 0,
+    ecgOverrunCount: (raw.ecgOverrunCount as number) ?? 0,
+    bleRssi: (raw.bleRssi as number | null) ?? null,
+    batteryPct: (raw.batteryPct as number | null) ?? null,
+    fwVersion: (raw.fwVersion as string) ?? '1.0.0',
+    sessionId: (raw.sessionId as string | null) ?? null,
   };
 }
 
@@ -152,11 +186,13 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'workstation' | 'diagnostics' | 'settings'>('workstation');
   const [bleConnected, setBleConnected] = useState(false);
   const [backendOnline, setBackendOnline] = useState(false);
+  const [isDeviceReady, setIsDeviceReady] = useState(false);
 
   const [telemetry, setTelemetry] = useState<ClinicalTelemetryPacket>(DEFAULT_TELEMETRY);
   const [eventLog, setEventLog] = useState<ClinicalTelemetryPacket[]>([]);
   const [patient, setPatient] = useState<PatientInfo>(DEFAULT_PATIENT);
   const [diagnostics, setDiagnostics] = useState<TelemetryDiagnostics>(DEFAULT_DIAGNOSTICS);
+  const [deviceHealth, setDeviceHealth] = useState<DeviceHealthTelemetry>(DEFAULT_DEVICE_HEALTH);
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
 
   // ── Fetch patient, settings, diagnostics on mount ──────────────────────────
@@ -196,6 +232,11 @@ export default function Home() {
         if (tRes.ok) {
           const tData = await tRes.json();
           if (!tData.message) setTelemetry(mapApiTelemetry(tData));
+        }
+
+        const healthRes = await fetch(`${apiBase}/api/health/device`);
+        if (healthRes.ok) {
+          setDeviceHealth(mapApiDeviceHealth(await healthRes.json()));
         }
 
         // History events
@@ -259,6 +300,8 @@ export default function Home() {
             const mappedDiag = mapApiDiagnostics(raw.data as Record<string, unknown>);
             setDiagnostics(mappedDiag);
             setBleConnected(mappedDiag.bleConnected);
+          } else if (raw.type === 'device_health' && raw.data) {
+            setDeviceHealth(mapApiDeviceHealth(raw.data as Record<string, unknown>));
           } else {
             const rawPacket = (raw.data && raw.type === 'telemetry') ? (raw.data as Record<string, unknown>) : raw;
             const mappedPacket = mapApiTelemetry(rawPacket);
@@ -324,18 +367,30 @@ export default function Home() {
       <main
         style={{
           paddingLeft: '272px',
-          paddingRight: activeTab === 'workstation' ? '336px' : '16px',
+          paddingRight: activeTab === 'workstation' && isDeviceReady ? '336px' : '16px',
           paddingTop: '20px',
           paddingBottom: '32px',
         }}
         className="transition-all duration-200"
       >
-        {activeTab === 'workstation' && (
+        {activeTab === 'workstation' && !isDeviceReady && (
+          <DeviceInitialization
+            bleConnected={bleConnected}
+            telemetry={telemetry}
+            deviceHealth={deviceHealth}
+            onComplete={() => setIsDeviceReady(true)}
+            onRetry={() => {
+              window.location.reload();
+            }}
+          />
+        )}
+
+        {activeTab === 'workstation' && isDeviceReady && (
           <WorkstationView telemetry={telemetry} patient={patient} eventLog={eventLog} />
         )}
 
         {activeTab === 'diagnostics' && (
-          <DiagnosticsView diagnostics={diagnostics} />
+          <DiagnosticsView diagnostics={diagnostics} deviceHealth={deviceHealth} />
         )}
 
         {activeTab === 'settings' && (
@@ -343,8 +398,8 @@ export default function Home() {
         )}
       </main>
 
-      {/* Right Sidebar (Patient Summary — Workstation View Only) */}
-      {activeTab === 'workstation' && (
+      {/* Right Sidebar (Patient Summary — Workstation View Only when Ready) */}
+      {activeTab === 'workstation' && isDeviceReady && (
         <PatientSummarySidebar patient={patient} telemetry={telemetry} />
       )}
     </div>

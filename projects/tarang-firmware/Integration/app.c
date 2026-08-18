@@ -2,13 +2,19 @@
  * @file
  * @brief TARANG Integration — Orchestrator
  *
- * Thin orchestrator that initializes and processes all 3 sensor modules.
- * Each module is a direct extraction from its proven individual test project.
+ * Thin orchestrator that initializes and processes all 3 sensor modules
+ * plus the DSP → AI → Clinical Engine → BLE telemetry pipeline.
  *
  * Sensors:
  *   ECG  — LETIMER→PRS→IADC→DMADRV ping-pong (from ECG/july6)
  *   PPG  — MAX30102 I2C interrupt-driven      (from PPG/ppg)
  *   IMU  — MPU6050 I2C interrupt-driven        (from IMU/AMIMU)
+ *
+ * Pipeline (4-tier AI cascade):
+ *   Tier 0: DSP heuristics (always-on, Pan-Tompkins R-peak detection)
+ *   Tier 1: Gate CNN (~40KB, ~12ms on MVP) — only if suspicious
+ *   Tier 2: SV Head CNN (~32KB, ~10ms on MVP) — only if Gate flags abnormal
+ *   Tier 3: Clinical Event Engine (every beat)
  *
  * Target : EFR32MG26B510F3200IM48 (BRD2709A)
  *
@@ -20,6 +26,8 @@
  *   TARANG_ENABLE_ECG   — ECG analog acquisition (IADC + DMADRV)
  *   TARANG_ENABLE_PPG   — PPG optical sensor     (MAX30102 I2C)
  *   TARANG_ENABLE_IMU   — IMU motion sensor      (MPU6050 I2C)
+ *   TARANG_ENABLE_BLE   — BLE telemetry service
+ *   TARANG_ENABLE_RAW_ECG_STREAM — Output raw ADC via VCOM at 250 Hz
  *
  * Example: to test only ECG, set ECG=1, PPG=0, IMU=0 and rebuild.
  * ─────────────────────────────────────────────────────────────────────────
@@ -37,12 +45,25 @@
 #include <stdint.h>
 
 #include "em_cmu.h"
+#include "em_gpio.h"
 #include "gpiointerrupt.h"
+#include "sl_i2cspm.h"
 #include "sl_i2cspm_instances.h"
+#include "sl_sleeptimer.h"
 
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
 #include "sl_power_manager.h"
 #endif
+
+/* Sleeptimer handle for periodic 10ms wakeup */
+static sl_sleeptimer_timer_handle_t wakeup_timer;
+static void wakeup_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
+{
+  (void)handle;
+  (void)data;
+  /* Empty — the sole purpose is to wake the CPU from EM1 every 10ms
+   * so the super loop runs and processes any pending sensor data. */
+}
 
 /* Simple delay for sensor power-up stabilization */
 static void delay_ms(uint32_t ms)
@@ -62,7 +83,7 @@ static void delay_ms(uint32_t ms)
 #define TARANG_ENABLE_RAW_ECG_STREAM 1
 
 #ifndef TARANG_RUN_BOOT_TESTS
-#define TARANG_RUN_BOOT_TESTS 1
+#define TARANG_RUN_BOOT_TESTS 0   /* Set to 1 to run AI/ML boot test — adds ~100ms startup delay */
 #endif
 
 /***************************************************************************//**
@@ -70,20 +91,21 @@ static void delay_ms(uint32_t ms)
  ******************************************************************************/
 void app_init(void)
 {
+  /*
+   * CRITICAL: Prevent the power manager from entering EM2/EM3.
+   * EM2 shuts down I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
+   * EM1 keeps all peripherals alive while still saving power.
+   * Must be set BEFORE any peripheral usage (including boot tests).
+   */
+#if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
+  sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
+#endif
+
 #if TARANG_RUN_BOOT_TESTS
   /* === PHASE 1 & 2 VERIFICATION TEST AT BOOT === */
   extern void test_ml_model_multi_input(void);
   test_ml_model_multi_input();
   /* === END BOOT TEST === */
-#endif
-
-  /*
-   * CRITICAL: Prevent the power manager from entering EM2/EM3.
-   * EM2 shuts down I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
-   * EM1 keeps all peripherals alive while still saving power.
-   */
-#if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
-  sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
 #endif
 
   printf("\r\n");
@@ -98,23 +120,79 @@ void app_init(void)
   printf("==========================================\r\n");
 
   /*
-   * GPIO clock + interrupt dispatcher — ONCE before any sensor init.
-   * Both PPG (PC06) and IMU (PC00) use GPIOINT_CallbackRegister(),
-   * which requires GPIOINT_Init() to have been called first.
+   * GPIO clock — ensure enabled before sensor init.
+   * NOTE: GPIOINT_Init() is already called by autogen sl_driver_init()
+   * in sl_event_handler.c, so we do NOT call it again here.
    */
   CMU_ClockEnable(cmuClock_GPIO, true);
-  GPIOINT_Init();
 
   /*
    * CRITICAL: Give I2C sensors time to power up after flash/reset.
    * MAX30102 and MPU6050 both need ~50-100ms for stable power-on.
-   * Re-initialize I2CSPM to ensure clean bus state.
    */
   printf("[INIT] Waiting for sensor power-up (100ms)...\r\n");
   delay_ms(100);
-  printf("[INIT] Re-initializing I2C bus...\r\n");
-  sl_i2cspm_init_instances();
+
+  /*
+   * I2C BUS RECOVERY: If the MPU6050/MAX30102 was mid-transaction when
+   * the debugger halted or the MCU reset, the slave may be holding SDA low.
+   * Toggle SCL 9 times + generate a STOP to release the bus.
+   * This MUST happen BEFORE sl_i2cspm_init_instances().
+   */
+  printf("[INIT] I2C bus recovery (9 SCL pulses)...\r\n");
+  {
+    /* PC05 = SCL, PC07 = SDA (I2C1 mikroe) */
+    GPIO_PinModeSet(gpioPortC, 5, gpioModeWiredAndPullUp, 1);
+    GPIO_PinModeSet(gpioPortC, 7, gpioModeWiredAndPullUp, 1);
+
+    for (int i = 0; i < 9; i++) {
+      GPIO_PinOutClear(gpioPortC, 5);  /* SCL low */
+      delay_ms(1);
+      GPIO_PinOutSet(gpioPortC, 5);    /* SCL high */
+      delay_ms(1);
+    }
+    /* Generate STOP: SDA low→high while SCL high */
+    GPIO_PinOutClear(gpioPortC, 7);    /* SDA low */
+    delay_ms(1);
+    GPIO_PinOutSet(gpioPortC, 5);      /* SCL high */
+    delay_ms(1);
+    GPIO_PinOutSet(gpioPortC, 7);      /* SDA high → STOP */
+    delay_ms(1);
+
+    printf("[INIT] Bus state: SCL=%u SDA=%u\r\n",
+           (unsigned)GPIO_PinInGet(gpioPortC, 5),
+           (unsigned)GPIO_PinInGet(gpioPortC, 7));
+  }
+
+  /* NOTE: sl_i2cspm_init_instances() is already called by autogen
+   * sl_driver_init() in sl_event_handler.c. No re-init needed. */
+  printf("[INIT] I2C bus ready (autogen init).\r\n");
   delay_ms(50);
+
+  /* ── I2C Bus Scan — probe known sensor addresses ───────────────────── */
+  {
+    printf("[INIT] I2C scan: probing known addresses...\r\n");
+    uint8_t addrs[] = { 0x57, 0x68 };  /* MAX30102, MPU6050 */
+    const char *names[] = { "MAX30102 (PPG)", "MPU6050  (IMU)" };
+
+    for (int i = 0; i < 2; i++) {
+      I2C_TransferSeq_TypeDef seq;
+      uint8_t dummy = 0;
+      seq.addr  = addrs[i] << 1;
+      seq.flags = I2C_FLAG_WRITE_READ;
+      uint8_t reg = 0x00;
+      seq.buf[0].data = &reg;
+      seq.buf[0].len  = 1;
+      seq.buf[1].data = &dummy;
+      seq.buf[1].len  = 1;
+
+      I2C_TransferReturn_TypeDef ret = I2CSPM_Transfer(sl_i2cspm_mikroe, &seq);
+      printf("[INIT]   0x%02X %s -> %s (ret=%d)\r\n",
+             addrs[i], names[i],
+             (ret == i2cTransferDone) ? "ACK (found)" : "NACK (missing)",
+             (int)ret);
+    }
+  }
 
 #if TARANG_ENABLE_ECG
   printf("[INIT] ECG: Starting LETIMER+PRS+IADC+DMADRV...\r\n");
@@ -129,7 +207,7 @@ void app_init(void)
 
 #if TARANG_ENABLE_PPG
   printf("[INIT] PPG: Configuring MAX30102...\r\n");
-  tarang_ppg_init(false);
+  tarang_ppg_init();
   printf("[INIT] PPG: %s\r\n",
          tarang_ppg_is_found() ? "OK — interrupts armed at ~100 Hz" : "FAILED");
 #else
@@ -153,6 +231,19 @@ void app_init(void)
   printf("==========================================\r\n");
   printf("[INIT] Done. Diagnostics every ~2 sec.\r\n");
   printf("==========================================\r\n");
+
+  /*
+   * Start a 10ms periodic wakeup timer. This wakes the CPU from EM1
+   * every 10ms so the super loop can check sensor data_ready flags.
+   * GPIO sensor interrupts ALSO wake the CPU — this timer is a
+   * guaranteed fallback that ensures the system never sleeps forever.
+   */
+  uint32_t ticks = sl_sleeptimer_ms_to_tick(10);
+  sl_sleeptimer_start_periodic_timer(&wakeup_timer,
+                                     ticks,
+                                     wakeup_callback,
+                                     NULL, 0, 0);
+  printf("[INIT] 10ms wakeup timer started.\r\n");
 }
 
 /***************************************************************************//**
@@ -189,73 +280,13 @@ void app_process_action(void)
   current_count = tarang_imu_get_sample_count();
 #endif
 
-  /* ── Non-blocking Coordinated I2C Bus Recovery ──────────────────────
+  /* ── I2C Bus Recovery ────────────────────────────────────────────────
    *
-   * Fast, non-blocking sensor probe with exponential backoff.
-   * If both I2C sensors are unavailable, run lightweight quick-pings (<0.2ms).
-   * Only reconfigure a sensor if it actually ACKs on the bus.
+   * NOTE: Disabled — PR #24 PPG/IMU drivers don't have
+   * tarang_ppg_get_health() / tarang_i2c_quick_ping() / tarang_i2c_bus_clear()
+   * / tarang_imu_init_ex(). Recovery will be re-enabled when PPG/IMU
+   * drivers are upgraded with health tracking APIs.
    * ─────────────────────────────────────────────────────────────────── */
-#if TARANG_ENABLE_PPG && TARANG_ENABLE_IMU
-  static uint32_t last_bus_recovery_tick = 0;
-  static uint32_t bus_recovery_interval = 1250u; /* Start at 5 sec (1250 samples @ 250 Hz) */
-  static uint32_t consecutive_recovery_fails = 0;
-
-  bool ppg_unavail = (tarang_ppg_get_health() == TARANG_SENSOR_UNAVAILABLE || !tarang_ppg_is_found());
-  bool imu_unavail = (tarang_imu_get_health() == TARANG_SENSOR_UNAVAILABLE || !tarang_imu_is_found());
-
-  if (ppg_unavail || imu_unavail) {
-    if (current_count - last_bus_recovery_tick >= bus_recovery_interval) {
-      last_bus_recovery_tick = current_count;
-
-      /* Step 1: Lightweight non-blocking quick-ping (<0.2 ms execution time) */
-      bool ppg_alive = ppg_unavail ? tarang_i2c_quick_ping(TARANG_MAX30102_I2C_ADDR) : true;
-      bool imu_alive = imu_unavail ? tarang_i2c_quick_ping(TARANG_MPU6050_I2C_ADDR) : true;
-
-      if (!ppg_alive && !imu_alive) {
-        /* Both missing: run 9-pulse bus clear with interleaved ECG drain */
-#if TARANG_ENABLE_ECG
-        tarang_ecg_process(); /* Pre-drain */
-#endif
-        tarang_i2c_bus_clear();
-#if TARANG_ENABLE_ECG
-        tarang_ecg_process(); /* Post-drain */
-#endif
-        /* Exponential backoff: 5s -> 15s -> 30s -> 60s max */
-        consecutive_recovery_fails++;
-        if (consecutive_recovery_fails == 1)      bus_recovery_interval = 1250u;  /* 5s */
-        else if (consecutive_recovery_fails == 2) bus_recovery_interval = 3750u;  /* 15s */
-        else if (consecutive_recovery_fails == 3) bus_recovery_interval = 7500u;  /* 30s */
-        else                                      bus_recovery_interval = 15000u; /* 60s max */
-      } else {
-        /* At least one sensor responded to quick-ping! Reset backoff & reconfigure */
-        consecutive_recovery_fails = 0;
-        bus_recovery_interval = 1250u;
-
-        if (ppg_unavail && ppg_alive) {
-#if TARANG_ENABLE_ECG
-          tarang_ecg_process();
-#endif
-          printf("[APP] MAX30102 detected on I2C quick-ping. Reconfiguring...\r\n");
-          tarang_ppg_init(true);
-        }
-
-        if (imu_unavail && imu_alive) {
-#if TARANG_ENABLE_ECG
-          tarang_ecg_process();
-#endif
-          printf("[APP] MPU6050 detected on I2C quick-ping. Reconfiguring...\r\n");
-          tarang_imu_init_ex(true);
-        }
-#if TARANG_ENABLE_ECG
-        tarang_ecg_process();
-#endif
-      }
-    }
-  } else {
-    consecutive_recovery_fails = 0;
-    bus_recovery_interval = 1250u;
-  }
-#endif
 
   /* ── Periodic diagnostics (every ~2 seconds) ────────────────────────
    *

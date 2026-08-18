@@ -15,6 +15,7 @@ Requirements:
 
 import sys
 import asyncio
+import os
 import struct
 import time
 import httpx
@@ -23,8 +24,10 @@ from bleak import BleakScanner, BleakClient
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 TELEMETRY_CHAR_UUID = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"
-HEALTH_CHAR_UUID    = "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
-BACKEND_URL = "http://localhost:8000"
+HEALTH_CHAR_UUID    = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
+BACKEND_URL = os.getenv("TARANG_BACKEND_URL", "http://localhost:8000").rstrip("/")
+BLE_ADDRESS = os.getenv("TARANG_BLE_ADDRESS")
+CONFIGURED_SESSION_ID = os.getenv("TARANG_SESSION_ID")
 INGEST_URL = f"{BACKEND_URL}/api/telemetry/ingest"
 HEALTH_INGEST_URL = f"{BACKEND_URL}/api/health/ingest"
 DIAGNOSTICS_URL = f"{BACKEND_URL}/api/diagnostics/update"
@@ -111,12 +114,15 @@ def decode_health_packet(data: bytearray) -> dict | None:
 packets_received = 0
 packets_dropped = 0
 connect_time = None
+last_ingest_latency_ms = 0.0
 
 
 async def post_telemetry(client: httpx.AsyncClient, packet: dict):
-    global packets_received, packets_dropped
+    global packets_received, packets_dropped, last_ingest_latency_ms
     try:
+        started_at = time.monotonic()
         r = await client.post(INGEST_URL, json=packet, timeout=2.0)
+        last_ingest_latency_ms = round((time.monotonic() - started_at) * 1000, 1)
         if r.status_code == 200:
             packets_received += 1
         else:
@@ -143,14 +149,13 @@ async def post_diagnostics(
     rssi: int = -60,
 ):
     try:
-        latency = (time.monotonic() - connect_time) if connect_time else 0.0
         await http.post(DIAGNOSTICS_URL, json={
             "ble_connected": connected,
             "device_mac": ble_client.address if ble_client else "00:00:00:00:00:00",
             "rssi_dbm": rssi,
             "packets_received": packets_received,
             "packets_dropped": packets_dropped,
-            "latency_ms": round(latency * 1000 % 100, 1),
+            "latency_ms": last_ingest_latency_ms,
             "battery_pct": None,
             "ecg_health": True,
             "ppg_health": True,
@@ -177,6 +182,8 @@ async def wait_for_backend(http: httpx.AsyncClient):
 
 async def find_device():
     """Scan and return the TARANG device, or non-blocking prompt."""
+    if BLE_ADDRESS:
+        return BLE_ADDRESS
     print("[BLE] Scanning for TARANG device...")
     devices = await BleakScanner.discover(timeout=5.0)
     for d in devices:
@@ -223,7 +230,8 @@ async def run_ble_gateway():
                         continue
 
                     connect_time = time.monotonic()
-                    session_id = f"sess_{int(time.time())}_{address.replace(':', '')[-6:]}"
+                    session_id = CONFIGURED_SESSION_ID or f"sess_{int(time.time())}_{address.replace(':', '')[-6:]}"
+                    last_real_health_at = [0.0]
                     print(f"[BLE] Connected to {address} (Session: {session_id})")
                     await post_diagnostics(http, client, True)
 
@@ -240,16 +248,14 @@ async def run_ble_gateway():
                                 f"Flags=0x{packet['rhythm_flags']:02X} | "
                                 f"Pkt#{packets_received + 1}"
                             )
-                            asyncio.ensure_future(post_telemetry(http, packet))
-                            asyncio.ensure_future(
-                                post_diagnostics(http, client, True)
-                            )
+                            asyncio.create_task(post_telemetry(http, packet))
 
                     def health_handler(sender, data: bytearray):
                         hpkt = decode_health_packet(data)
                         if hpkt:
+                            last_real_health_at[0] = time.monotonic()
                             hpkt["session_id"] = session_id
-                            asyncio.ensure_future(post_health(http, hpkt))
+                            asyncio.create_task(post_health(http, hpkt))
 
                     # Subscribe to telemetry UUID
                     try:
@@ -273,23 +279,27 @@ async def run_ble_gateway():
                         pass
 
                     print("[BLE] Streaming live telemetry to backend. Press Ctrl+C to stop.")
+                    last_diagnostics_at = 0.0
                     while client.is_connected:
-                        # Fallback periodic health beacon if health char is unpolled
-                        elapsed_s = int(time.monotonic() - connect_time)
-                        asyncio.ensure_future(post_health(http, {
-                            "session_id": session_id,
-                            "uptime_s": elapsed_s,
-                            "ecg_lead_off": False,
-                            "ecg_sqi": 240,
-                            "ppg_finger_present": True,
-                            "imu_ok": True,
-                            "i2c_failure_count": 0,
-                            "dsp_overflow_count": 0,
-                            "ecg_overrun_count": 0,
-                            "ble_rssi": -60,
-                            "battery_pct": None,
-                            "fw_version": "1.0.0",
-                        }))
+                        now = time.monotonic()
+                        if now - last_diagnostics_at >= 5.0:
+                            await post_diagnostics(http, client, True)
+                            last_diagnostics_at = now
+                        if now - last_real_health_at[0] >= 3.0:
+                            await post_health(http, {
+                                "session_id": session_id,
+                                "uptime_s": int(now - connect_time),
+                                "ecg_lead_off": False,
+                                "ecg_sqi": 240,
+                                "ppg_finger_present": True,
+                                "imu_ok": True,
+                                "i2c_failure_count": 0,
+                                "dsp_overflow_count": 0,
+                                "ecg_overrun_count": 0,
+                                "ble_rssi": -60,
+                                "battery_pct": None,
+                                "fw_version": "1.0.0",
+                            })
                         await asyncio.sleep(1.0)
 
                     print("[BLE] Device disconnected.")

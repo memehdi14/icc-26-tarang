@@ -10,7 +10,6 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "tarang_sensor_health.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +22,6 @@ extern "C" {
  * @note Call GPIOINT_Init() and CMU_ClockEnable(cmuClock_GPIO) BEFORE this.
  ******************************************************************************/
 void tarang_imu_init(void);
-bool tarang_imu_init_ex(bool is_runtime_retry);
 
 /***************************************************************************//**
  * IMU process action — call from app_process_action().
@@ -43,8 +41,6 @@ int16_t  tarang_imu_get_gyro_z(void);
 int16_t  tarang_imu_get_temp_raw(void);
 uint32_t tarang_imu_get_sample_count(void);
 uint32_t tarang_imu_get_interrupt_count(void);
-tarang_sensor_health_t tarang_imu_get_health(void);
-bool     tarang_imu_is_valid(void);
 bool     tarang_imu_is_healthy(void);
 
 #ifdef __cplusplus

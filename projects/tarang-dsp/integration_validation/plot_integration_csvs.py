@@ -42,7 +42,11 @@ def parse_csv_log(filepath, max_lines=40000):
     line_count = 0
     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
         reader = csv.reader(f)
-        header = next(reader, None)
+        header = None
+        for row in reader:
+            if row and not row[0].startswith('#'):
+                header = row
+                break
         if not header:
             return None
 
@@ -52,7 +56,7 @@ def parse_csv_log(filepath, max_lines=40000):
             line_count += 1
             if line_count > max_lines:
                 break
-            if not row or len(row) < 3:
+            if not row or row[0].startswith('#'):
                 continue
 
             # Format 1: unix_timestamp, elapsed_sec, raw_line
