@@ -190,12 +190,16 @@ async def main(args: argparse.Namespace) -> None:
             await run_once(address)
             retry_delay = 5.0   # reset backoff on clean disconnect
         except BleakError as e:
-            print(f"[BLE] BLE error: {e}")
+            print(f"[BLE] BLE error: {repr(e)}")
+            import traceback
+            traceback.print_exc()
         except KeyboardInterrupt:
             print("\n[BLE] Stopped by user.")
             break
         except Exception as e:
-            print(f"[BLE] Unexpected error: {e}")
+            print(f"[BLE] Unexpected error: {repr(e)}")
+            import traceback
+            traceback.print_exc()
 
         print(f"[BLE] Reconnecting in {retry_delay:.0f}s...")
         await asyncio.sleep(retry_delay)
