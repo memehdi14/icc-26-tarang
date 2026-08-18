@@ -244,6 +244,10 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       sc = sl_bt_sm_set_bondable_mode(1);
       app_assert_status(sc);
 
+      /* Set default connection timing: min=20ms, max=100ms, timeout=3000ms */
+      sc = sl_bt_connection_set_default_parameters(16, 80, 0, 300, 0, 0xFFFF);
+      app_assert_status(sc);
+
       /* Create advertising set */
       sc = sl_bt_advertiser_create_set(&tarang_advertising_set_handle);
       app_assert_status(sc);
