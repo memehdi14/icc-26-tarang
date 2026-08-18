@@ -1,8 +1,7 @@
 """
 Tarang Clinical — Database Connection & Session Factory
 ========================================================
-Uses SQLite by default (zero-config, single-file).
-Change DATABASE_URL to postgresql://... for production.
+Mode A (Event-Driven) + Legacy Compatibility
 """
 
 import os
@@ -24,7 +23,6 @@ engine = create_engine(
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
 )
 
-
 if DATABASE_URL.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def configure_sqlite(dbapi_connection, _connection_record):
@@ -42,13 +40,19 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     try:
         with engine.connect() as conn:
-            # Migration 1: Add session_id column if not present
+            # Mode A Indexes
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vitals_device_ts ON vitals_samples (device_id, ts);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_analytics_device_ts ON analytics_5min (device_id, ts);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_device_ts ON clinical_events (device_id, ts);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_snippets_event_id ON ecg_snippets (event_id);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_annotations_snippet_id ON beat_annotations (snippet_id);"))
+
+            # Legacy index compatibility
             try:
                 conn.execute(text("ALTER TABLE telemetry_events ADD COLUMN session_id VARCHAR(64);"))
                 conn.commit()
             except Exception:
-                pass # Column already exists
-            # Migration 2: Ensure indexes
+                pass
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_telemetry_events_received_at ON telemetry_events (received_at);"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_telemetry_events_session_id ON telemetry_events (session_id);"))
             conn.commit()

@@ -27,6 +27,7 @@ from routers import (
     integrations,
     settings as settings_router,
     health as health_router,
+    mode_a_events,
 )
 
 
@@ -134,6 +135,7 @@ app.include_router(health_router.router)
 app.include_router(devices.router)
 app.include_router(sessions.router)
 app.include_router(integrations.router)
+app.include_router(mode_a_events.router)
 
 # Mount WebSocket endpoint at /ws/telemetry (separate from REST prefix)
 app.add_api_websocket_route("/ws/telemetry", telemetry.websocket_telemetry)

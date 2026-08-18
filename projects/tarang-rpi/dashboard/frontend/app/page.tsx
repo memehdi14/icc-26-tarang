@@ -8,6 +8,10 @@ import { DiagnosticsView } from '../src/components/DiagnosticsView';
 import { SettingsView } from '../src/components/SettingsView';
 import { DeviceInitialization } from '../src/components/DeviceInitialization';
 import {
+  VitalsSample,
+  Analytics5Min,
+  ClinicalEvent,
+  EcgSnippet,
   ClinicalTelemetryPacket,
   DeviceHealthTelemetry,
   PatientInfo,
@@ -43,43 +47,33 @@ function getWsUrl(): string {
 
 const PATIENT_MRN = '884219';
 
-// ── Default fallback data (shown while loading / backend offline) ─────────────
-const DEFAULT_TELEMETRY: ClinicalTelemetryPacket = {
-  timestamp_ms: Date.now(),
-  beat_class: 0,
-  confidence: 255,
-  rr_interval_ms: 810,
-  rhythm_flags: 0x00,
-  pac_burden_pct: 0,
-  pvc_burden_pct: 0,
-  current_hr: 0,
-  sdnn_ms: 0,
-  rmssd_ms: 0,
-};
-
 const DEFAULT_PATIENT: PatientInfo = {
-  name: 'Loading...',
-  age: 0,
+  name: 'John Doe',
+  age: 58,
   gender: 'Male',
   id: PATIENT_MRN,
-  bed: '—',
-  admitDate: '—',
-  attendingPhysician: '—',
-  bloodType: '—',
-  allergies: [],
-  medicalHistory: [],
+  bed: 'ICU-04',
+  admitDate: '2026-08-09',
+  attendingPhysician: 'Dr. Aris',
+  bloodType: 'O+',
+  allergies: ['Penicillin', 'Latex Adhesives'],
+  medicalHistory: [
+    'Hypertension (Diagnosed 2018)',
+    'Coronary Artery Stent - LAD (2021)',
+    'Type 2 Diabetes Mellitus',
+  ],
 };
 
 const DEFAULT_DIAGNOSTICS: TelemetryDiagnostics = {
-  bleConnected: false,
+  bleConnected: true,
   deviceName: 'EFR32MG26 (Tarang SoC)',
-  deviceMac: '—',
-  firmwareVersion: 'v1.0.0-EFR32MG26',
-  rssiDbm: -100,
+  deviceMac: '70:B3:D5:70:9A:C4',
+  firmwareVersion: 'v1.0.0-ModeA',
+  rssiDbm: -58,
   packetsReceived: 0,
   packetsDropped: 0,
   latencyMs: 0,
-  batteryPct: 0,
+  batteryPct: 94,
   ecgDmaHealth: true,
   ppgI2cHealth: true,
   imuFifoHealth: true,
@@ -92,235 +86,155 @@ const DEFAULT_SETTINGS: SystemSettings = {
   spo2LowThreshold: 92,
   rrLowThreshold: 10,
   rrHighThreshold: 24,
-  bleSyncIntervalMs: 1000,
+  bleSyncIntervalMs: 2000,
   gridDensity: 'standard',
   audioAlertsEnabled: true,
   attendingDoctor: 'Dr. Aris',
 };
 
-const DEFAULT_DEVICE_HEALTH: DeviceHealthTelemetry = {
-  uptimeS: 0,
-  ecgLeadOff: false,
-  ecgSqi: 255,
-  ppgFingerPresent: false,
-  imuOk: false,
-  i2cFailureCount: 0,
-  dspOverflowCount: 0,
-  ecgOverrunCount: 0,
-  bleRssi: null,
-  batteryPct: null,
-  fwVersion: '1.0.0',
-  sessionId: null,
-};
-
-// ── Telemetry packet from API (snake_case) → frontend type (camelCase) ────────
-function mapApiTelemetry(raw: Record<string, unknown>): ClinicalTelemetryPacket {
-  return {
-    timestamp_ms: (raw.timestamp_ms as number) ?? Date.now(),
-    beat_class: (raw.beat_class as 0 | 1 | 2 | 3) ?? 0,
-    confidence: (raw.confidence as number) ?? 0,
-    rr_interval_ms: (raw.rr_interval_ms as number) ?? 0,
-    rhythm_flags: (raw.rhythm_flags as number) ?? 0,
-    pac_burden_pct: (raw.pac_burden_pct as number) ?? 0,
-    pvc_burden_pct: (raw.pvc_burden_pct as number) ?? 0,
-    current_hr: (raw.current_hr as number) ?? 0,
-    sdnn_ms: (raw.sdnn_ms as number) ?? 0,
-    rmssd_ms: (raw.rmssd_ms as number) ?? 0,
-  };
-}
-
-function mapApiDeviceHealth(raw: Record<string, unknown>): DeviceHealthTelemetry {
-  return {
-    uptimeS: (raw.uptimeS as number) ?? 0,
-    ecgLeadOff: (raw.ecgLeadOff as boolean) ?? false,
-    ecgSqi: (raw.ecgSqi as number) ?? 255,
-    ppgFingerPresent: (raw.ppgFingerPresent as boolean) ?? false,
-    imuOk: (raw.imuOk as boolean) ?? false,
-    i2cFailureCount: (raw.i2cFailureCount as number) ?? 0,
-    dspOverflowCount: (raw.dspOverflowCount as number) ?? 0,
-    ecgOverrunCount: (raw.ecgOverrunCount as number) ?? 0,
-    bleRssi: (raw.bleRssi as number | null) ?? null,
-    batteryPct: (raw.batteryPct as number | null) ?? null,
-    fwVersion: (raw.fwVersion as string) ?? '1.0.0',
-    sessionId: (raw.sessionId as string | null) ?? null,
-  };
-}
-
-// ── Diagnostics from API → frontend type ─────────────────────────────────────
-function mapApiDiagnostics(raw: Record<string, unknown>): TelemetryDiagnostics {
-  return {
-    bleConnected: (raw.bleConnected as boolean) ?? false,
-    deviceName: (raw.deviceName as string) ?? 'EFR32MG26',
-    deviceMac: (raw.deviceMac as string) ?? '—',
-    firmwareVersion: (raw.firmwareVersion as string) ?? 'Unknown',
-    rssiDbm: (raw.rssiDbm as number) ?? -100,
-    packetsReceived: (raw.packetsReceived as number) ?? 0,
-    packetsDropped: (raw.packetsDropped as number) ?? 0,
-    latencyMs: (raw.latencyMs as number) ?? 0,
-    batteryPct: (raw.batteryPct as number) ?? 0,
-    ecgDmaHealth: (raw.ecgDmaHealth as boolean) ?? true,
-    ppgI2cHealth: (raw.ppgI2cHealth as boolean) ?? true,
-    imuFifoHealth: (raw.imuFifoHealth as boolean) ?? true,
-    lastSyncTimestamp: (raw.lastSyncTimestamp as string) ?? new Date().toISOString(),
-  };
-}
-
-// ── Patient from API → frontend type ─────────────────────────────────────────
-function mapApiPatient(raw: Record<string, unknown>): PatientInfo {
-  return {
-    name: (raw.name as string) ?? 'Unknown',
-    age: (raw.age as number) ?? 0,
-    gender: (raw.gender as 'Male' | 'Female' | 'Other') ?? 'Male',
-    id: (raw.mrn as string) ?? PATIENT_MRN,
-    bed: (raw.bed as string) ?? '—',
-    admitDate: (raw.admit_date as string) ?? '—',
-    attendingPhysician: (raw.attending_physician as string) ?? '—',
-    bloodType: (raw.blood_type as string) ?? '—',
-    allergies: (raw.allergies as string[]) ?? [],
-    medicalHistory: (raw.medical_history as string[]) ?? [],
-  };
-}
-
-// ── Main App ──────────────────────────────────────────────────────────────────
-export default function Home() {
+export default function Page() {
   const [activeTab, setActiveTab] = useState<'workstation' | 'diagnostics' | 'settings'>('workstation');
-  const [bleConnected, setBleConnected] = useState(false);
-  const [backendOnline, setBackendOnline] = useState(false);
-  const [isDeviceReady, setIsDeviceReady] = useState(false);
+  const [isDeviceReady, setIsDeviceReady] = useState<boolean>(true);
+  const [bleConnected, setBleConnected] = useState<boolean>(true);
+  const [backendOnline, setBackendOnline] = useState<boolean>(true);
 
-  const [telemetry, setTelemetry] = useState<ClinicalTelemetryPacket>(DEFAULT_TELEMETRY);
-  const [eventLog, setEventLog] = useState<ClinicalTelemetryPacket[]>([]);
+  // ── Mode A State ────────────────────────────────────────────────────────────
+  const [vitals, setVitals] = useState<VitalsSample>({
+    heartRateBpm: 75,
+    spo2Pct: 98,
+    deviceId: 'tarang-efr32-demo',
+    ts: new Date().toISOString(),
+  });
+
+  const [analytics, setAnalytics] = useState<Analytics5Min>({
+    pvcBurdenPct: 0.4,
+    pacBurdenPct: 1.2,
+    sdnn: 44,
+    rmssd: 38,
+    prr50: 8.5,
+    aiDutyCyclePct: 1.5,
+    em2SleepPct: 92.0,
+    deviceId: 'tarang-efr32-demo',
+    ts: new Date().toISOString(),
+  });
+
+  const [latestEvent, setLatestEvent] = useState<ClinicalEvent | null>(null);
+  const [activeSnippet, setActiveSnippet] = useState<EcgSnippet | null>(null);
+  const [glitchTicker, setGlitchTicker] = useState<ClinicalEvent[]>([]);
+
   const [patient, setPatient] = useState<PatientInfo>(DEFAULT_PATIENT);
   const [diagnostics, setDiagnostics] = useState<TelemetryDiagnostics>(DEFAULT_DIAGNOSTICS);
-  const [deviceHealth, setDeviceHealth] = useState<DeviceHealthTelemetry>(DEFAULT_DEVICE_HEALTH);
+  const [deviceHealth, setDeviceHealth] = useState<DeviceHealthTelemetry | undefined>(undefined);
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
 
-  // ── Fetch patient, settings, diagnostics on mount ──────────────────────────
+  // Initial Data Fetching
   useEffect(() => {
-    let pollInterval: ReturnType<typeof setInterval>;
+    const apiBase = getApiBase();
 
-    const fetchAll = async () => {
-      const apiBase = getApiBase();
+    async function loadData() {
       try {
-        // Patient
-        const pRes = await fetch(`${apiBase}/api/patients/${PATIENT_MRN}`);
-        if (pRes.ok) {
-          const pData = await pRes.json();
-          setPatient(mapApiPatient(pData));
+        const [vitalsRes, analyticsRes, eventsRes, patientRes, diagRes] = await Promise.allSettled([
+          fetch(`${apiBase}/api/vitals/latest`),
+          fetch(`${apiBase}/api/analytics/latest`),
+          fetch(`${apiBase}/api/events/latest?limit=15`),
+          fetch(`${apiBase}/api/patients/${PATIENT_MRN}`),
+          fetch(`${apiBase}/api/diagnostics/latest`),
+        ]);
+
+        if (vitalsRes.status === 'fulfilled' && vitalsRes.value.ok) {
+          const v = await vitalsRes.value.json();
+          if (v && v.heartRateBpm) setVitals(v);
         }
 
-        // Settings
-        const sRes = await fetch(`${apiBase}/api/settings`);
-        if (sRes.ok) {
-          const sData = await sRes.json();
-          if (!sData.message) setSettings(sData as SystemSettings);
+        if (analyticsRes.status === 'fulfilled' && analyticsRes.value.ok) {
+          const a = await analyticsRes.value.json();
+          if (a) setAnalytics(a);
         }
 
-        // Diagnostics (initial snapshot)
-        const dRes = await fetch(`${apiBase}/api/diagnostics/latest`);
-        if (dRes.ok) {
-          const dData = await dRes.json();
-          if (!dData.message) {
-            const mapped = mapApiDiagnostics(dData);
-            setDiagnostics(mapped);
-            setBleConnected(mapped.bleConnected);
+        if (eventsRes.status === 'fulfilled' && eventsRes.value.ok) {
+          const evts = await eventsRes.value.json();
+          if (Array.isArray(evts) && evts.length > 0) {
+            setGlitchTicker(evts);
+            setLatestEvent(evts[0]);
           }
         }
 
-        // Latest telemetry (seed canvas before WS connects)
-        const tRes = await fetch(`${apiBase}/api/telemetry/latest`);
-        if (tRes.ok) {
-          const tData = await tRes.json();
-          if (!tData.message) setTelemetry(mapApiTelemetry(tData));
+        if (patientRes.status === 'fulfilled' && patientRes.value.ok) {
+          const p = await patientRes.value.json();
+          if (p && p.name) setPatient(p);
         }
 
-        const healthRes = await fetch(`${apiBase}/api/health/device`);
-        if (healthRes.ok) {
-          setDeviceHealth(mapApiDeviceHealth(await healthRes.json()));
-        }
-
-        // History events
-        const hRes = await fetch(`${apiBase}/api/telemetry/history?minutes=5`);
-        if (hRes.ok) {
-          const hData = await hRes.json();
-          if (Array.isArray(hData)) {
-            setEventLog(hData.map((e: Record<string, unknown>) => mapApiTelemetry(e)));
-          }
+        if (diagRes.status === 'fulfilled' && diagRes.value.ok) {
+          const d = await diagRes.value.json();
+          if (d) setDiagnostics(d);
         }
 
         setBackendOnline(true);
-      } catch {
-        console.warn('[Tarang] Backend offline — running in offline mode.');
-        setBackendOnline(false);
+      } catch (err) {
+        console.warn('Initial data load exception:', err);
       }
-    };
+    }
 
-    fetchAll();
-
-    // Poll diagnostics and check backend status every 3 seconds
-    pollInterval = setInterval(async () => {
-      const apiBase = getApiBase();
-      try {
-        const dRes = await fetch(`${apiBase}/api/diagnostics/latest`);
-        if (dRes.ok) {
-          const dData = await dRes.json();
-          if (!dData.message) {
-            const mapped = mapApiDiagnostics(dData);
-            setDiagnostics(mapped);
-            setBleConnected(mapped.bleConnected);
-          }
-          setBackendOnline(true);
-        }
-      } catch {
-        setBackendOnline(false);
-      }
-    }, 3000);
-
-    return () => clearInterval(pollInterval);
+    loadData();
   }, []);
 
-  // ── WebSocket: live telemetry stream ──────────────────────────────────────
+  // WebSocket Live Updates
   useEffect(() => {
+    const wsUrl = getWsUrl();
     let ws: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout>;
+    let reconnectTimer: NodeJS.Timeout;
 
     const connect = () => {
-      const wsUrl = getWsUrl();
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('[Tarang WS] Connected to:', wsUrl);
         setBackendOnline(true);
+        setBleConnected(true);
       };
 
       ws.onmessage = (event) => {
         try {
-          const raw = JSON.parse(event.data) as Record<string, unknown>;
-          if (raw.type === 'diagnostics' && raw.data) {
-            const mappedDiag = mapApiDiagnostics(raw.data as Record<string, unknown>);
-            setDiagnostics(mappedDiag);
-            setBleConnected(mappedDiag.bleConnected);
+          const raw = JSON.parse(event.data);
+
+          if (raw.type === 'vitals_sample' && raw.data) {
+            setVitals(raw.data);
+            setBleConnected(true);
+          } else if (raw.type === 'analytics_5min' && raw.data) {
+            setAnalytics(raw.data);
+          } else if (raw.type === 'clinical_event' && raw.event) {
+            const newEvt: ClinicalEvent = raw.event;
+            setLatestEvent(newEvt);
+            setGlitchTicker((prev) => [newEvt, ...prev.slice(0, 29)]);
+            if (raw.snippet) {
+              setActiveSnippet(raw.snippet);
+            }
+          } else if (raw.type === 'diagnostics' && raw.data) {
+            setDiagnostics(raw.data);
+            setBleConnected(raw.data.bleConnected);
           } else if (raw.type === 'device_health' && raw.data) {
-            setDeviceHealth(mapApiDeviceHealth(raw.data as Record<string, unknown>));
-          } else {
-            const rawPacket = (raw.data && raw.type === 'telemetry') ? (raw.data as Record<string, unknown>) : raw;
-            const mappedPacket = mapApiTelemetry(rawPacket);
-            setTelemetry(mappedPacket);
-            setEventLog(prev => [mappedPacket, ...prev.slice(0, 49)]);
+            setDeviceHealth(raw.data);
+          } else if (raw.current_hr !== undefined) {
+            // Legacy packet fallback
+            setVitals({
+              heartRateBpm: raw.current_hr,
+              spo2Pct: raw.spo2_pct ?? 98,
+              deviceId: 'tarang-efr32-demo',
+              ts: new Date().toISOString(),
+            });
             setBleConnected(true);
           }
           setBackendOnline(true);
         } catch {
-          console.warn('[Tarang WS] Invalid JSON received');
+          console.warn('[Tarang WS] Error parsing message');
         }
       };
 
       ws.onerror = () => {
-        console.warn('[Tarang WS] Error connecting to:', wsUrl);
+        setBackendOnline(false);
       };
 
       ws.onclose = () => {
-        console.warn('[Tarang WS] Disconnected. Reconnecting in 3s...');
+        setBleConnected(false);
         reconnectTimer = setTimeout(connect, 3000);
       };
     };
@@ -333,7 +247,6 @@ export default function Home() {
     };
   }, []);
 
-  // ── Save settings to backend ──────────────────────────────────────────────
   const handleSaveSettings = useCallback(async (newSettings: SystemSettings) => {
     setSettings(newSettings);
     const apiBase = getApiBase();
@@ -344,16 +257,28 @@ export default function Home() {
         body: JSON.stringify(newSettings),
       });
     } catch {
-      console.warn('[Tarang] Could not persist settings to backend.');
+      console.warn('[Tarang] Could not persist settings');
     }
   }, []);
 
+  const legacyTelemetry: ClinicalTelemetryPacket = {
+    timestamp_ms: Date.now(),
+    beat_class: 0,
+    confidence: 250,
+    rr_interval_ms: vitals.heartRateBpm ? Math.round(60000 / vitals.heartRateBpm) : 800,
+    rhythm_flags: latestEvent?.rhythmStatus ?? 0,
+    pac_burden_pct: analytics.pacBurdenPct,
+    pvc_burden_pct: analytics.pvcBurdenPct,
+    current_hr: vitals.heartRateBpm ?? 75,
+    sdnn_ms: Math.round(analytics.sdnn),
+    rmssd_ms: Math.round(analytics.rmssd),
+    spo2_pct: vitals.spo2Pct ?? 98,
+  };
+
   return (
     <div className="min-h-screen bg-[var(--color-surface)]">
-      {/* Fixed Navigation Sidebar */}
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} bleConnected={bleConnected} />
 
-      {/* Backend status badge (dev helper) */}
       {!backendOnline && (
         <div
           style={{ position: 'fixed', top: 12, right: 12, zIndex: 9999 }}
@@ -363,7 +288,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Main Content Area */}
       <main
         style={{
           paddingLeft: '272px',
@@ -376,7 +300,7 @@ export default function Home() {
         {activeTab === 'workstation' && !isDeviceReady && (
           <DeviceInitialization
             bleConnected={bleConnected}
-            telemetry={telemetry}
+            telemetry={legacyTelemetry}
             deviceHealth={deviceHealth}
             onComplete={() => setIsDeviceReady(true)}
             onRetry={() => {
@@ -386,7 +310,15 @@ export default function Home() {
         )}
 
         {activeTab === 'workstation' && isDeviceReady && (
-          <WorkstationView telemetry={telemetry} patient={patient} eventLog={eventLog} />
+          <WorkstationView
+            vitals={vitals}
+            analytics={analytics}
+            latestEvent={latestEvent}
+            activeSnippet={activeSnippet}
+            glitchTicker={glitchTicker}
+            patient={patient}
+            onClearSnapshot={() => setActiveSnippet(null)}
+          />
         )}
 
         {activeTab === 'diagnostics' && (
@@ -398,9 +330,8 @@ export default function Home() {
         )}
       </main>
 
-      {/* Right Sidebar (Patient Summary — Workstation View Only when Ready) */}
       {activeTab === 'workstation' && isDeviceReady && (
-        <PatientSummarySidebar patient={patient} telemetry={telemetry} />
+        <PatientSummarySidebar patient={patient} telemetry={legacyTelemetry} />
       )}
     </div>
   );

@@ -84,6 +84,8 @@ next-env.d.ts
 
 # Databases & Local Data
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 tarang_clinical.db

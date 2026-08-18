@@ -96,16 +96,70 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertEqual(latest.status_code, 200)
         self.assertEqual(latest.json()["current_hr"], 75)
 
-        observations = self.client.get(
-            "/api/v1/observations", params={"sessionId": session_id}
-        )
-        self.assertEqual(observations.status_code, 200)
-        self.assertEqual(observations.json()["count"], 1)
+        # ── Mode A Event-Driven API Tests ─────────────────────────────────────
+        # 1. Periodic Vitals Ingest & Read
+        vitals_ingest = self.client.post("/api/vitals", json={
+            "device_id": "tarang-test-01",
+            "session_id": session_id,
+            "heart_rate_bpm": 78,
+            "spo2_pct": 99,
+        })
+        self.assertEqual(vitals_ingest.status_code, 201)
 
-        summary = self.client.get(f"/api/v1/sessions/{session_id}/summary")
-        self.assertEqual(summary.status_code, 200)
-        self.assertEqual(summary.json()["latestObservation"]["value"]["heartRateBpm"], 75)
+        vitals_latest = self.client.get("/api/vitals/latest", params={"deviceId": "tarang-test-01"})
+        self.assertEqual(vitals_latest.status_code, 200)
+        self.assertEqual(vitals_latest.json()["heartRateBpm"], 78)
+        self.assertEqual(vitals_latest.json()["spo2Pct"], 99)
 
+        # 2. 5-Min Analytics Rollup Ingest & Read
+        analytics_ingest = self.client.post("/api/analytics", json={
+            "device_id": "tarang-test-01",
+            "session_id": session_id,
+            "pvc_burden_pct": 0.8,
+            "pac_burden_pct": 1.5,
+            "sdnn": 48.0,
+            "rmssd": 36.0,
+            "prr50": 9.2,
+            "ai_duty_cycle_pct": 1.5,
+            "em2_sleep_pct": 92.5,
+        })
+        self.assertEqual(analytics_ingest.status_code, 201)
+
+        analytics_latest = self.client.get("/api/analytics/latest", params={"deviceId": "tarang-test-01"})
+        self.assertEqual(analytics_latest.status_code, 200)
+        self.assertEqual(analytics_latest.json()["em2SleepPct"], 92.5)
+        self.assertEqual(analytics_latest.json()["aiDutyCyclePct"], 1.5)
+
+        # 3. Clinical Event + 4s Snippet + Annotations Ingest & Read
+        event_ingest = self.client.post("/api/events", json={
+            "device_id": "tarang-test-01",
+            "session_id": session_id,
+            "rhythm_status": 2, # VT
+            "pattern_type": "V-Run",
+            "confidence": 0.96,
+            "sample_rate_hz": 250,
+            "waveform": [0.1, 0.2, 1.2, -0.4, 0.0] * 200, # 1000 samples = 4s @ 250Hz
+            "annotations": [
+                {"offset_ms": 800, "label": "N", "confidence": 0.99},
+                {"offset_ms": 1600, "label": "V", "confidence": 0.95},
+                {"offset_ms": 2400, "label": "V", "confidence": 0.96},
+                {"offset_ms": 3200, "label": "V", "confidence": 0.94},
+            ],
+        })
+        self.assertEqual(event_ingest.status_code, 201)
+        event_id = event_ingest.json()["eventId"]
+
+        events_latest = self.client.get("/api/events/latest", params={"deviceId": "tarang-test-01"})
+        self.assertEqual(events_latest.status_code, 200)
+        self.assertTrue(len(events_latest.json()) >= 1)
+        self.assertEqual(events_latest.json()[0]["patternType"], "V-Run")
+
+        snippet_res = self.client.get(f"/api/events/{event_id}/snippet")
+        self.assertEqual(snippet_res.status_code, 200)
+        self.assertEqual(len(snippet_res.json()["waveform"]), 1000)
+        self.assertEqual(len(snippet_res.json()["annotations"]), 4)
+
+        # Stop Session
         stop_response = self.client.post(f"/api/sessions/{session_id}/stop")
         self.assertEqual(stop_response.status_code, 200)
         self.assertEqual(stop_response.json()["status"], "stopped")

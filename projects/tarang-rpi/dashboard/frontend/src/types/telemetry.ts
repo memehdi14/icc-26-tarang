@@ -1,9 +1,63 @@
+// TARANG Mode A (Event-Driven) Data Types
+
+export interface VitalsSample {
+  id?: number;
+  deviceId?: string;
+  sessionId?: string;
+  ts?: string | null;
+  heartRateBpm?: number | null;
+  spo2Pct?: number | null;
+}
+
+export interface Analytics5Min {
+  id?: number;
+  deviceId?: string;
+  sessionId?: string;
+  ts?: string | null;
+  pvcBurdenPct: number;
+  pacBurdenPct: number;
+  sdnn: number;
+  rmssd: number;
+  prr50: number;
+  aiDutyCyclePct: number;
+  em2SleepPct: number;
+}
+
+export interface BeatAnnotation {
+  id?: number;
+  snippetId?: number;
+  offsetMs: number;
+  label: 'N' | 'V' | 'S' | 'Q';
+  confidence: number;
+}
+
+export interface EcgSnippet {
+  id?: number;
+  eventId?: number;
+  deviceId?: string;
+  tsStart?: string | null;
+  sampleRateHz: number;
+  waveform?: number[];
+  annotations?: BeatAnnotation[];
+}
+
+export interface ClinicalEvent {
+  id?: number;
+  deviceId?: string;
+  sessionId?: string;
+  ts?: string | null;
+  rhythmStatus: number; // 0=NSR, 1=AFib, 2=VT, etc.
+  patternType?: string | null; // Couplet, Triplet, Bigeminy, Trigeminy, Run, VT, null
+  confidence?: number;
+  snippet?: EcgSnippet | null;
+}
+
 export interface ClinicalTelemetryPacket {
   timestamp_ms: number;
-  beat_class: 0 | 1 | 2 | 3; // 0 = Normal, 1 = PAC, 2 = PVC, 3 = Unclassified
-  confidence: number; // 0 - 255
+  beat_class: 0 | 1 | 2 | 3;
+  confidence: number;
   rr_interval_ms: number;
-  rhythm_flags: number; // Bitmask: 0x01 Normal, 0x02 Brady, 0x04 Tachy, 0x08 Arrhythmia
+  rhythm_flags: number;
   pac_burden_pct: number;
   pvc_burden_pct: number;
   current_hr: number;
@@ -47,7 +101,7 @@ export interface TelemetryDiagnostics {
 export interface DeviceHealthTelemetry {
   uptimeS: number;
   ecgLeadOff: boolean;
-  ecgSqi: number; // 0 - 255
+  ecgSqi: number;
   ppgFingerPresent: boolean;
   imuOk: boolean;
   i2cFailureCount: number;

@@ -95,11 +95,12 @@ void app_init(void)
 {
   /*
    * CRITICAL: Prevent the power manager from entering EM2/EM3.
-   * EM2 shuts down I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
-   * EM1 keeps all peripherals alive while still saving power.
+   * EM2 shuts down the BLE radio link layer (kills active connections)
+   * and I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
+   * EM1 keeps all peripherals AND BLE radio alive while still saving power.
    * Must be set BEFORE any peripheral usage (including boot tests).
    */
-#if defined(SL_CATALOG_POWER_MANAGER_PRESENT) && TARANG_ANY_SENSOR_ENABLED
+#if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
   sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
 #endif
 

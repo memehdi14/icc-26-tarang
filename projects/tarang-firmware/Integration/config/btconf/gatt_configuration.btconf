@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!--Custom BLE GATT-->
-<gatt generic_attribute_service="true" header="gatt_db.h" name="Custom BLE GATT" out="gatt_db.c" prefix="gattdb_">
+<!--TARANG Mode A (Event-Driven) BLE GATT Configuration-->
+<gatt gatt_caching="false" generic_attribute_service="true" header="gatt_db.h" name="Custom BLE GATT" out="gatt_db.c" prefix="gattdb_">
 
   <!--Generic Access-->
   <service advertise="false" name="Generic Access" requirement="mandatory" sourceId="org.bluetooth.service.generic_access" type="primary" uuid="1800">
-    <informativeText>Abstract: The generic_access service contains generic information about the device. All available Characteristics are readonly. </informativeText>
+    <informativeText>Generic Access Service</informativeText>
 
     <!--Device Name-->
     <characteristic const="false" id="device_name" name="Device Name" sourceId="org.bluetooth.characteristic.gap.device_name" uuid="2A00">
@@ -17,7 +17,6 @@
 
     <!--Appearance-->
     <characteristic const="true" name="Appearance" sourceId="org.bluetooth.characteristic.gap.appearance" uuid="2A01">
-      <informativeText>Abstract: The external appearance of this device. The values are composed of a category (10-bits) and sub-categories (6-bits). </informativeText>
       <value length="2" type="hex" variable_length="false">0000</value>
       <properties>
         <read authenticated="false" bonded="false" encrypted="false"/>
@@ -27,11 +26,10 @@
 
   <!--Device Information-->
   <service advertise="false" id="device_information" name="Device Information" requirement="mandatory" sourceId="org.bluetooth.service.device_information" type="primary" uuid="180A">
-    <informativeText>Abstract: The Device Information Service exposes manufacturer and/or vendor information about a device. Summary: This service exposes manufacturer information about a device. The Device Information Service is instantiated as a Primary Service. Only one instance of the Device Information Service is exposed on a device.</informativeText>
+    <informativeText>Device Information Service</informativeText>
 
     <!--Manufacturer Name String-->
     <characteristic const="true" id="manufacturer_name_string" name="Manufacturer Name String" sourceId="org.bluetooth.characteristic.manufacturer_name_string" uuid="2A29">
-      <informativeText>Abstract: The value of this characteristic is a UTF-8 string representing the name of the manufacturer of the device.</informativeText>
       <value length="12" type="utf-8" variable_length="false">Silicon Labs</value>
       <properties>
         <read authenticated="false" bonded="false" encrypted="false"/>
@@ -40,7 +38,6 @@
 
     <!--System ID-->
     <characteristic const="false" id="system_id" name="System ID" sourceId="org.bluetooth.characteristic.system_id" uuid="2A23">
-      <informativeText>Abstract: The SYSTEM ID characteristic consists of a structure with two fields. The first field are the LSOs and the second field contains the MSOs. This is a 64-bit structure which consists of a 40-bit manufacturer-defined identifier concatenated with a 24 bit unique Organizationally Unique Identifier (OUI). The OUI is issued by the IEEE Registration Authority (http://standards.ieee.org/regauth/index.html) and is required to be used in accordance with IEEE Standard 802-2001.6 while the least significant 40 bits are manufacturer defined. If System ID generated based on a Bluetooth Device Address, it is required to be done as follows. System ID and the Bluetooth Device Address have a very similar structure: a Bluetooth Device Address is 48 bits in length and consists of a 24 bit Company Assigned Identifier (manufacturer defined identifier) concatenated with a 24 bit Company Identifier (OUI). In order to encapsulate a Bluetooth Device Address as System ID, the Company Identifier is concatenated with 0xFFFE followed by the Company Assigned Identifier of the Bluetooth Address. For more guidelines related to EUI-64, refer to http://standards.ieee.org/develop/regauth/tut/eui64.pdf. Examples: If the system ID is based of a Bluetooth Device Address with a Company Identifier (OUI) is 0x123456 and the Company Assigned Identifier is 0x9ABCDE, then the System Identifier is required to be 0x123456FFFE9ABCDE.</informativeText>
       <value length="8" type="hex" variable_length="false"/>
       <properties>
         <read authenticated="false" bonded="false" encrypted="false"/>
@@ -48,45 +45,145 @@
     </characteristic>
   </service>
 
-  <!--Telemetry Service-->
-  <service advertise="false" name="Telemetry Service" requirement="mandatory" sourceId="" type="primary" uuid="544e937a-82f3-4395-b62b-b72bdea94c75">
+  <!--Service A: Vitals (Periodic, High Frequency 2-5s)-->
+  <service advertise="false" id="service_vitals" name="Vitals Service" requirement="mandatory" sourceId="" type="primary" uuid="544e937a-82f3-4395-b62b-b72bdea94c75">
+    <informativeText>Service A: Periodic vitals sync (HR, SpO2, Timestamp)</informativeText>
 
-    <!--Telemetry Data-->
-    <characteristic const="false" id="telemetry_data" name="Telemetry Data" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66a">
-      <value length="16" type="hex" variable_length="false">00</value>
+    <!--Heart Rate (uint16, 2B, BPM)-->
+    <characteristic const="false" id="vitals_heart_rate" name="Heart Rate" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66a">
+      <value length="2" type="hex" variable_length="false">0000</value>
       <properties>
         <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
 
-    <!--Device Health-->
-    <characteristic const="false" id="device_health" name="Device Health" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77b">
-      <value length="16" type="hex" variable_length="false">00</value>
+    <!--SpO2 (uint8, 1B, %)-->
+    <characteristic const="false" id="vitals_spo2" name="SpO2" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66b">
+      <value length="1" type="hex" variable_length="false">00</value>
+      <properties>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--Vitals Timestamp (uint32, 4B, ms/uptime tick)-->
+    <characteristic const="false" id="vitals_timestamp" name="Vitals Timestamp" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66c">
+      <value length="4" type="hex" variable_length="false">00000000</value>
       <properties>
         <read authenticated="false" bonded="false" encrypted="false"/>
-        <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
+  </service>
 
-    <!--ECG Waveform-->
-    <characteristic const="false" id="ecg_waveform" name="ECG Waveform" sourceId="" uuid="c5da9988-1111-4b5c-b00e-ef96b24ee77b">
-      <value length="244" type="hex" variable_length="false">00</value>
+  <!--Service B: Analytics (Periodic, 5-min Rollup)-->
+  <service advertise="false" id="service_analytics" name="Analytics Service" requirement="mandatory" sourceId="" type="primary" uuid="655f937a-82f3-4395-b62b-b72bdea94c75">
+    <informativeText>Service B: 5-min analytics rollups (Burden, HRV, Edge AI Health)</informativeText>
+
+    <!--PVC Burden % (uint8, 1B)-->
+    <characteristic const="false" id="analytics_pvc_burden" name="PVC Burden" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77b">
+      <value length="1" type="hex" variable_length="false">00</value>
       <properties>
         <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
 
-    <!--PPG Waveform-->
-    <characteristic const="false" id="ppg_waveform" name="PPG Waveform" sourceId="" uuid="c5da9988-2222-4b5c-b00e-ef96b24ee77b">
-      <value length="244" type="hex" variable_length="true">00</value>
+    <!--PAC Burden % (uint8, 1B)-->
+    <characteristic const="false" id="analytics_pac_burden" name="PAC Burden" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77c">
+      <value length="1" type="hex" variable_length="false">00</value>
       <properties>
         <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
 
-    <!--IMU Waveform-->
-    <characteristic const="false" id="imu_waveform" name="IMU Waveform" sourceId="" uuid="c5da9988-3333-4b5c-b00e-ef96b24ee77b">
+    <!--SDNN (uint16, 2B, ms)-->
+    <characteristic const="false" id="analytics_sdnn" name="SDNN" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77d">
+      <value length="2" type="hex" variable_length="false">0000</value>
+      <properties>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--RMSSD (uint16, 2B, ms)-->
+    <characteristic const="false" id="analytics_rmssd" name="RMSSD" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77e">
+      <value length="2" type="hex" variable_length="false">0000</value>
+      <properties>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--pRR50 (uint8, 1B, %)-->
+    <characteristic const="false" id="analytics_prr50" name="pRR50" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77f">
+      <value length="1" type="hex" variable_length="false">00</value>
+      <properties>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--AI Duty Cycle % (uint8, 1B, fixed-point x10)-->
+    <characteristic const="false" id="analytics_ai_duty_cycle" name="AI Duty Cycle" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee780">
+      <value length="1" type="hex" variable_length="false">00</value>
+      <properties>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--EM2 Sleep % (uint8, 1B, %)-->
+    <characteristic const="false" id="analytics_em2_sleep" name="EM2 Sleep" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee781">
+      <value length="1" type="hex" variable_length="false">00</value>
+      <properties>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+  </service>
+
+  <!--Service C: ClinicalEvent (Event-Driven Only)-->
+  <service advertise="false" id="service_clinical_event" name="Clinical Event Service" requirement="mandatory" sourceId="" type="primary" uuid="7660937a-82f3-4395-b62b-b72bdea94c75">
+    <informativeText>Service C: Event-driven anomaly push (Rhythm status, snippet chunks, annotations, ticker)</informativeText>
+
+    <!--Rhythm Status (uint8, 1B, enum: 0=NSR, 1=AFib, 2=VT, etc.)-->
+    <characteristic const="false" id="event_rhythm_status" name="Rhythm Status" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88a">
+      <value length="1" type="hex" variable_length="false">00</value>
+      <properties>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--Event Meta (struct ~8B: event_id(uint16), type(uint8), conf(uint8), ts(uint32))-->
+    <characteristic const="false" id="event_meta" name="Event Meta" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88b">
+      <value length="8" type="hex" variable_length="false">0000000000000000</value>
+      <properties>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--ECG Snippet Chunk (Indicate, chunked, sequence-numbered)-->
+    <characteristic const="false" id="event_ecg_chunk" name="ECG Snippet Chunk" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88c">
       <value length="244" type="hex" variable_length="true">00</value>
+      <properties>
+        <indicate authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--ECG Snippet Control (uint8, 1B: start=1 / ack=2 / end=3)-->
+    <characteristic const="false" id="event_ecg_control" name="ECG Snippet Control" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88d">
+      <value length="1" type="hex" variable_length="false">00</value>
+      <properties>
+        <write authenticated="false" bonded="false" encrypted="false"/>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--Beat Annotations (Indicate/Notify, struct array)-->
+    <characteristic const="false" id="event_beat_annotations" name="Beat Annotations" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88e">
+      <value length="244" type="hex" variable_length="true">00</value>
+      <properties>
+        <indicate authenticated="false" bonded="false" encrypted="false"/>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
+
+    <!--Glitch Ticker Event (struct ~6B: pattern enum(uint16), ts(uint32))-->
+    <characteristic const="false" id="event_glitch_ticker" name="Glitch Ticker Event" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88f">
+      <value length="6" type="hex" variable_length="false">000000000000</value>
       <properties>
         <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
