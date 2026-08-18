@@ -255,8 +255,10 @@ async def ensure_device_bonded(address: str):
         return False
 
 
+pair_backoff_delay = 5
+
 async def run_ble_gateway():
-    global connect_time
+    global connect_time, pair_backoff_delay
 
     async with httpx.AsyncClient() as http:
         await wait_for_backend(http)
@@ -271,11 +273,20 @@ async def run_ble_gateway():
             address = device.address if hasattr(device, 'address') else str(device)
             
             # 1. Deterministic Central-Initiated Bonding before GATT discovery
-            await ensure_device_bonded(address)
+            bonded = await ensure_device_bonded(address)
+            if not bonded:
+                print(f"[BLE][Security] Pairing incomplete. Backing off for {pair_backoff_delay}s to avoid SMP lockout...")
+                await asyncio.sleep(pair_backoff_delay)
+                pair_backoff_delay = min(pair_backoff_delay * 2, 60)
+                continue
+            
+            # Reset backoff on successful bond
+            pair_backoff_delay = 5
 
             print(f"[BLE] Connecting to {address}...")
             try:
-                async with BleakClient(device, timeout=20.0) as client:
+                # Use address to let Bleak resolve the fresh DBus path
+                async with BleakClient(address, timeout=20.0) as client:
                     if not client.is_connected:
                         print("[BLE] Connection failed (client not connected).")
                         continue
