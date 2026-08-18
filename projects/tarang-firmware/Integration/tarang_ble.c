@@ -269,12 +269,12 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
           sl_bt_advertiser_general_discoverable);
       app_assert_status(sc);
 
-      /* ── 30-SECOND TIMED ADVERTISING WINDOW ──────────────────────── */
+      /* ── Continuous Connectable Advertising ──────────────────────── */
       sc = sl_bt_advertiser_set_timing(
           tarang_advertising_set_handle,
           160,    /* min interval: 160 × 0.625ms = 100ms */
           160,    /* max interval: 160 × 0.625ms = 100ms */
-          3000,   /* DURATION: 3000 × 10ms = 30 SECONDS */
+          0,      /* DURATION: 0 = Continuous until connected */
           0);     /* max events: 0 = no event count limit */
       app_assert_status(sc);
 
@@ -284,15 +284,9 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
           sl_bt_legacy_advertiser_connectable);
       app_assert_status(sc);
 
-      printf("[BLE] 30-second advertising window started. Discoverable now.\r\n");
+      printf("[BLE] Connectable advertising started (Ready for RPi Hub).\r\n");
       break;
     }
-
-    /* ── Advertising Timeout: 30s expired without connection ────────── */
-    case sl_bt_evt_advertiser_timeout_id:
-      printf("[BLE] 30s advertising window expired. Device is now UNDISCOVERABLE.\r\n");
-      printf("[BLE] Press RESET on EFR32 to re-enable advertising.\r\n");
-      break;
 
     /* ── Connection Opened: stop advertising, set connection params ──── */
     case sl_bt_evt_connection_opened_id:
@@ -300,25 +294,21 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       tarang_ble_conn_handle = evt->data.evt_connection_opened.connection;
       printf("[BLE] Connection opened! Handle=0x%02X\r\n", tarang_ble_conn_handle);
 
-      /* STOP advertising — Pod becomes undiscoverable to all other scanners */
+      /* Stop advertising while connected */
       sl_bt_advertiser_stop(tarang_advertising_set_handle);
-      printf("[BLE] Advertising stopped — Pod is now UNDISCOVERABLE.\r\n");
 
-      /* Request aggressive 20ms connection interval for real-time telemetry:
-       *   min CI = 16 × 1.25ms = 20ms
-       *   max CI = 16 × 1.25ms = 20ms
-       *   slave latency = 0
-       *   supervision timeout = 100 × 10ms = 1000ms
-       *   ce_len_max = 0xFFFF (let controller decide) */
+      /* Request 20ms connection interval for high-throughput telemetry */
       sc = sl_bt_connection_set_parameters(
           tarang_ble_conn_handle,
-          16,       /* min CI */
-          16,       /* max CI */
+          16,       /* min CI 20ms */
+          16,       /* max CI 20ms */
           0,        /* slave latency */
           100,      /* supervision timeout */
           0,        /* ce_len min */
           0xFFFF);  /* ce_len max */
-      app_assert_status(sc);
+      if (sc != SL_STATUS_OK) {
+        printf("[BLE] Connection param request status: 0x%04lX\r\n", (unsigned long)sc);
+      }
 
       /* Reset dispatch timers */
       last_telemetry_notify_ms = 0;
@@ -326,15 +316,14 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       break;
     }
 
-    /* ── Connection Closed: clear state, restart 30s advertising window ── */
+    /* ── Connection Closed: clear state, restart advertising ── */
     case sl_bt_evt_connection_closed_id:
-      printf("[BLE] Connection closed. Restarting 30s advertising window...\r\n");
+      printf("[BLE] Connection closed. Restarting advertising...\r\n");
       tarang_ble_conn_handle = SL_BT_INVALID_CONNECTION_HANDLE;
       tarang_ble_telemetry_notifications_enabled = false;
       tarang_ble_health_notifications_enabled     = false;
       tarang_ble_ecg_waveform_notifications_enabled = false;
 
-      /* Restart 30s advertising window for reconnection */
       sc = sl_bt_legacy_advertiser_generate_data(
           tarang_advertising_set_handle,
           sl_bt_advertiser_general_discoverable);
@@ -342,7 +331,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
 
       sc = sl_bt_advertiser_set_timing(
           tarang_advertising_set_handle,
-          160, 160, 3000, 0);
+          160, 160, 0, 0);
       app_assert_status(sc);
 
       sc = sl_bt_legacy_advertiser_start(
