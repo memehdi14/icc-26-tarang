@@ -191,7 +191,7 @@ async def find_device():
         name = d.name or ""
         if any(kw in name.upper() for kw in ("TARANG", "EFR32", "SILABS")):
             print(f"[BLE] Found: {d.name} @ {d.address}")
-            return d.address
+            return d
 
     print("[BLE] Device not found by name. Available devices:")
     for i, d in enumerate(devices):
@@ -204,7 +204,7 @@ async def find_device():
     try:
         choice = input("Enter device index or MAC address (blank to retry): ").strip()
         if choice.isdigit() and int(choice) < len(devices):
-            return devices[int(choice)].address
+            return devices[int(choice)]
         return choice or None
     except EOFError:
         return None
@@ -217,17 +217,18 @@ async def run_ble_gateway():
         await wait_for_backend(http)
 
         while True:
-            address = await find_device()
-            if not address:
+            device = await find_device()
+            if not device:
                 print(f"[BLE] No device selected/found. Retrying in {RECONNECT_DELAY_S}s...")
                 await asyncio.sleep(RECONNECT_DELAY_S)
                 continue
 
+            address = device.address if hasattr(device, 'address') else str(device)
             print(f"[BLE] Connecting to {address}...")
             try:
-                async with BleakClient(address, timeout=10.0) as client:
+                async with BleakClient(device, timeout=20.0) as client:
                     if not client.is_connected:
-                        print("[BLE] Connection failed.")
+                        print("[BLE] Connection failed (client not connected).")
                         continue
 
                     connect_time = time.monotonic()
@@ -317,7 +318,7 @@ async def run_ble_gateway():
                     await post_diagnostics(http, client, False)
 
             except Exception as e:
-                print(f"[BLE] Connection error: {e}")
+                print(f"[BLE] Connection error: {repr(e)}")
 
             print(f"[BLE] Reconnecting in {RECONNECT_DELAY_S}s...")
             await asyncio.sleep(RECONNECT_DELAY_S)
