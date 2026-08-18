@@ -210,6 +210,42 @@ async def find_device():
         return None
 
 
+async def ensure_device_bonded(address: str):
+    """
+    Ensure the central (RPi) initiates pairing & stores the LTK via BlueZ
+    BEFORE Bleak initiates GATT service discovery.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "bluetoothctl", "info", address,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+        info_text = stdout.decode(errors="ignore")
+        if "Paired: yes" in info_text and "Bonded: yes" in info_text:
+            print(f"[BLE][Security] Device {address} is already paired & bonded in BlueZ.")
+            return True
+
+        print(f"[BLE][Security] Initiating Central-side bonding for {address} via BlueZ...")
+        pair_proc = await asyncio.create_subprocess_exec(
+            "bluetoothctl", "pair", address,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        pair_stdout, _ = await asyncio.wait_for(pair_proc.communicate(), timeout=10.0)
+        output = pair_stdout.decode(errors="ignore")
+        if "Pairing successful" in output or "Paired: yes" in output:
+            print(f"[BLE][Security] ✅ Central-side pairing & bonding successful.")
+            return True
+        else:
+            print(f"[BLE][Security] Pairing status: {output.strip()}")
+            return False
+    except Exception as e:
+        print(f"[BLE][Security] Pre-pair check note: {e}")
+        return False
+
+
 async def run_ble_gateway():
     global connect_time
 
@@ -224,6 +260,10 @@ async def run_ble_gateway():
                 continue
 
             address = device.address if hasattr(device, 'address') else str(device)
+            
+            # 1. Deterministic Central-Initiated Bonding before GATT discovery
+            await ensure_device_bonded(address)
+
             print(f"[BLE] Connecting to {address}...")
             try:
                 async with BleakClient(device, timeout=20.0) as client:
@@ -235,15 +275,6 @@ async def run_ble_gateway():
                     session_id = CONFIGURED_SESSION_ID or f"sess_{int(time.time())}_{address.replace(':', '')[-6:]}"
                     last_real_health_at = [0.0]
                     print(f"[BLE] Connected to {address} (Session: {session_id})")
-
-                    # Establish bonding & encryption with EFR32
-                    try:
-                        if hasattr(client, "pair"):
-                            print("[BLE] Establishing bonding & encryption with TARANG Pod...")
-                            await client.pair()
-                            print("[BLE] ✅ Security & bonding established.")
-                    except Exception as e:
-                        print(f"[BLE] Pairing note: {e} (proceeding with GATT)")
 
                     await post_diagnostics(http, client, True)
 
