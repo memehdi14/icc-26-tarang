@@ -139,6 +139,14 @@ async def find_device():
     return None
 
 
+def clean_bluez_cache(address: str):
+    try:
+        import subprocess
+        subprocess.run(["bluetoothctl", "remove", address], capture_output=True, timeout=2.0)
+    except Exception:
+        pass
+
+
 async def run_ble_gateway():
     async with httpx.AsyncClient() as http:
         while True:
@@ -149,10 +157,12 @@ async def run_ble_gateway():
                 continue
 
             address = device.address if hasattr(device, 'address') else str(device)
-            print(f"[BLE] Connecting to {address}...")
+            clean_bluez_cache(address)
+            await asyncio.sleep(1.0)
+            print(f"[BLE] Connecting to {address} (timeout 25s)...")
 
             try:
-                async with BleakClient(address, timeout=20.0) as client:
+                async with BleakClient(address, timeout=25.0) as client:
                     if not client.is_connected:
                         continue
 
