@@ -1,6 +1,16 @@
 /***************************************************************************//**
  * @file tarang_ble.c
- * @brief TARANG Bluetooth Low Energy (BLE) Telemetry Implementation.
+ * @brief TARANG BLE Telemetry — Two-Device Clinical System (Pod ↔ Hub).
+ *
+ * Implements the BLE GATT server for the EFR32MG26 Patient Pod:
+ *   - 30-second boot advertising window (undiscoverable after timeout/connect)
+ *   - Just Works bonding with LTK persistence for auto-reconnect
+ *   - Clinical Telemetry notifications (16B, event-driven + 1 Hz fallback)
+ *   - Device Health notifications (16B, 1 Hz periodic)
+ *   - ECG Waveform notifications (32B chunks, 25 Hz — placeholder for Phase 2)
+ *   - PPG/IMU Waveform characteristics (reserved, not yet dispatched)
+ *
+ * Target : EFR32MG26B510F3200IM48 (Series 2, Cortex-M33)
  ******************************************************************************/
 #include "tarang_ble.h"
 #include "tarang_time.h"
@@ -20,12 +30,19 @@
 #include "gatt_db.h"
 #endif
 
-#if !defined(gattdb_telemetry_data) && defined(gattdb_device_status)
-#define gattdb_telemetry_data gattdb_device_status
-#elif !defined(gattdb_telemetry_data) && defined(gattdb_system_id)
-#define gattdb_telemetry_data gattdb_system_id
-#elif !defined(gattdb_telemetry_data)
-#define gattdb_telemetry_data 21
+/* ── Compile-time GATT handle assertions ──────────────────────────────────── */
+#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
+  #if !defined(gattdb_telemetry_data)
+    #error "gattdb_telemetry_data is not defined — regenerate gatt_db from gatt_configuration.btconf"
+  #endif
+  #if !defined(gattdb_device_health)
+    /* Fallback: old btconf used 'device_status' id instead of 'device_health' */
+    #if defined(gattdb_device_status)
+      #define gattdb_device_health gattdb_device_status
+    #else
+      #error "gattdb_device_health is not defined — regenerate gatt_db from gatt_configuration.btconf"
+    #endif
+  #endif
 #endif
 
 #if defined(SL_CATALOG_APP_ASSERT_PRESENT)
@@ -38,10 +55,24 @@
 #define SL_BT_INVALID_CONNECTION_HANDLE 0xFFu
 #endif
 
+/******************************************************************************
+ *                           STATIC STATE
+ ******************************************************************************/
 static uint8_t tarang_advertising_set_handle = 0xFFu;
 static uint8_t tarang_ble_conn_handle = SL_BT_INVALID_CONNECTION_HANDLE;
-static bool tarang_ble_telemetry_notifications_enabled = false;
 
+/* Per-characteristic CCCD tracking */
+static bool tarang_ble_telemetry_notifications_enabled = false;
+static bool tarang_ble_health_notifications_enabled     = false;
+static bool tarang_ble_ecg_waveform_notifications_enabled = false;
+
+/* Periodic dispatch timers */
+static uint32_t last_telemetry_notify_ms = 0;
+static uint32_t last_health_notify_ms    = 0;
+
+/******************************************************************************
+ *                     HEALTH PACKET BUILDER
+ ******************************************************************************/
 void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_packet_t *pkt)
 {
   (void)pipeline;
@@ -94,6 +125,9 @@ void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_p
   pkt->fw_version_packed = (uint16_t)((TARANG_FW_VERSION_MAJOR << 8) | TARANG_FW_VERSION_MINOR);
 }
 
+/******************************************************************************
+ *                       PUBLIC API
+ ******************************************************************************/
 void tarang_ble_init(void)
 {
   printf("[BLE] Module initialized.\r\n");
@@ -109,6 +143,9 @@ bool tarang_ble_is_notifications_enabled(void)
   return tarang_ble_telemetry_notifications_enabled;
 }
 
+/******************************************************************************
+ *                     PERIODIC BLE DISPATCH
+ ******************************************************************************/
 void tarang_ble_process(tarang_pipeline_t *pipeline)
 {
 #if defined(SL_CATALOG_BLUETOOTH_PRESENT)
@@ -116,72 +153,90 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
     return;
   }
 
-  static uint32_t last_periodic_notify_ms = 0;
-
   bool connected = (tarang_ble_conn_handle != SL_BT_INVALID_CONNECTION_HANDLE);
-  bool notif_enabled = tarang_ble_telemetry_notifications_enabled;
+  if (!connected) return;
 
-  /* Only compute time-based fallback when BLE is actually connected and
-   * subscribed — no point tracking the timer when nobody is listening.
-   * This also prevents the flag-clear path from running at boot when
-   * last_periodic_notify_ms=0 and now_ms >= 1000ms after init delays. */
-  bool should_send = tarang_pipeline_should_send_event(pipeline);
-  if (connected && notif_enabled && !should_send) {
-    uint32_t now_ms = tarang_now_ms();
-    if (now_ms - last_periodic_notify_ms >= 1000u) {
-      should_send = true; /* 1 Hz fallback periodic telemetry packet */
+  uint32_t now_ms = tarang_now_ms();
+
+  /* ── 1. Clinical Telemetry Notification ───────────────────────────── */
+  if (tarang_ble_telemetry_notifications_enabled) {
+    bool should_send = tarang_pipeline_should_send_event(pipeline);
+
+    /* 1 Hz fallback periodic telemetry when no events pending */
+    if (!should_send && (now_ms - last_telemetry_notify_ms >= 1000u)) {
+      should_send = true;
+    }
+
+    if (should_send) {
+      tarang_event_packet_t pkt;
+      tarang_pipeline_get_packet(pipeline, &pkt);
+
+      sl_status_t sc = sl_bt_gatt_server_send_notification(
+          tarang_ble_conn_handle,
+          gattdb_telemetry_data,
+          sizeof(pkt),
+          (const uint8_t *)&pkt);
+
+      if (sc == SL_STATUS_OK) {
+        /* Clear pending flags ONLY after successful dispatch */
+        last_telemetry_notify_ms = now_ms;
+        pipeline->beat_telemetry_pending = false;
+        pipeline->engine.rhythm_changed = false;
+        pipeline->engine.significant_event = false;
+
+        printf("[BLE] Telemetry TX: HR=%u rhythm=0x%02X class=%u\r\n",
+               (unsigned)pkt.current_hr, (unsigned)pkt.rhythm_flags, (unsigned)pkt.beat_class);
+      } else {
+        printf("[BLE] Telemetry TX fail: 0x%04lX\r\n", (unsigned long)sc);
+      }
     }
   }
 
-  /* ── BLE telemetry notification ─────────────────────────────────── */
-  if (notif_enabled &&
-      connected &&
-      should_send) {
+  /* ── 2. Device Health Notification (1 Hz periodic) ────────────────── */
+  if (tarang_ble_health_notifications_enabled) {
+    if (now_ms - last_health_notify_ms >= 1000u) {
+      tarang_health_packet_t hpkt;
+      tarang_ble_build_health_packet(pipeline, &hpkt);
 
-    uint32_t now_ms = tarang_now_ms();
-    last_periodic_notify_ms = now_ms;
+      sl_status_t sc = sl_bt_gatt_server_send_notification(
+          tarang_ble_conn_handle,
+          gattdb_device_health,
+          sizeof(hpkt),
+          (const uint8_t *)&hpkt);
 
-    tarang_event_packet_t pkt;
-    tarang_pipeline_get_packet(pipeline, &pkt);
-
-    sl_status_t sc = sl_bt_gatt_server_send_notification(
-        tarang_ble_conn_handle,
-        gattdb_telemetry_data,
-        sizeof(pkt),
-        (const uint8_t *)&pkt);
-
-    if (sc != SL_STATUS_OK) {
-      printf("[BLE] Notification failed: 0x%04lX (will retry on next tick)\r\n", (unsigned long)sc);
-    } else {
-      /* Clear pending flags ONLY when successfully dispatched over BLE */
-      pipeline->beat_telemetry_pending = false;
-      pipeline->engine.rhythm_changed = false;
-      pipeline->engine.significant_event = false;
-
-      printf("[BLE] Telemetry notification sent! (16 bytes, HR=%u rhythm=0x%02X class=%u)\r\n",
-             (unsigned)pkt.current_hr, (unsigned)pkt.rhythm_flags, (unsigned)pkt.beat_class);
+      if (sc == SL_STATUS_OK) {
+        last_health_notify_ms = now_ms;
+      } else {
+        printf("[BLE] Health TX fail: 0x%04lX\r\n", (unsigned long)sc);
+      }
     }
   }
+
+  /* ── 3. ECG Waveform Notification (25 Hz — Phase 2 implementation) ─ */
+  /* TODO: Tap from DSP morph_ring and dispatch 10-sample chunks here.
+   * tarang_ble_ecg_waveform_notifications_enabled tracks the CCCD. */
+
 #else
   (void)pipeline;
 #endif
 }
 
-#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
-/***************************************************************************//**
- * Bluetooth stack event handler.
- * Called automatically by Simplicity SDK event dispatcher when BLE events occur.
+/******************************************************************************
+ *        BLUETOOTH STACK EVENT HANDLER (called by Simplicity SDK)
  ******************************************************************************/
+#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
 void sl_bt_on_event(sl_bt_msg_t *evt)
 {
   sl_status_t sc;
 
   switch (SL_BT_MSG_ID(evt->header)) {
 
+    /* ── System Boot: configure security, create adv set, start 30s window ── */
     case sl_bt_evt_system_boot_id:
+    {
       printf("TARANG BLE BOOT OK\r\n");
 
-      /* Configure Security Manager for bonding & encryption with Just Works (No I/O) */
+      /* Configure Security Manager: Just Works (No I/O) bonding */
       sc = sl_bt_sm_configure(0x08, sl_bt_sm_io_capability_noinputnooutput);
       app_assert_status(sc);
 
@@ -193,19 +248,34 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       sc = sl_bt_advertiser_create_set(&tarang_advertising_set_handle);
       app_assert_status(sc);
 
+      /* ── Dynamic Device Name: TARANG-<last 4 hex of MAC> ──────────── */
+      {
+        bd_addr address;
+        uint8_t addr_type;
+        sc = sl_bt_system_get_identity_address(&address, &addr_type);
+        if (sc == SL_STATUS_OK) {
+          char name_buf[16];
+          snprintf(name_buf, sizeof(name_buf), "TARANG-%02X%02X",
+                   address.addr[1], address.addr[0]);
+          sl_bt_gatt_server_write_attribute_value(
+              gattdb_device_name, 0, strlen(name_buf), (const uint8_t *)name_buf);
+          printf("[BLE] Device name: %s\r\n", name_buf);
+        }
+      }
+
       /* Generate advertising data */
       sc = sl_bt_legacy_advertiser_generate_data(
           tarang_advertising_set_handle,
           sl_bt_advertiser_general_discoverable);
       app_assert_status(sc);
 
-      /* 100 ms advertising interval (160 * 0.625ms = 100ms) */
+      /* ── 30-SECOND TIMED ADVERTISING WINDOW ──────────────────────── */
       sc = sl_bt_advertiser_set_timing(
           tarang_advertising_set_handle,
-          160,
-          160,
-          0,
-          0);
+          160,    /* min interval: 160 × 0.625ms = 100ms */
+          160,    /* max interval: 160 × 0.625ms = 100ms */
+          3000,   /* DURATION: 3000 × 10ms = 30 SECONDS */
+          0);     /* max events: 0 = no event count limit */
       app_assert_status(sc);
 
       /* Start connectable advertising */
@@ -213,35 +283,66 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
           tarang_advertising_set_handle,
           sl_bt_legacy_advertiser_connectable);
       app_assert_status(sc);
+
+      printf("[BLE] 30-second advertising window started. Discoverable now.\r\n");
+      break;
+    }
+
+    /* ── Advertising Timeout: 30s expired without connection ────────── */
+    case sl_bt_evt_advertiser_timeout_id:
+      printf("[BLE] 30s advertising window expired. Device is now UNDISCOVERABLE.\r\n");
+      printf("[BLE] Press RESET on EFR32 to re-enable advertising.\r\n");
       break;
 
+    /* ── Connection Opened: stop advertising, set connection params ──── */
     case sl_bt_evt_connection_opened_id:
+    {
       tarang_ble_conn_handle = evt->data.evt_connection_opened.connection;
-      printf("[BLE] Connection opened! Handle=0x%02X. Requesting 20ms interval...\r\n",
-             tarang_ble_conn_handle);
+      printf("[BLE] Connection opened! Handle=0x%02X\r\n", tarang_ble_conn_handle);
 
-      /* Request 20 ms connection interval (16 * 1.25ms = 20ms),
-         0 slave latency, 1 second supervision timeout */
+      /* STOP advertising — Pod becomes undiscoverable to all other scanners */
+      sl_bt_advertiser_stop(tarang_advertising_set_handle);
+      printf("[BLE] Advertising stopped — Pod is now UNDISCOVERABLE.\r\n");
+
+      /* Request aggressive 20ms connection interval for real-time telemetry:
+       *   min CI = 16 × 1.25ms = 20ms
+       *   max CI = 16 × 1.25ms = 20ms
+       *   slave latency = 0
+       *   supervision timeout = 100 × 10ms = 1000ms
+       *   ce_len_max = 0xFFFF (let controller decide) */
       sc = sl_bt_connection_set_parameters(
           tarang_ble_conn_handle,
-          16,
-          16,
-          0,
-          100,
-          0,
-          0xFFFF);
+          16,       /* min CI */
+          16,       /* max CI */
+          0,        /* slave latency */
+          100,      /* supervision timeout */
+          0,        /* ce_len min */
+          0xFFFF);  /* ce_len max */
       app_assert_status(sc);
-      break;
 
+      /* Reset dispatch timers */
+      last_telemetry_notify_ms = 0;
+      last_health_notify_ms    = 0;
+      break;
+    }
+
+    /* ── Connection Closed: clear state, restart 30s advertising window ── */
     case sl_bt_evt_connection_closed_id:
-      printf("[BLE] Connection closed. Restarting advertising...\r\n");
+      printf("[BLE] Connection closed. Restarting 30s advertising window...\r\n");
       tarang_ble_conn_handle = SL_BT_INVALID_CONNECTION_HANDLE;
       tarang_ble_telemetry_notifications_enabled = false;
+      tarang_ble_health_notifications_enabled     = false;
+      tarang_ble_ecg_waveform_notifications_enabled = false;
 
-      /* Restart advertising */
+      /* Restart 30s advertising window for reconnection */
       sc = sl_bt_legacy_advertiser_generate_data(
           tarang_advertising_set_handle,
           sl_bt_advertiser_general_discoverable);
+      app_assert_status(sc);
+
+      sc = sl_bt_advertiser_set_timing(
+          tarang_advertising_set_handle,
+          160, 160, 3000, 0);
       app_assert_status(sc);
 
       sc = sl_bt_legacy_advertiser_start(
@@ -250,6 +351,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       app_assert_status(sc);
       break;
 
+    /* ── Bonding Confirm: auto-accept Just Works pairing ──────────── */
     case sl_bt_evt_sm_confirm_bonding_id:
     {
       uint8_t conn = evt->data.evt_sm_confirm_bonding.connection;
@@ -266,6 +368,13 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       uint8_t conn = evt->data.evt_sm_bonded.connection;
       uint8_t bond = evt->data.evt_sm_bonded.bonding;
       printf("[BLE][SM] SUCCESS: Device bonded! Connection=0x%02X BondHandle=0x%02X\r\n", conn, bond);
+
+      /* Log security level for verification */
+      uint8_t sec_mode;
+      sc = sl_bt_sm_get_bonding_details(bond, NULL, NULL, &sec_mode, NULL);
+      if (sc == SL_STATUS_OK) {
+        printf("[BLE][SM] Security mode: %u (1=unauthenticated, 2=authenticated)\r\n", sec_mode);
+      }
       break;
     }
 
@@ -277,26 +386,40 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       break;
     }
 
+    /* ── CCCD Write: track per-characteristic notification subscription ── */
     case sl_bt_evt_gatt_server_characteristic_status_id:
     {
       uint16_t characteristic = evt->data.evt_gatt_server_characteristic_status.characteristic;
       uint8_t status_flags = evt->data.evt_gatt_server_characteristic_status.status_flags;
-      uint16_t client_config_flags = evt->data.evt_gatt_server_characteristic_status.client_config_flags;
-
-      printf("[BLE] Characteristic status change: char=0x%04X status=0x%02X config=0x%04X (telemetry char=0x%04X)\r\n",
-             (unsigned)characteristic, (unsigned)status_flags, (unsigned)client_config_flags,
-             (unsigned)gattdb_telemetry_data);
+      uint16_t client_config = evt->data.evt_gatt_server_characteristic_status.client_config_flags;
 
       if (status_flags & sl_bt_gatt_server_client_config) {
-        if (characteristic == gattdb_telemetry_data || characteristic == (gattdb_telemetry_data - 1)) {
-          if (client_config_flags != sl_bt_gatt_disable) {
-            printf("[BLE] SUCCESS: Client subscribed to telemetry notifications!\r\n");
-            tarang_ble_telemetry_notifications_enabled = true;
-          } else {
-            printf("[BLE] Client unsubscribed from telemetry notifications.\r\n");
-            tarang_ble_telemetry_notifications_enabled = false;
-          }
+        bool enabled = (client_config != sl_bt_gatt_disable);
+
+        printf("[BLE] CCCD write: char=0x%04X config=0x%04X -> %s\r\n",
+               (unsigned)characteristic, (unsigned)client_config,
+               enabled ? "ENABLED" : "DISABLED");
+
+        /* Clinical Telemetry CCCD */
+        if (characteristic == gattdb_telemetry_data) {
+          tarang_ble_telemetry_notifications_enabled = enabled;
+          printf("[BLE] %s: Clinical Telemetry notifications\r\n",
+                 enabled ? "SUBSCRIBED" : "UNSUBSCRIBED");
         }
+        /* Device Health CCCD */
+        else if (characteristic == gattdb_device_health) {
+          tarang_ble_health_notifications_enabled = enabled;
+          printf("[BLE] %s: Device Health notifications\r\n",
+                 enabled ? "SUBSCRIBED" : "UNSUBSCRIBED");
+        }
+#if defined(gattdb_ecg_waveform)
+        /* ECG Waveform CCCD */
+        else if (characteristic == gattdb_ecg_waveform) {
+          tarang_ble_ecg_waveform_notifications_enabled = enabled;
+          printf("[BLE] %s: ECG Waveform notifications\r\n",
+                 enabled ? "SUBSCRIBED" : "UNSUBSCRIBED");
+        }
+#endif
       }
       break;
     }

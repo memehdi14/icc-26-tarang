@@ -23,8 +23,9 @@ from bleak import BleakScanner, BleakClient
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-TELEMETRY_CHAR_UUID = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"
-HEALTH_CHAR_UUID    = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"
+TELEMETRY_CHAR_UUID    = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"
+HEALTH_CHAR_UUID       = "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
+ECG_WAVEFORM_CHAR_UUID = "c5da9988-1111-4b5c-b00e-ef96b24ee77b"
 BACKEND_URL = os.getenv("TARANG_BACKEND_URL", "http://localhost:8000").rstrip("/")
 BLE_ADDRESS = os.getenv("TARANG_BLE_ADDRESS")
 CONFIGURED_SESSION_ID = os.getenv("TARANG_SESSION_ID")
@@ -233,6 +234,16 @@ async def run_ble_gateway():
                     session_id = CONFIGURED_SESSION_ID or f"sess_{int(time.time())}_{address.replace(':', '')[-6:]}"
                     last_real_health_at = [0.0]
                     print(f"[BLE] Connected to {address} (Session: {session_id})")
+
+                    # Establish bonding & encryption with EFR32
+                    try:
+                        if hasattr(client, "pair"):
+                            print("[BLE] Establishing bonding & encryption with TARANG Pod...")
+                            await client.pair()
+                            print("[BLE] ✅ Security & bonding established.")
+                    except Exception as e:
+                        print(f"[BLE] Pairing note: {e} (proceeding with GATT)")
+
                     await post_diagnostics(http, client, True)
 
                     def telemetry_handler(sender, data: bytearray):
