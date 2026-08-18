@@ -520,8 +520,31 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
     {
       tarang_ble_conn_handle = evt->data.evt_connection_opened.connection;
       printf("[BLE] Connection opened! Handle=0x%02X\r\n", tarang_ble_conn_handle);
+
+      /* Set 20ms connection interval (16 * 1.25ms = 20ms) */
+      sc = sl_bt_connection_set_parameters(
+          tarang_ble_conn_handle,
+          16,
+          16,
+          0,
+          100,
+          0,
+          0xFFFF);
+      if (sc != SL_STATUS_OK) {
+        printf("[BLE] Set params note: 0x%04lX\r\n", (unsigned long)sc);
+      }
+
       last_vitals_send_ms    = 0;
       last_analytics_send_ms = 0;
+      break;
+    }
+
+    /* ── Auto-confirm bonding if requested ──── */
+    case sl_bt_evt_sm_confirm_bonding_id:
+    {
+      uint8_t conn = evt->data.evt_sm_confirm_bonding.connection;
+      printf("[BLE][SM] Confirming bonding on conn=0x%02X\r\n", conn);
+      sl_bt_sm_bonding_confirm(conn, 1);
       break;
     }
 

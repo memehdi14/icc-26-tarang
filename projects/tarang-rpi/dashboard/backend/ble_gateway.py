@@ -157,12 +157,11 @@ async def run_ble_gateway():
                 continue
 
             address = device.address if hasattr(device, 'address') else str(device)
-            clean_bluez_cache(address)
-            await asyncio.sleep(1.0)
-            print(f"[BLE] Connecting to {address} (timeout 25s)...")
+            print(f"[BLE] Connecting to {address} (timeout 20s)...")
 
             try:
-                async with BleakClient(address, timeout=25.0) as client:
+                # Pass device instance directly so Bleak uses the live DBus object
+                async with BleakClient(device, timeout=20.0) as client:
                     if not client.is_connected:
                         continue
 
