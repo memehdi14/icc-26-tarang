@@ -47,15 +47,15 @@ def get_latest_device_health(db: Session = Depends(get_db)):
         return {
             "uptimeS": 0,
             "ecgLeadOff": False,
-            "ecgSqi": 255,
-            "ppgFingerPresent": True,
-            "imuOk": True,
+            "ecgSqi": 0,
+            "ppgFingerPresent": False,
+            "imuOk": False,
             "i2cFailureCount": 0,
             "dspOverflowCount": 0,
             "ecgOverrunCount": 0,
-            "bleRssi": -60,
+            "bleRssi": None,
             "batteryPct": None,
-            "fwVersion": "1.0.0",
+            "fwVersion": None,
         }
     return event.to_dict()
 

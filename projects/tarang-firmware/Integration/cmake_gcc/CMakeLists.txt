@@ -21,6 +21,7 @@ target_compile_options(slc PUBLIC
 add_executable(Integration
     # Add additional sources here
     "${CMAKE_CURRENT_LIST_DIR}/../tarang_ble.c"
+    "${CMAKE_CURRENT_LIST_DIR}/../tarang_nlms.c"
 )
 
 target_include_directories(Integration PUBLIC

@@ -101,7 +101,10 @@ source dashboard/backend/venv/bin/activate
 python ble_test.py 64:02:8F:64:26:14
 ```
 
-The test performs pairing before service enumeration, validates all three Tarang services, subscribes to HR, SpO2, and event metadata, and listens for notifications.
+The test keeps discovery active while it resolves and connects the wearable,
+pairs on that active connection, then stops discovery. It validates all three
+Tarang services, starts the required vitals, analytics, and clinical-event
+subscriptions, and listens for notifications and confirmed indications.
 
 Use unsecured mode only while testing firmware that has no protected GATT attributes:
 
@@ -165,15 +168,48 @@ npm run start -- -H 0.0.0.0 -p 3000
 ```text
 Backend ready at http://127.0.0.1:8000
 Scanning for configured device 64:02:8F:64:26:14
-Connecting to TARANG-2614 (...), pairing=True
-Connected and GATT verified
+Connecting to TARANG-2614 (...) before pairing; discovery remains active
+BLE pairing complete
+Connected and GATT verified (MTU=..., session=...)
 Subscribed to b4cf8877-...
 ...
-9 Mode A subscriptions active
-Vitals: HR=75 SpO2=98
+14 Mode A subscriptions active
+Vitals: HR=<measured-or-unavailable> SpO2=<measured-or-unavailable>
 ```
 
-On first connection, BlueZ performs SMP pairing. Later connections reuse the stored bond.
+On first connection, BlueZ performs SMP pairing. Later connections reuse the
+stored bond. Heart rate remains unavailable until ECG has enough valid RR
+intervals or the PPG window is valid; SpO2 remains unavailable until the
+four-second PPG window passes finger, signal-quality, and motion gates.
+
+### Manual BlueZ confirmation
+
+Use this only to isolate a BlueZ problem. Enter each command separately inside
+`bluetoothctl`; do not paste the whole block at its prompt.
+
+```bash
+bluetoothctl
+```
+
+```text
+power on
+agent NoInputNoOutput
+default-agent
+scan on
+```
+
+Wait until `TARANG-2614` appears. Keep discovery on for the first connection:
+
+```text
+connect 64:02:8F:64:26:14
+pair 64:02:8F:64:26:14
+scan off
+trust 64:02:8F:64:26:14
+info 64:02:8F:64:26:14
+```
+
+The production gateway performs this sequence programmatically and is the
+preferred test. Disconnect EFR Connect or any other phone before the Pi test.
 
 ## Database
 
@@ -211,6 +247,34 @@ cd projects/tarang-rpi
 ```
 
 It then updates Python dependencies, runs tests, installs exact frontend dependencies from `package-lock.json`, and rebuilds Next.js.
+
+## Push From the Development Machine
+
+Review exactly what will be committed before pushing:
+
+```powershell
+cd C:\MMDPublic\Hackathons\TeamOcelleon
+git status --short
+git diff --check
+git add projects/tarang-firmware/Integration projects/tarang-rpi
+git diff --cached --stat
+git commit -m "Integrate Tarang sensor pipeline and Raspberry Pi hub"
+git push -u origin HEAD
+```
+
+Do not commit `tarang.env`, the Python virtual environment, `.next`, or the
+SQLite deployment database. On the Pi, pull and rebuild from the repository
+root:
+
+```bash
+cd ~/icc-26-tarang
+git pull --ff-only
+cd projects/tarang-rpi
+./update_rpi.sh
+./start_all.sh
+```
+
+Use `./setup_rpi.sh` instead of `./update_rpi.sh` on a fresh Pi checkout.
 
 ## Optional systemd Service
 
@@ -250,17 +314,24 @@ journalctl -u tarang-hub -f
 
 ### Pairing fails immediately
 
-Confirm the firmware boot log contains:
+Confirm the firmware boot log contains successful Security Manager setup and
+connectable advertising, including:
 
 ```text
-[BLE] enable bonding: OK
+[BLE][OK] configure security manager
+[BLE][OK] configure persistent bonding store
+[BLE][OK] enable bonding
+[BLE][OK] start connectable advertising
 ```
 
 Then inspect the firmware's `[BLE][SM] Bonding failed` reason. Do not delete the bond repeatedly without recording that reason.
 
 ### Required subscriptions fail
 
-If GATT attributes require bonding, confirm `TARANG_BLE_PAIR=true`. The gateway treats HR, SpO2, and event metadata subscriptions as mandatory and reconnects instead of pretending the session is healthy.
+If GATT attributes require bonding, confirm `TARANG_BLE_PAIR=true`. The gateway
+treats HR, SpO2, all seven analytics values, event metadata, ECG chunks, and
+beat annotations as mandatory. It reconnects rather than pretending the
+session is healthy.
 
 ### Device is not found
 
@@ -280,14 +351,20 @@ Only after confirming a key mismatch, remove the bond from both peers:
 bluetoothctl remove 64:02:8F:64:26:14
 ```
 
-Erase the corresponding EFR32 bond through the firmware's maintenance flow or a controlled NVM reset, then pair once again. Removing only one side creates another mismatch.
+Erase the corresponding EFR32 bond through the firmware's maintenance flow or
+a controlled NVM reset/known full-device erase, reboot it, then pair once.
+Removing only one side creates another mismatch. A normal firmware reflash may
+preserve NVM bond keys and is not necessarily a bond erase.
 
 ### Pi connects but receives no data
 
 - Disconnect the phone; the current firmware tracks one application connection.
 - Confirm all required subscriptions succeeded.
 - Confirm the firmware reports CCCD `SUBSCRIBED` events.
-- Remember that the current BLE-only firmware checkpoint sends test vitals while ECG/AI flags are disabled.
+- Confirm ECG, PPG, IMU, NLMS, and BLE are enabled in `tarang_constants.h`.
+- Expect unavailable vitals during sensor/algorithm warmup; do not expect 75/98 defaults.
+- The current GATT has no dedicated device-health characteristic. Readiness is
+  based on connection plus receipt of real telemetry.
 
 ### Backend is unavailable
 

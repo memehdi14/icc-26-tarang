@@ -16,10 +16,9 @@ import httpx
 from bleak import BleakClient, BleakScanner
 
 from ble_protocol import (
-    ANALYTICS_BURDEN_UUID,
+    ANALYTICS_CHARACTERISTIC_UUIDS,
     EVENT_ANNOTATIONS_UUID,
     EVENT_ECG_CHUNK_UUID,
-    EVENT_ECG_CONTROL_UUID,
     EVENT_META_UUID,
     EVENT_RHYTHM_UUID,
     EVENT_TICKER_UUID,
@@ -31,6 +30,7 @@ from ble_protocol import (
     VITALS_HR_UUID,
     VITALS_SPO2_UUID,
     decode_analytics,
+    decode_analytics_characteristic,
     decode_annotations,
     decode_event_meta,
     decode_event_ticker,
@@ -282,7 +282,17 @@ class GatewaySession:
         self.last_spo2: int | None = None
         self._loop = asyncio.get_running_loop()
         self._vitals_timer: asyncio.TimerHandle | None = None
+        self._analytics_timer: asyncio.TimerHandle | None = None
         self._event_timer: asyncio.TimerHandle | None = None
+        self._analytics_values: dict[str, float] = {
+            "pvc_burden_pct": 0.0,
+            "pac_burden_pct": 0.0,
+            "sdnn": 0.0,
+            "rmssd": 0.0,
+            "prr50": 0.0,
+            "ai_duty_cycle_pct": 0.0,
+            "em2_sleep_pct": 0.0,
+        }
         self._diagnostics_task: asyncio.Task[None] | None = None
         self._event = ClinicalEventBuffer()
         self._snippet = SnippetReassembler()
@@ -304,13 +314,13 @@ class GatewaySession:
     def on_heart_rate(self, _sender: Any, data: bytearray) -> None:
         value = self._decode("heart-rate", decode_heart_rate, data)
         if value is not None:
-            self.last_hr = value
+            self.last_hr = value if value > 0 else None
             self._schedule_vitals()
 
     def on_spo2(self, _sender: Any, data: bytearray) -> None:
         value = self._decode("SpO2", decode_spo2, data)
         if value is not None:
-            self.last_spo2 = value
+            self.last_spo2 = value if value > 0 else None
             self._schedule_vitals()
 
     def _schedule_vitals(self) -> None:
@@ -329,17 +339,46 @@ class GatewaySession:
         LOG.info("Vitals: HR=%s SpO2=%s", self.last_hr, self.last_spo2)
 
     def on_analytics(self, _sender: Any, data: bytearray) -> None:
+        """Compatibility callback for the retired nine-byte rollup."""
         decoded = self._decode("analytics", decode_analytics, data)
         if decoded is None:
             return
+        self._analytics_values.update(decoded)
+        self._schedule_analytics()
+
+    def on_analytics_scalar(
+        self, characteristic_uuid: str, _sender: Any, data: bytearray
+    ) -> None:
+        decoded = self._decode(
+            "analytics scalar",
+            lambda payload: decode_analytics_characteristic(
+                characteristic_uuid, payload
+            ),
+            data,
+        )
+        if decoded is None:
+            return
+        field, value = decoded
+        self._analytics_values[field] = value
+        self._schedule_analytics()
+
+    def _schedule_analytics(self) -> None:
+        if self._analytics_timer is not None:
+            self._analytics_timer.cancel()
+        self._analytics_timer = self._loop.call_later(
+            0.25, self._flush_analytics
+        )
+
+    def _flush_analytics(self) -> None:
+        self._analytics_timer = None
         payload = self._base_payload()
-        payload.update(decoded)
+        payload.update(self._analytics_values)
         self.publisher.enqueue("/api/analytics", payload, "analytics")
         LOG.info(
             "Analytics: PVC=%.1f%% PAC=%.1f%% SDNN=%.0fms",
-            decoded["pvc_burden_pct"],
-            decoded["pac_burden_pct"],
-            decoded["sdnn"],
+            self._analytics_values["pvc_burden_pct"],
+            self._analytics_values["pac_burden_pct"],
+            self._analytics_values["sdnn"],
         )
 
     def on_rhythm(self, _sender: Any, data: bytearray) -> None:
@@ -363,6 +402,11 @@ class GatewaySession:
         self._event.rhythm_status = meta.event_type
         self._event.confidence = meta.confidence / 255.0
         self._event.timestamp_ms = meta.timestamp_ms
+        self._snippet.reset()
+        self._event.waveform = None
+        self._event.annotations = None
+        self._event.snippet_started = True
+        self._event.snippet_ended = False
         self._schedule_event_flush(2.0)
         LOG.info(
             "Clinical event %d: rhythm=%d confidence=%.1f%%",
@@ -410,7 +454,9 @@ class GatewaySession:
     def on_annotations(self, _sender: Any, data: bytearray) -> None:
         annotations = self._decode("annotations", decode_annotations, data)
         if annotations is not None:
-            self._event.annotations = annotations
+            if self._event.annotations is None:
+                self._event.annotations = []
+            self._event.annotations.extend(annotations)
             self._schedule_event_flush(0.5)
 
     def _cancel_event_timer(self) -> None:
@@ -457,17 +503,23 @@ class GatewaySession:
         self._event.posted = True
 
     async def subscribe(self, client: BleakClient) -> None:
-        subscriptions = (
+        subscriptions: list[tuple[str, Callable]] = [
             (VITALS_HR_UUID, self.on_heart_rate),
             (VITALS_SPO2_UUID, self.on_spo2),
-            (ANALYTICS_BURDEN_UUID, self.on_analytics),
             (EVENT_RHYTHM_UUID, self.on_rhythm),
             (EVENT_META_UUID, self.on_event_meta),
             (EVENT_ECG_CHUNK_UUID, self.on_ecg_chunk),
-            (EVENT_ECG_CONTROL_UUID, self.on_event_control),
             (EVENT_ANNOTATIONS_UUID, self.on_annotations),
             (EVENT_TICKER_UUID, self.on_event_ticker),
-        )
+        ]
+        for analytics_uuid in ANALYTICS_CHARACTERISTIC_UUIDS:
+            subscriptions.append(
+                (
+                    analytics_uuid,
+                    lambda sender, data, uuid=analytics_uuid:
+                        self.on_analytics_scalar(uuid, sender, data),
+                )
+            )
 
         active: set[str] = set()
         for uuid, handler in subscriptions:
@@ -519,6 +571,8 @@ class GatewaySession:
     async def close(self) -> None:
         if self._vitals_timer is not None:
             self._vitals_timer.cancel()
+        if self._analytics_timer is not None:
+            self._analytics_timer.cancel()
         self._cancel_event_timer()
         if self._diagnostics_task is not None:
             self._diagnostics_task.cancel()
@@ -534,30 +588,44 @@ class BleGateway:
                 "TARANG_SESSION_ID is unset; active sessions will be resolved from the backend"
             )
 
-    async def find_device(self):
-        if self.config.ble_address:
-            LOG.info("Scanning for configured device %s", self.config.ble_address)
-            return await BleakScanner.find_device_by_address(
-                self.config.ble_address,
-                timeout=self.config.scan_timeout_s,
-            )
-
+    async def start_discovery(self) -> tuple[BleakScanner | None, Any | None]:
+        """Find TARANG while leaving discovery active for the initial connect."""
+        loop = asyncio.get_running_loop()
+        found: asyncio.Future[Any] = loop.create_future()
+        address = self.config.ble_address
         prefix = self.config.name_prefix
-        LOG.info("Scanning for a device named %s*", prefix)
 
-        def match(device, advertisement_data) -> bool:
+        if address:
+            LOG.info("Scanning for configured device %s", address)
+        else:
+            LOG.info("Scanning for a device named %s*", prefix)
+
+        def on_advertisement(device: Any, advertisement_data: Any) -> None:
+            if found.done():
+                return
+            device_address = str(device.address).upper()
             name = advertisement_data.local_name or device.name or ""
-            return name.upper().startswith(prefix)
+            if (address and device_address == address) or (
+                not address and name.upper().startswith(prefix)
+            ):
+                found.set_result(device)
 
-        return await BleakScanner.find_device_by_filter(
-            match,
-            timeout=self.config.scan_timeout_s,
-        )
+        scanner = BleakScanner(detection_callback=on_advertisement)
+        await scanner.start()
+        try:
+            device = await asyncio.wait_for(found, timeout=self.config.scan_timeout_s)
+            return scanner, device
+        except asyncio.TimeoutError:
+            await scanner.stop()
+            return None, None
+        except BaseException:
+            await scanner.stop()
+            raise
 
     async def run_forever(self) -> None:
         reconnect_delay = self.config.reconnect_delay_s
         while True:
-            device = await self.find_device()
+            scanner, device = await self.start_discovery()
             if device is None:
                 LOG.warning("Tarang device not found; retrying in %.1fs", reconnect_delay)
                 await asyncio.sleep(reconnect_delay)
@@ -574,57 +642,72 @@ class BleGateway:
                 self.config, self.publisher, device, self.config.session_id
             )
             LOG.info(
-                "Connecting to %s (%s), pairing=%s",
+                "Connecting to %s (%s) before pairing; discovery remains active",
                 device.name or "TARANG",
                 device.address,
-                self.config.pair,
             )
 
+            client = BleakClient(
+                device,
+                disconnected_callback=on_disconnect,
+                timeout=self.config.connect_timeout_s,
+                pair=False,
+            )
             try:
-                async with BleakClient(
-                    device,
-                    disconnected_callback=on_disconnect,
-                    timeout=self.config.connect_timeout_s,
-                    pair=self.config.pair,
-                ) as client:
-                    if not client.is_connected:
-                        raise RuntimeError("Bleak returned without an active connection")
+                await client.connect()
+                if not client.is_connected:
+                    raise RuntimeError("Bleak returned without an active connection")
 
-                    service_uuids = {service.uuid.lower() for service in client.services}
-                    missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
-                    if missing_services:
-                        raise RuntimeError(
-                            "Tarang GATT services missing: "
-                            + ", ".join(sorted(missing_services))
-                        )
+                if self.config.pair:
+                    LOG.info("GATT resolved; requesting bond on the connected link")
+                    await client.pair()
+                    LOG.info("BLE pairing complete")
 
-                    await self.publisher.synchronize_device(
-                        session.device_id,
-                        device.name or "Tarang Wearable",
-                        session.address,
+                # Once connected and paired, BlueZ retains the device object and
+                # discovery can stop without invalidating the connection.
+                if scanner is not None:
+                    await scanner.stop()
+                    scanner = None
+
+                service_uuids = {service.uuid.lower() for service in client.services}
+                missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
+                if missing_services:
+                    raise RuntimeError(
+                        "Tarang GATT services missing: "
+                        + ", ".join(sorted(missing_services))
                     )
-                    if self.config.session_id is None:
-                        session.session_id = (
-                            await self.publisher.resolve_active_session(
-                                session.device_id
-                            )
-                        )
 
-                    LOG.info(
-                        "Connected and GATT verified (MTU=%s, session=%s)",
-                        client.mtu_size,
-                        session.session_id or "unassigned",
+                await self.publisher.synchronize_device(
+                    session.device_id,
+                    device.name or "Tarang Wearable",
+                    session.address,
+                )
+                if self.config.session_id is None:
+                    session.session_id = (
+                        await self.publisher.resolve_active_session(
+                            session.device_id
+                        )
                     )
-                    reconnect_delay = self.config.reconnect_delay_s
-                    await session.subscribe(client)
-                    session.publish_diagnostics(True)
-                    session.start_diagnostics()
-                    await disconnected.wait()
+
+                LOG.info(
+                    "Connected and GATT verified (MTU=%s, session=%s)",
+                    client.mtu_size,
+                    session.session_id or "unassigned",
+                )
+                reconnect_delay = self.config.reconnect_delay_s
+                await session.subscribe(client)
+                session.publish_diagnostics(True)
+                session.start_diagnostics()
+                await disconnected.wait()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 LOG.error("BLE session failed: %s", exc, exc_info=True)
             finally:
+                if scanner is not None:
+                    await scanner.stop()
+                if client.is_connected:
+                    await client.disconnect()
                 await session.close()
                 session.publish_diagnostics(False)
 

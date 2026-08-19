@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "tarang_constants.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,6 +43,12 @@ int16_t  tarang_imu_get_temp_raw(void);
 uint32_t tarang_imu_get_sample_count(void);
 uint32_t tarang_imu_get_interrupt_count(void);
 bool     tarang_imu_is_healthy(void);
+uint16_t tarang_imu_get_motion_mg(void);
+bool     tarang_imu_get_latest_sample(tarang_imu_sample_t *sample);
+bool     tarang_imu_get_sample_at_or_before(uint64_t timestamp_us,
+                                            tarang_imu_sample_t *sample);
+bool     tarang_imu_get_interpolated_sample(uint64_t timestamp_us,
+                                            tarang_imu_sample_t *sample);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,11 @@
 # TARANG Integrated Multi-Sensor Firmware
 
-This directory contains the production integrated firmware for **Project TARANG** (ECG + PPG + IMU + DSP + Tier 1/2 TFLite Micro CNNs + Clinical Event Engine + BLE) running on the **Silicon Labs EFR32MG26 (BRD2709A / BRD2608A)**.
+This directory contains the functional-validation firmware for **Project TARANG** (ECG + PPG + IMU + NLMS + DSP + Tier 1/2 TFLite Micro CNNs + Clinical Event Engine + BLE) running on the **Silicon Labs EFR32MG26 (BRD2709A / BRD2608A)**.
+
+The authoritative pipeline, wire contract, known limitations, deployment flow,
+and validation gates are in
+**[TARANG_END_TO_END_ARCHITECTURE.md](TARANG_END_TO_END_ARCHITECTURE.md)**.
+This is research firmware and is not a certified diagnostic medical device.
 
 ---
 
@@ -19,13 +24,16 @@ All 3 biometric and motion sensors connect to the EFR32MG26 via dedicated analog
 | **MPU6050 (IMU)** | I2C SCL | `PC05` | Shared I2C Clock | Shared `sl_i2cspm_mikroe` bus with MAX30102 |
 | | I2C SDA | `PC07` | Shared I2C Data | Shared `sl_i2cspm_mikroe` bus with MAX30102 |
 | | INT (Interrupt) | `PC00` | Active-HIGH (`Rising Edge`) | DATA_RDY interrupt line triggering at 100 Hz |
-| | AD0 | `GND` | I2C Address Select | Sets 7-bit I2C Address to `0x68` (driver also supports `0x70`) |
+| | AD0 | `GND` | I2C Address Select | Sets 7-bit I2C Address to `0x68` (driver also detects alternate address `0x69`) |
 | | VCC / GND | `3V3` / `GND` | Power Supply | 3.3V DC Power and Ground |
 | **VCOM Serial UART**| TX (MCU Out) | `PB02` | EUSART0 TX | Connected to J-Link CDC UART virtual COM port |
 | | RX (MCU In) | `PB03` | EUSART0 RX | Connected to J-Link CDC UART virtual COM port |
 
 > [!NOTE]
-> **Power Lock & Stability**: `app.c` locks energy mode to `SL_POWER_MANAGER_EM1` to keep I2C and autonomous IADC/DMA conversions running continuously without peripheral clock shutdown.
+> **Validation power policy**: ECG remains at 250 Hz nominal, PPG at 100 Hz,
+> and IMU at 100 Hz. The application currently uses a 10 ms wake timer and
+> does not claim measured EM2 residency. See
+> [WHY_POWER_OPTIMIZATION_IS_DEFERRED.md](WHY_POWER_OPTIMIZATION_IS_DEFERRED.md).
 
 ---
 
@@ -39,7 +47,7 @@ All 3 biometric and motion sensors connect to the EFR32MG26 via dedicated analog
        │ Tier 0: Streaming DSP & Pan-Tompkins Peak Detector      │
        │  - 0.5–40 Hz Morphology BP + 5–15 Hz QRS BP             │
        │  - 300 ms Hard Refractory (blocks T-wave double counts) │
-       │  - 30-beat Rolling Circuit Breaker (>20% susp rate)     │
+       │  - 30-beat suspicious-rate monitor                      │
        └────────────────────────────┬────────────────────────────┘
                                     │ Beat Emitted (~1 Hz)
                        Is beat suspicious?
@@ -121,7 +129,9 @@ commander flash build/base/Integration.hex --device EFR32MG26B510F3200IM48
 
 ## 5. End-to-End Verification
 
-For the complete 5-stage verification methodology, consult **[TESTING_GUIDE.md](TESTING_GUIDE.md)**:
+For the original model/DSP verification methodology, consult
+**[TESTING_GUIDE.md](TESTING_GUIDE.md)**. Its historical measurements must be
+rerun against the current NLMS-enabled build:
 1. **Stage 0**: Pure-Python TFLite Model Sanity Check (`verify_model_stage0.py`)
 2. **Stage 1**: Offline DSP & Gate Replay (`verify_stage1_dsp_replay.py`)
 3. **Stage 2**: Host C++ Wrapper Unit Test (`test_ai_offline.c`)

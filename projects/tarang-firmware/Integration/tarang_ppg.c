@@ -2,13 +2,12 @@
  * @file tarang_ppg.c
  * @brief TARANG PPG acquisition module — implementation.
  *
- * Direct extraction from Separate Testing/PPG/ppg/app.c.
- * UNCHANGED sensor logic. Only renamed app_init→tarang_ppg_init,
- * app_process_action→tarang_ppg_process, removed GPIOINT_Init()
- * (called once by orchestrator).
+ * Acquisition began from Separate Testing/PPG/ppg/app.c. Integration adds
+ * rolling pulse/SpO2 estimation, signal-quality gates, and motion rejection.
  *
  * MAX30102 over I2C (sl_i2cspm_mikroe), interrupt-driven via PC06 GPIO.
- * PPG_RDY interrupt fires at 100Hz, one sample read per interrupt.
+ * PPG_RDY interrupt fires at 100Hz. Rolling RED/IR windows produce pulse,
+ * perfusion, signal-quality, and estimated SpO2 metrics.
  *
  * Target : EFR32MG26B510F3200IM48 (Series 2, Cortex-M33)
  ******************************************************************************/
@@ -18,6 +17,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <math.h>
+#include <string.h>
+
+#include "tarang_constants.h"
 
 #include "sl_i2cspm.h"
 #include "sl_i2cspm_instances.h"
@@ -63,6 +66,15 @@
 #define MAX30102_MAX_DRAIN_PER_SERVICE  8u
 #define MAX30102_RECOVERY_THRESHOLD     4u
 
+#define PPG_METRIC_WINDOW_SAMPLES       400u  /* 4 seconds at 100 Hz */
+#define PPG_METRIC_UPDATE_SAMPLES       100u  /* Recompute once per second */
+#define PPG_FINGER_IR_MIN               10000.0f
+#define PPG_SENSOR_DC_MAX               250000.0f
+#define PPG_MIN_AC_RATIO                0.0005f
+#define PPG_MOTION_REJECT_MG            120u
+#define PPG_MIN_PULSE_BPM               40u
+#define PPG_MAX_PULSE_BPM               200u
+
 /*******************************************************************************
  * Hardware Pin Definition — MAX30102 INT connected to PC06
  ******************************************************************************/
@@ -98,12 +110,137 @@ static volatile uint8_t  int_status2      = 0u;
 static volatile bool     max30102_found   = false;
 static volatile uint32_t consecutive_i2c_failures = 0u;
 static volatile uint32_t recovery_attempts = 0u;
+static volatile uint16_t latest_motion_mg = 0u;
+
+static tarang_ppg_metrics_t latest_metrics;
+static float ppg_ir_ac_window[PPG_METRIC_WINDOW_SAMPLES];
+static uint32_t last_metric_sample_count = 0u;
 
 static volatile I2C_TransferReturn_TypeDef last_ppg_i2c_ret = i2cTransferDone;
 
 static bool max30102_read_reg(uint8_t reg, uint8_t *value);
 static bool max30102_write_reg(uint8_t reg, uint8_t value);
 static bool max30102_read_fifo_one(uint8_t *data);
+static void ppg_update_metrics(void);
+
+static uint32_t ppg_window_value(const uint32_t *buffer, uint32_t logical_index)
+{
+    uint32_t start = (ppg_index + PPG_BUFFER_SIZE - PPG_METRIC_WINDOW_SAMPLES)
+                     % PPG_BUFFER_SIZE;
+    return buffer[(start + logical_index) % PPG_BUFFER_SIZE];
+}
+
+static void ppg_update_metrics(void)
+{
+    if (ppg_sample_count < PPG_METRIC_WINDOW_SAMPLES) {
+        return;
+    }
+    if ((ppg_sample_count - last_metric_sample_count) < PPG_METRIC_UPDATE_SAMPLES) {
+        return;
+    }
+    last_metric_sample_count = ppg_sample_count;
+
+    double red_sum = 0.0;
+    double ir_sum = 0.0;
+    for (uint32_t i = 0; i < PPG_METRIC_WINDOW_SAMPLES; i++) {
+        red_sum += (double)ppg_window_value(ppg_red_buffer, i);
+        ir_sum += (double)ppg_window_value(ppg_ir_buffer, i);
+    }
+
+    float red_dc = (float)(red_sum / (double)PPG_METRIC_WINDOW_SAMPLES);
+    float ir_dc = (float)(ir_sum / (double)PPG_METRIC_WINDOW_SAMPLES);
+    double red_energy = 0.0;
+    double ir_energy = 0.0;
+
+    for (uint32_t i = 0; i < PPG_METRIC_WINDOW_SAMPLES; i++) {
+        float red_ac = (float)ppg_window_value(ppg_red_buffer, i) - red_dc;
+        float ir_ac = (float)ppg_window_value(ppg_ir_buffer, i) - ir_dc;
+        ppg_ir_ac_window[i] = ir_ac;
+        red_energy += (double)red_ac * red_ac;
+        ir_energy += (double)ir_ac * ir_ac;
+    }
+
+    float red_rms = sqrtf((float)(red_energy / PPG_METRIC_WINDOW_SAMPLES));
+    float ir_rms = sqrtf((float)(ir_energy / PPG_METRIC_WINDOW_SAMPLES));
+    float ir_ac_ratio = ir_dc > 1.0f ? ir_rms / ir_dc : 0.0f;
+
+    memset(&latest_metrics, 0, sizeof(latest_metrics));
+    latest_metrics.window_end_sample = ppg_sample_count;
+    latest_metrics.finger_present =
+        ir_dc >= PPG_FINGER_IR_MIN && ir_dc < PPG_SENSOR_DC_MAX
+        && red_dc > 1000.0f && red_dc < PPG_SENSOR_DC_MAX;
+    latest_metrics.motion_rejected = latest_motion_mg > PPG_MOTION_REJECT_MG;
+
+    float pi_x100 = ir_ac_ratio * 10000.0f;
+    if (pi_x100 > 65535.0f) pi_x100 = 65535.0f;
+    latest_metrics.perfusion_index_x100 = (uint16_t)(pi_x100 + 0.5f);
+
+    if (!latest_metrics.finger_present || ir_ac_ratio < PPG_MIN_AC_RATIO
+        || red_dc <= 1.0f || ir_dc <= 1.0f || red_rms <= 0.0f || ir_rms <= 0.0f) {
+        return;
+    }
+
+    uint32_t min_lag = (TARANG_PPG_SAMPLE_RATE_HZ * 60u) / PPG_MAX_PULSE_BPM;
+    uint32_t max_lag = (TARANG_PPG_SAMPLE_RATE_HZ * 60u) / PPG_MIN_PULSE_BPM;
+    float best_corr = 0.0f;
+    uint32_t best_lag = 0u;
+
+    for (uint32_t lag = min_lag; lag <= max_lag; lag++) {
+        double cross = 0.0;
+        double e0 = 0.0;
+        double e1 = 0.0;
+        for (uint32_t i = lag; i < PPG_METRIC_WINDOW_SAMPLES; i++) {
+            float a = ppg_ir_ac_window[i];
+            float b = ppg_ir_ac_window[i - lag];
+            cross += (double)a * b;
+            e0 += (double)a * a;
+            e1 += (double)b * b;
+        }
+        if (cross > 0.0 && e0 > 0.0 && e1 > 0.0) {
+            float corr = (float)(cross / sqrt(e0 * e1));
+            if (corr > best_corr) {
+                best_corr = corr;
+                best_lag = lag;
+            }
+        }
+    }
+
+    if (best_lag > 0u) {
+        uint32_t pulse = (TARANG_PPG_SAMPLE_RATE_HZ * 60u + best_lag / 2u) / best_lag;
+        if (pulse <= 255u) latest_metrics.pulse_rate_bpm = (uint8_t)pulse;
+    }
+
+    float ratio = (red_rms / red_dc) / (ir_rms / ir_dc);
+    float spo2 = -45.060f * ratio * ratio + 30.354f * ratio + 94.845f;
+    if (spo2 > 100.0f) spo2 = 100.0f;
+    if (spo2 < 70.0f) spo2 = 70.0f;
+
+    float quality = best_corr * 70.0f + ir_ac_ratio * 3000.0f;
+    if (ratio < 0.2f || ratio > 2.0f) quality *= 0.5f;
+    if (quality > 100.0f) quality = 100.0f;
+    if (quality < 0.0f) quality = 0.0f;
+    latest_metrics.signal_quality = (uint8_t)(quality + 0.5f);
+    latest_metrics.spo2_pct = (uint8_t)(spo2 + 0.5f);
+
+    latest_metrics.valid = !latest_metrics.motion_rejected
+        && best_corr >= 0.35f
+        && latest_metrics.signal_quality >= 35u
+        && latest_metrics.pulse_rate_bpm >= PPG_MIN_PULSE_BPM
+        && latest_metrics.pulse_rate_bpm <= PPG_MAX_PULSE_BPM
+        && ratio >= 0.2f && ratio <= 2.0f;
+
+#if TARANG_DEBUG_VERBOSE
+    printf("[PPG][METRIC] valid=%u finger=%u motion=%u SpO2=%u pulse=%u PIx100=%u SQI=%u R_x1000=%lu\r\n",
+           latest_metrics.valid ? 1u : 0u,
+           latest_metrics.finger_present ? 1u : 0u,
+           latest_metrics.motion_rejected ? 1u : 0u,
+           latest_metrics.spo2_pct,
+           latest_metrics.pulse_rate_bpm,
+           latest_metrics.perfusion_index_x100,
+           latest_metrics.signal_quality,
+           (unsigned long)(ratio * 1000.0f));
+#endif
+}
 
 /* Simple busy-wait delay */
 static void ppg_delay_ms(uint32_t ms)
@@ -476,6 +613,8 @@ void tarang_ppg_process(void)
         status_has_data = false;
     }
 
+    ppg_update_metrics();
+
     consecutive_i2c_failures = 0u;
 
     /* Re-prime — if the pin is still LOW after our read, the sensor
@@ -486,6 +625,7 @@ void tarang_ppg_process(void)
         ppg_data_ready = true;
     }
 
+#if TARANG_DEBUG_VERBOSE
     if ((drained > 1u) || ((ppg_sample_count != 0u) && ((ppg_sample_count % 100u) == 0u))) {
         printf("[PPG] cnt=%lu int=%lu RED=%lu IR=%lu drained=%u\r\n",
                (unsigned long)ppg_sample_count,
@@ -494,6 +634,7 @@ void tarang_ppg_process(void)
                (unsigned long)ir_sample,
                (unsigned int)drained);
     }
+#endif
 }
 
 /*******************************************************************************
@@ -526,12 +667,22 @@ bool tarang_ppg_is_found(void)
 
 bool tarang_ppg_is_finger_present(void)
 {
-    /* Stub: no finger presence detection in PR #24 driver */
-    return (ppg_sample_count > 0 && max30102_found);
+    return latest_metrics.finger_present;
 }
 
 uint32_t tarang_ppg_get_consecutive_failures(void)
 {
-    /* Stub: no failure tracking in PR #24 driver */
-    return max30102_found ? 0 : 1;
+    return consecutive_i2c_failures;
+}
+
+void tarang_ppg_set_motion_level_mg(uint16_t motion_mg)
+{
+    latest_motion_mg = motion_mg;
+}
+
+bool tarang_ppg_get_metrics(tarang_ppg_metrics_t *metrics)
+{
+    if (metrics == NULL) return false;
+    *metrics = latest_metrics;
+    return latest_metrics.valid;
 }

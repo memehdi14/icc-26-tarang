@@ -40,7 +40,7 @@ class ApiSmokeTest(unittest.TestCase):
         schema = self.client.get("/openapi.json")
         self.assertEqual(schema.status_code, 200)
         self.assertIn("/api/v1/observations", schema.json()["paths"])
-        self.assertEqual(self.client.get("/api/patients/884219").status_code, 200)
+        self.assertEqual(self.client.get("/api/patients").json(), [])
 
         patient_response = self.client.post("/api/patients", json={
             "name": "Demo Patient",

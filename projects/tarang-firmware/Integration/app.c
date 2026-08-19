@@ -20,8 +20,9 @@
  *
  * ─── TEST MODE SELECTOR ─────────────────────────────────────────────────
  *
- * Set EXACTLY ONE of these to 1 before building to test that sensor alone.
- * Set ALL THREE to 1 for the full combined integration test.
+ * Configure the shared TARANG_ENABLE_* switches in tarang_constants.h.
+ * Set exactly one sensor to 1 for an isolated test, or all three to 1 for the
+ * full combined integration test.
  *
  *   TARANG_ENABLE_ECG   — ECG analog acquisition (IADC + DMADRV)
  *   TARANG_ENABLE_PPG   — PPG optical sensor     (MAX30102 I2C)
@@ -59,17 +60,6 @@
 #if defined(SL_CATALOG_BLUETOOTH_PRESENT)
 #include "sl_bt_api.h"
 #endif
-
-/*******************************************************************************
- * TEST MODE - Change these to select which sensors are active.
- ******************************************************************************/
-#define TARANG_ENABLE_ECG   0
-#define TARANG_ENABLE_PPG   0
-#define TARANG_ENABLE_IMU   0
-#define TARANG_ENABLE_BLE   1
-#define TARANG_ENABLE_RAW_ECG_STREAM 0
-#define TARANG_ANY_SENSOR_ENABLED \
-  (TARANG_ENABLE_ECG || TARANG_ENABLE_PPG || TARANG_ENABLE_IMU)
 
 #if TARANG_ANY_SENSOR_ENABLED
 /* Sleeptimer handle for periodic 10ms sensor processing. */
@@ -262,14 +252,20 @@ void app_init(void)
 void app_process_action(void)
 {
   /* ── Sensor processing ──────────────────────────────────────────────── */
-#if TARANG_ENABLE_ECG
-  tarang_ecg_process();
-#endif
-#if TARANG_ENABLE_PPG
-  tarang_ppg_process();
-#endif
 #if TARANG_ENABLE_IMU
   tarang_imu_process();
+#endif
+#if TARANG_ENABLE_PPG
+#if TARANG_ENABLE_IMU
+  tarang_ppg_set_motion_level_mg(tarang_imu_get_motion_mg());
+#else
+  tarang_ppg_set_motion_level_mg(0u);
+#endif
+  tarang_ppg_process();
+#endif
+#if TARANG_ENABLE_ECG
+  tarang_ecg_process();
+  tarang_pipeline_run_deferred(tarang_pipeline_get_instance());
 #endif
 
   /* ── BLE Telemetry Dispatch (Unconditional) ─────────────────────────── */
@@ -387,6 +383,14 @@ void app_process_action(void)
            (unsigned long)pipeline->class_n_count,
            (unsigned long)pipeline->class_s_count,
            (unsigned long)pipeline->class_v_count);
+    const tarang_nlms_state_t *nlms =
+        tarang_pipeline_get_nlms_state(pipeline);
+    printf("  [NLMS] state=%s motion=%u mg suppression=%u.%u%% resets=%lu\r\n",
+           tarang_nlms_bypass_reason_string(nlms->bypass_reason),
+           nlms->motion_mg,
+           nlms->suppression_pct_x10 / 10u,
+           nlms->suppression_pct_x10 % 10u,
+           (unsigned long)nlms->safety_reset_count);
   }
 
   printf("========================================\r\n");

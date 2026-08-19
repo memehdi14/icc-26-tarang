@@ -46,7 +46,7 @@ export interface ClinicalEvent {
   deviceId?: string;
   sessionId?: string;
   ts?: string | null;
-  rhythmStatus: number; // 0=NSR, 1=AFib, 2=VT, etc.
+  rhythmStatus: number; // TARANG_RHYTHM_* bitfield
   patternType?: string | null; // Couplet, Triplet, Bigeminy, Trigeminy, Run, VT, null
   confidence?: number;
   snippet?: EcgSnippet | null;

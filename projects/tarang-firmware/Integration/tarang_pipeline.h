@@ -3,10 +3,13 @@
  * @brief TARANG Pipeline Orchestrator — public API.
  *
  * Connects the 4-tier hierarchy:
- *   Tier 0: DSP (Pan-Tompkins, NLMS, z-score) → beat_suspicious heuristics
+ *   Tier 0: DSP (Pan-Tompkins, bandpass/notch, z-score) → beat heuristics
  *   Tier 1: Gate CNN (~8KB Int8) — only if suspicious
  *   Tier 2: SV Head CNN (~18KB Int8) — only if Gate says abnormal
  *   Tier 3: Clinical Event Engine (every beat)
+ *
+ * IMU-assisted NLMS runs ahead of the morphology/QRS DSP. It is guarded by
+ * motion, timestamp-freshness, QRS-preservation, and degradation fallbacks.
  *
  * Mirrors the reference project pattern from
  * aiml_soc_anomaly_detection_efr32_baremetal:
@@ -24,6 +27,7 @@
 #include "tarang_constants.h"
 #include "tarang_clinical_engine.h"
 #include "tarang_dsp.h"
+#include "tarang_nlms.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,10 +38,14 @@ extern "C" {
  ******************************************************************************/
 /* Max pending beats queued for deferred AI processing */
 #define TARANG_MAX_PENDING_BEATS  4
+#define TARANG_EVENT_SNIPPET_SAMPLES \
+  (4u * TARANG_ECG_SAMPLE_RATE_HZ)
+#define TARANG_EVENT_ANNOTATION_HISTORY 16u
 
 typedef struct {
   float    waveform[TARANG_BEAT_WINDOW_SIZE];
   uint32_t timestamp_ms;
+  uint32_t r_peak_sample_idx;
   uint16_t rr_interval_ms;
   uint8_t  signal_quality;
   bool     suspicious;
@@ -62,8 +70,23 @@ typedef struct {
 } tarang_pipeline_beat_telemetry_t;
 
 typedef struct {
+  uint32_t sample_idx;
+  uint8_t  beat_class;
+  uint8_t  confidence;
+} tarang_pipeline_annotation_history_t;
+
+typedef struct {
+  uint16_t offset_ms;
+  uint8_t  beat_class;
+  uint8_t  confidence;
+} tarang_pipeline_event_annotation_t;
+
+typedef struct {
   /* DSP state (entire streaming Pan-Tompkins chain) */
   tarang_dsp_state_t       dsp;
+
+  /* Causally aligned IMU-referenced motion cancellation. */
+  tarang_nlms_state_t      nlms;
 
   /* Clinical engine instance */
   tarang_clinical_engine_t engine;
@@ -81,10 +104,9 @@ typedef struct {
   uint32_t suspicious_beats;
   uint32_t gate_passed_beats;
 
-  /* ISSUE-1 FIX: Circuit breaker for runaway suspicious rate.
-   * Tracks last 30 beats to detect if >20% are suspicious.
-   * When circuit breaker trips, Tier-1 CNN is disabled until rate recovers.
-   * This prevents power budget destruction if DSP tuning fails. */
+  /* Suspicious-rate monitor for the last 30 beats. It only disables Tier-1
+   * when TARANG_ENABLE_AI_CIRCUIT_BREAKER is explicitly enabled after
+   * overload and clinical-validation testing. */
   #define CIRCUIT_BREAKER_WINDOW 30
   uint8_t  circuit_breaker_ring[CIRCUIT_BREAKER_WINDOW];
   uint8_t  circuit_breaker_idx;
@@ -98,6 +120,17 @@ typedef struct {
   uint8_t  pending_head;
   uint8_t  pending_tail;
   uint8_t  pending_count;
+
+  /* Clean, normalized ECG history used to build real event snapshots. */
+  int16_t  clean_ecg_ring[TARANG_EVENT_SNIPPET_SAMPLES];
+  uint16_t clean_ecg_head;
+  uint16_t clean_ecg_count;
+
+  /* Beat labels associated with absolute DSP sample indices. */
+  tarang_pipeline_annotation_history_t
+      annotation_history[TARANG_EVENT_ANNOTATION_HISTORY];
+  uint8_t annotation_head;
+  uint8_t annotation_count;
 
   /* One-shot debug event consumed immediately after each ECG sample. */
   tarang_pipeline_beat_telemetry_t latest_beat_telemetry;
@@ -127,8 +160,8 @@ typedef struct {
  * @note Call AFTER sensor inits (ECG, IMU, PPG) are complete.
  *       Call BEFORE the main super-loop starts processing.
  *
- * In Phase B, this will also initialize TFLite Micro interpreter,
- * validate model input tensor shape, and allocate the tensor arena.
+ * This also initializes the TFLite Micro interpreters, validates model input
+ * tensor shapes, and allocates the tensor arenas.
  *
  * @param[out] pipeline  Pipeline state.
  ******************************************************************************/
@@ -198,12 +231,28 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
 /***************************************************************************//**
  * @brief Run deferred AI inference on any queued beats.
  *
- * NOT IMPLEMENTED — declared for a planned deferred-execution architecture
- * that hasn't been built yet. Do not call. See BUG-1 in code review 2026-08-10.
+ * ECG DMA processing only queues complete beat windows. This function drains
+ * the queue and runs Tier 0-3 outside the acquisition loop.
  *
  * @param[in,out] pipeline  Pipeline state.
  ******************************************************************************/
 void tarang_pipeline_run_deferred(tarang_pipeline_t *pipeline);
+
+uint16_t tarang_pipeline_copy_event_snippet(
+    const tarang_pipeline_t *pipeline,
+    int16_t *samples,
+    uint16_t max_samples,
+    uint32_t *start_sample_idx);
+
+uint8_t tarang_pipeline_copy_event_annotations(
+    const tarang_pipeline_t *pipeline,
+    uint32_t start_sample_idx,
+    uint16_t sample_count,
+    tarang_pipeline_event_annotation_t *annotations,
+    uint8_t max_annotations);
+
+const tarang_nlms_state_t *tarang_pipeline_get_nlms_state(
+    const tarang_pipeline_t *pipeline);
 
 const tarang_dsp_debug_sample_t *tarang_pipeline_get_debug_sample(
     const tarang_pipeline_t *pipeline);

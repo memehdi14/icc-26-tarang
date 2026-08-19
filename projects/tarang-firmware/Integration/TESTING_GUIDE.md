@@ -1,5 +1,12 @@
 # TARANG End-to-End Testing & Validation Guide
 
+> [!IMPORTANT]
+> Results recorded in this guide predate the final synchronized NLMS, real PPG
+> metrics, and reliable BLE event-transfer integration. Treat them as
+> historical/offline evidence and rerun the applicable stages on the current
+> build. Current acceptance gates are defined in
+> [TARANG_END_TO_END_ARCHITECTURE.md](TARANG_END_TO_END_ARCHITECTURE.md).
+
 This document defines the 5-stage end-to-end verification framework for the TARANG embedded firmware.
 
 ---

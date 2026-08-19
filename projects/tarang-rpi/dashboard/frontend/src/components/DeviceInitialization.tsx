@@ -18,6 +18,7 @@ interface DeviceInitializationProps {
   backendOnline: boolean;
   bleConnected: boolean;
   telemetry: ClinicalTelemetryPacket;
+  telemetryReady: boolean;
   deviceHealth?: DeviceHealthTelemetry;
   deviceName?: string;
   sessionLabel?: string;
@@ -29,8 +30,8 @@ interface DeviceInitializationProps {
 const STAGES = [
   { title: 'Clinical services', detail: 'Database and monitoring session ready', icon: Database },
   { title: 'BLE channel', detail: 'Tarang GATT services connected', icon: Radio },
-  { title: 'Signal pipeline', detail: 'ECG, PPG, and motion health received', icon: Activity },
-  { title: 'Inference runtime', detail: 'Model weights and DSP state verified', icon: Cpu },
+  { title: 'Telemetry path', detail: 'First measured vitals received from the wearable', icon: Activity },
+  { title: 'Inference runtime', detail: 'Edge DSP and AI runtime settling', icon: Cpu },
   { title: 'Ready', detail: 'Clinical telemetry can begin', icon: ShieldCheck },
 ];
 
@@ -38,6 +39,7 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
   backendOnline,
   bleConnected,
   telemetry,
+  telemetryReady,
   deviceHealth,
   deviceName = 'Tarang wearable',
   sessionLabel,
@@ -47,7 +49,7 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hasLiveHealth = deviceHealth !== undefined;
-  const targetStage = !backendOnline ? 0 : !bleConnected ? 1 : !hasLiveHealth ? 2 : 4;
+  const targetStage = !backendOnline ? 0 : !bleConnected ? 1 : !telemetryReady ? 2 : 4;
   const [displayStage, setDisplayStage] = useState(0);
   const [finishing, setFinishing] = useState(false);
 
@@ -76,10 +78,10 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
   const statusText = useMemo(() => {
     if (!backendOnline) return 'Waiting for the clinical backend';
     if (!bleConnected) return 'Waiting for the bonded Tarang wearable';
-    if (!hasLiveHealth) return 'Waiting for the first sensor health packet';
-    if (displayStage === 3) return 'Loading quantized inference weights';
+    if (!telemetryReady) return 'Waiting for the first measured vitals packet';
+    if (displayStage === 3) return 'Settling the edge inference runtime';
     return 'Monitoring context is ready';
-  }, [backendOnline, bleConnected, hasLiveHealth, displayStage]);
+  }, [backendOnline, bleConnected, telemetryReady, displayStage]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -164,13 +166,13 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
         <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-8 max-lg:grid-cols-1">
           <section className="view-enter" style={{ animationDelay: '70ms' }}>
             <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-bold"><Activity size={17} className="text-[var(--color-primary)]" /> ECG acquisition channel</div>
+              <div className="flex items-center gap-2 text-sm font-bold"><Activity size={17} className="text-[var(--color-primary)]" /> Signal pipeline activity</div>
               <span className="eyebrow">{hasLiveHealth ? `SQI ${deviceHealth?.ecgSqi}/255` : bleConnected ? 'Synchronizing' : 'Offline'}</span>
             </div>
             <div className="waveform-grid relative h-[250px] overflow-hidden rounded-lg border border-[var(--color-outline-variant)] bg-white">
               <canvas ref={canvasRef} width={920} height={250} className="block h-full w-full" />
               <div className="absolute bottom-3 left-4 flex gap-5 font-mono text-[10px] text-[var(--color-on-surface-variant)]">
-                <span>25 mm/s</span><span>10 mm/mV</span><span>{telemetry.current_hr || '--'} bpm</span>
+                <span>Commissioning trace</span><span>{telemetry.current_hr || '--'} bpm measured</span>
               </div>
             </div>
 
@@ -205,7 +207,7 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
               })}
             </ol>
 
-            {(!backendOnline || !bleConnected || !hasLiveHealth) && (
+            {(!backendOnline || !bleConnected || !telemetryReady) && (
               <div className="mt-5 border-t border-[var(--color-outline-variant)] pt-5">
                 <p className="mb-3 text-xs text-[var(--color-on-surface-variant)]">The workstation will continue automatically when the missing signal becomes available.</p>
                 <button onClick={onRetry} className="button-primary w-full"><RefreshCw size={16} /> Refresh device status</button>

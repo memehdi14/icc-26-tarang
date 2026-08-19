@@ -393,7 +393,7 @@ export default function Page() {
         body: JSON.stringify({
           mrn: patient.id,
           session_id: activeSession?.session_id,
-          priority: latestEvent?.rhythmStatus === 2 ? 'critical' : 'urgent',
+          priority: ((latestEvent?.rhythmStatus ?? 0) & 0x80) !== 0 ? 'critical' : 'urgent',
           reason: latestEvent?.patternType
             ? `${latestEvent.patternType} event requires clinical review`
             : 'Clinical review requested from the telemetry workstation',
@@ -445,6 +445,7 @@ export default function Page() {
         backendOnline={backendOnline}
         bleConnected={bleConnected}
         telemetry={legacyTelemetry}
+        telemetryReady={Boolean(vitals.ts)}
         deviceHealth={deviceHealth}
         deviceName={activeDevice?.name ?? diagnostics.deviceName}
         sessionLabel={activeSession?.session_id}

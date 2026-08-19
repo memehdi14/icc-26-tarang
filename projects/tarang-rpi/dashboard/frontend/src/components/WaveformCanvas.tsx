@@ -37,18 +37,11 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
       if (!hasEvent) {
         phase += 0.022;
         const center = height / 2;
-        context.strokeStyle = '#008378';
-        context.lineWidth = 1.8;
+        context.strokeStyle = 'rgba(0,131,120,0.5)';
+        context.lineWidth = 1.5;
         context.beginPath();
-        for (let x = 0; x < width; x += 1) {
-          const cycle = ((x / width) * 7 + phase * 0.8) % 1;
-          let y = center + Math.sin(x * 0.028 + phase) * 2.5;
-          if (cycle > 0.35 && cycle < 0.39) y -= Math.sin((cycle - 0.35) / 0.04 * Math.PI) * 11;
-          if (cycle > 0.46 && cycle < 0.48) y -= Math.sin((cycle - 0.46) / 0.02 * Math.PI) * 48;
-          if (cycle > 0.48 && cycle < 0.51) y += Math.sin((cycle - 0.48) / 0.03 * Math.PI) * 18;
-          if (cycle > 0.60 && cycle < 0.70) y -= Math.sin((cycle - 0.60) / 0.10 * Math.PI) * 9;
-          if (x === 0) context.moveTo(x, y); else context.lineTo(x, y);
-        }
+        context.moveTo(0, center);
+        context.lineTo(width, center);
         context.stroke();
 
         const sweepX = (phase * 160) % (width + 180) - 90;
@@ -95,12 +88,12 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
         <div className="flex items-center gap-3">
           <span className={`status-dot ${hasEvent ? 'text-[var(--color-warning)]' : 'pulse-dot text-[var(--color-success)]'}`} />
           <div>
-            <h2 className="text-sm font-bold">{hasEvent ? 'Event ECG snapshot' : 'ECG lead II'}</h2>
-            <p className="eyebrow mt-0.5">{hasEvent ? '4-second high-resolution capture' : 'Event-driven live preview'}</p>
+            <h2 className="text-sm font-bold">{hasEvent ? 'Event ECG snapshot' : 'Event capture armed'}</h2>
+            <p className="eyebrow mt-0.5">{hasEvent ? '4-second high-resolution capture' : 'Waveform appears when an anomaly is captured'}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="eyebrow">25 mm/s&nbsp;&nbsp;10 mm/mV&nbsp;&nbsp;250 Hz</span>
+          <span className="eyebrow">{hasEvent ? 'Normalized ECG / 250 Hz' : '250 Hz event acquisition'}</span>
           {hasEvent && onClearSnapshot && <button className="button-quiet" onClick={onClearSnapshot}><RefreshCw size={15} /> Return live</button>}
         </div>
       </div>
@@ -109,7 +102,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
         <canvas ref={canvasRef} width={1100} height={310} className="block h-full w-full" />
         {!hasEvent && (
           <div className="absolute bottom-3 left-4 flex items-center gap-2 rounded bg-white/90 px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-primary)]">
-            <Radio size={14} /> Monitoring active / high-resolution capture on anomaly
+            <Radio size={14} /> Monitoring active / waiting for an event snapshot
           </div>
         )}
         {hasEvent && (
@@ -122,7 +115,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
           </div>
         )}
         <div className="pointer-events-none absolute bottom-3 right-4 flex items-center gap-2 font-mono text-[10px] text-[var(--color-on-surface-variant)]">
-          {hasEvent ? <><Activity size={13} /> Trigger -1.0s to +3.0s</> : <><CheckCircle2 size={13} /> Inference armed</>}
+          {hasEvent ? <><Activity size={13} /> Four-second event context</> : <><CheckCircle2 size={13} /> Inference armed</>}
         </div>
       </div>
     </div>

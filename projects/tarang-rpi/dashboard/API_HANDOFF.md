@@ -10,13 +10,17 @@
 6. Stream live data over `/ws/telemetry` and load history from the session endpoints.
 7. Stop monitoring (`POST /api/sessions/{session_id}/stop`) to release the device.
 
+A clean database starts with an empty patient worklist. The UI must preserve
+`null`/unavailable clinical values during acquisition and algorithm warmup; it
+must not replace them with demonstration HR or SpO2 values.
+
 ## UI direction
 
 - First screen: compact patient worklist with search, status, bed, active device, and an Add Patient action.
 - Patient form: demographics and clinical context only; keep device assignment in the next step.
 - Start-monitoring step: patient summary, available-device selector, connection status, then one Start action.
 - Dashboard: retain the current workstation; add the selected patient and active session to its route/state.
-- Session review: start/end time, latest vitals, rhythm events, device-health events, and export/integration action.
+- Session review: start/end time, latest vitals, rhythm events, connection diagnostics, and export/integration action.
 - Always show empty, loading, disconnected, reconnecting, and device-already-in-use states.
 
 ## Internal API
@@ -69,6 +73,13 @@ The versioned resources are FHIR-inspired, not certified FHIR resources. Put a v
 When `TARANG_SESSION_ID` is unset, the gateway polls the backend for the active
 session assigned to `TARANG_DEVICE_ID`. An explicit value pins ingestion to one
 session and disables automatic session switching.
+
+The current firmware requires 14 subscriptions: HR, SpO2, seven analytics
+scalars, event metadata, ECG chunks, beat annotations, rhythm, and pattern
+ticker. The event-control characteristic is a command input in the current
+runtime and is intentionally not subscribed. There is no dedicated
+device-health characteristic in the current generated GATT database;
+readiness is connection plus first real telemetry.
 
 Run the backend smoke test before deployment:
 

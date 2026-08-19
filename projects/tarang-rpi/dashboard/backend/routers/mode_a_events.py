@@ -140,7 +140,7 @@ class BeatAnnotationInput(BaseModel):
 class ClinicalEventIngest(BaseModel):
     device_id: str = Field(default="tarang-efr32-demo")
     session_id: Optional[str] = None
-    rhythm_status: int = Field(default=0, ge=0, le=255) # 0=NSR, 1=AFib, 2=VT, ...
+    rhythm_status: int = Field(default=0, ge=0, le=255) # TARANG_RHYTHM_* bitfield
     pattern_type: Optional[str] = None # Couplet, Triplet, Bigeminy, Run, null
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     ts: Optional[datetime] = None
@@ -204,7 +204,12 @@ def get_latest_vitals(
         query = query.filter(VitalsSample.session_id == session_id)
     sample = query.order_by(desc(VitalsSample.id)).first()
     if not sample:
-        return {"heartRateBpm": 75, "spo2Pct": 98, "deviceId": device_id or "tarang-efr32-demo", "ts": None}
+        return {
+            "heartRateBpm": None,
+            "spo2Pct": None,
+            "deviceId": device_id or "unassigned",
+            "ts": None,
+        }
     return sample.to_dict()
 
 
@@ -270,14 +275,14 @@ def get_latest_analytics(
     rollup = query.order_by(desc(Analytics5Min.id)).first()
     if not rollup:
         return {
-            "pvcBurdenPct": 0.4,
-            "pacBurdenPct": 1.2,
-            "sdnn": 44.0,
-            "rmssd": 38.0,
-            "prr50": 8.5,
-            "aiDutyCyclePct": 1.5,
-            "em2SleepPct": 92.0,
-            "deviceId": device_id or "tarang-efr32-demo",
+            "pvcBurdenPct": 0.0,
+            "pacBurdenPct": 0.0,
+            "sdnn": 0.0,
+            "rmssd": 0.0,
+            "prr50": 0.0,
+            "aiDutyCyclePct": 0.0,
+            "em2SleepPct": 0.0,
+            "deviceId": device_id or "unassigned",
             "ts": None,
         }
     return rollup.to_dict()
@@ -324,11 +329,13 @@ async def ingest_clinical_event(payload: ClinicalEventIngest, db: Session = Depe
 
     snippet = None
     if payload.waveform is not None:
+        sample_rate_hz = payload.sample_rate_hz or 250
+        snippet_duration_s = len(payload.waveform) / sample_rate_hz
         snippet = EcgSnippet(
             event_id=event.id,
             device_id=payload.device_id,
-            ts_start=event.ts,
-            sample_rate_hz=payload.sample_rate_hz or 250,
+            ts_start=event.ts - timedelta(seconds=snippet_duration_s),
+            sample_rate_hz=sample_rate_hz,
             waveform_json=payload.waveform,
         )
         db.add(snippet)

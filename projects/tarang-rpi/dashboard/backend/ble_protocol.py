@@ -13,7 +13,26 @@ VITALS_SPO2_UUID: Final = "b4cf8877-ba1a-414c-a99d-de85a13fd66b"
 VITALS_TIMESTAMP_UUID: Final = "b4cf8877-ba1a-414c-a99d-de85a13fd66c"
 
 ANALYTICS_SERVICE_UUID: Final = "655f937a-82f3-4395-b62b-b72bdea94c75"
-ANALYTICS_BURDEN_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
+ANALYTICS_PVC_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
+ANALYTICS_PAC_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee77c"
+ANALYTICS_SDNN_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee77d"
+ANALYTICS_RMSSD_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee77e"
+ANALYTICS_PRR50_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee77f"
+ANALYTICS_DUTY_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee780"
+ANALYTICS_SLEEP_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee781"
+
+# Compatibility alias used by older gateway deployments.
+ANALYTICS_BURDEN_UUID: Final = ANALYTICS_PVC_UUID
+
+ANALYTICS_CHARACTERISTIC_UUIDS: Final = (
+    ANALYTICS_PVC_UUID,
+    ANALYTICS_PAC_UUID,
+    ANALYTICS_SDNN_UUID,
+    ANALYTICS_RMSSD_UUID,
+    ANALYTICS_PRR50_UUID,
+    ANALYTICS_DUTY_UUID,
+    ANALYTICS_SLEEP_UUID,
+)
 
 EVENT_SERVICE_UUID: Final = "7660937a-82f3-4395-b62b-b72bdea94c75"
 EVENT_RHYTHM_UUID: Final = "d6ebaa99-da3c-536e-c11f-f0a7c35ff88a"
@@ -27,7 +46,14 @@ REQUIRED_SERVICE_UUIDS: Final = frozenset(
     {VITALS_SERVICE_UUID, ANALYTICS_SERVICE_UUID, EVENT_SERVICE_UUID}
 )
 REQUIRED_SUBSCRIPTION_UUIDS: Final = frozenset(
-    {VITALS_HR_UUID, VITALS_SPO2_UUID, EVENT_META_UUID}
+    {
+        VITALS_HR_UUID,
+        VITALS_SPO2_UUID,
+        EVENT_META_UUID,
+        EVENT_ECG_CHUNK_UUID,
+        EVENT_ANNOTATIONS_UUID,
+        *ANALYTICS_CHARACTERISTIC_UUIDS,
+    }
 )
 
 PATTERN_NAMES: Final = {
@@ -42,9 +68,13 @@ PATTERN_NAMES: Final = {
 RHYTHM_NAMES: Final = {
     0: "NSR",
     1: "AFib",
-    2: "VT",
-    3: "Bradycardia",
-    4: "Tachycardia",
+    2: "Sinus tachycardia",
+    4: "Sinus bradycardia",
+    8: "Bigeminy",
+    16: "Trigeminy",
+    32: "V-run",
+    64: "SVT-run",
+    128: "VT suspected",
 }
 
 _ANALYTICS = struct.Struct("<BBHHBBB")
@@ -53,7 +83,7 @@ _EVENT_TICKER = struct.Struct("<HI")
 _ANNOTATION = struct.Struct("<HBB")
 _CHUNK_HEADER = struct.Struct("<HH")
 
-MAX_SNIPPET_CHUNKS: Final = 32
+MAX_SNIPPET_CHUNKS: Final = 160
 MAX_SNIPPET_SAMPLES: Final = 2000
 
 
@@ -96,6 +126,7 @@ def decode_spo2(data: bytes | bytearray) -> int:
 
 
 def decode_analytics(data: bytes | bytearray) -> dict[str, float]:
+    """Decode the legacy packed rollup retained for compatibility tests."""
     _require_size(data, _ANALYTICS.size, "analytics")
     pvc, pac, sdnn, rmssd, prr50, duty_cycle_x10, sleep_pct = (
         _ANALYTICS.unpack_from(data)
@@ -109,6 +140,32 @@ def decode_analytics(data: bytes | bytearray) -> dict[str, float]:
         "ai_duty_cycle_pct": duty_cycle_x10 / 10.0,
         "em2_sleep_pct": float(sleep_pct),
     }
+
+
+def decode_analytics_characteristic(
+    characteristic_uuid: str, data: bytes | bytearray
+) -> tuple[str, float]:
+    """Decode one scalar from the generated seven-characteristic service."""
+    uuid = characteristic_uuid.lower()
+    u8_fields = {
+        ANALYTICS_PVC_UUID: ("pvc_burden_pct", 1.0),
+        ANALYTICS_PAC_UUID: ("pac_burden_pct", 1.0),
+        ANALYTICS_PRR50_UUID: ("prr50", 1.0),
+        ANALYTICS_DUTY_UUID: ("ai_duty_cycle_pct", 0.1),
+        ANALYTICS_SLEEP_UUID: ("em2_sleep_pct", 1.0),
+    }
+    u16_fields = {
+        ANALYTICS_SDNN_UUID: "sdnn",
+        ANALYTICS_RMSSD_UUID: "rmssd",
+    }
+    if uuid in u8_fields:
+        _require_size(data, 1, "analytics scalar")
+        field, scale = u8_fields[uuid]
+        return field, float(data[0]) * scale
+    if uuid in u16_fields:
+        _require_size(data, 2, "analytics scalar")
+        return u16_fields[uuid], float(struct.unpack_from("<H", data)[0])
+    raise ProtocolError(f"unknown analytics characteristic {characteristic_uuid}")
 
 
 def decode_event_meta(data: bytes | bytearray) -> EventMeta:
@@ -202,6 +259,7 @@ class SnippetReassembler:
         for index in range(self._total_chunks):
             if index not in self._chunks:
                 return None
-            waveform.extend(float(sample) for sample in self._chunks[index])
+            # Firmware transports normalized ECG as signed Q0.001 values.
+            waveform.extend(float(sample) / 1000.0 for sample in self._chunks[index])
         self.reset()
         return waveform

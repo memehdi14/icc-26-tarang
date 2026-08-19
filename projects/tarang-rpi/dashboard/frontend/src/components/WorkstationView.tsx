@@ -36,10 +36,11 @@ function formatTime(value?: string | null): string {
 }
 
 function rhythmPresentation(event?: ClinicalEvent | null) {
-  if (event?.rhythmStatus === 2 || event?.patternType === 'VT' || event?.patternType === 'V-Run') {
+  const flags = event?.rhythmStatus ?? 0;
+  if ((flags & 0x80) !== 0 || event?.patternType === 'VT' || event?.patternType === 'V-Run') {
     return { label: 'Ventricular rhythm requires immediate review', detail: 'An event snapshot has been captured for clinical assessment.', tone: 'critical', icon: ShieldAlert };
   }
-  if (event?.rhythmStatus === 1 || event?.patternType === 'AFib') {
+  if ((flags & 0x01) !== 0 || event?.patternType === 'AFib') {
     return { label: 'Atrial fibrillation pattern detected', detail: 'RR irregularity crossed the configured clinical threshold.', tone: 'warning', icon: AlertTriangle };
   }
   if (event?.patternType) {
@@ -73,7 +74,7 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
       value: vitals.heartRateBpm ?? '--',
       unit: 'bpm',
       reference: '60-100',
-      source: 'ECG + PPG fused',
+      source: 'ECG with PPG fallback',
       icon: HeartPulse,
       color: 'var(--color-secondary)',
       trend: vitals.heartRateBpm && vitals.heartRateBpm > 100 ? TrendingUp : TrendingDown,

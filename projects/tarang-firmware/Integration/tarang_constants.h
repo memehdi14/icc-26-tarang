@@ -31,6 +31,24 @@ extern "C" {
 #define TARANG_FW_VERSION_STRING        "1.0.0"
 
 /*******************************************************************************
+ * Integration Feature Selection
+ *
+ * Keep these switches shared. Acquisition runs in app.c while BLE health and
+ * telemetry decisions run in tarang_ble.c; translation-unit-local definitions
+ * can otherwise make the two sides report different hardware states.
+ ******************************************************************************/
+#define TARANG_ENABLE_ECG               1
+#define TARANG_ENABLE_PPG               1
+#define TARANG_ENABLE_IMU               1
+#define TARANG_ENABLE_BLE               1
+#define TARANG_ENABLE_NLMS              1
+#define TARANG_NLMS_APPLY_TO_DSP        1
+#define TARANG_ENABLE_AI_CIRCUIT_BREAKER 0  /* Re-enable only after overload validation. */
+#define TARANG_ENABLE_RAW_ECG_STREAM    0
+#define TARANG_ANY_SENSOR_ENABLED \
+  (TARANG_ENABLE_ECG || TARANG_ENABLE_PPG || TARANG_ENABLE_IMU)
+
+/*******************************************************************************
  * Debug UART Logging Flags (Solution D: gate verbose prints to eliminate UART blocking)
  ******************************************************************************/
 #ifndef TARANG_DEBUG_VERBOSE
@@ -125,7 +143,7 @@ extern "C" {
 #define TARANG_PREMATURITY_RATIO_DENOM  100
 #define TARANG_COMPENSATORY_PAUSE_NUM   3       /* rr_interval > 1.5 * mean (3/2) */
 #define TARANG_COMPENSATORY_PAUSE_DENOM 2
-#define TARANG_CIRCUIT_BREAKER_MAX_SUSP_PCT 20  /* 20% max suspicious beats before trip */
+#define TARANG_CIRCUIT_BREAKER_MAX_SUSP_PCT 20
 
 /*******************************************************************************
  * ML Thresholds (ADR-005, event-gated)
@@ -218,10 +236,12 @@ typedef struct __attribute__((packed)) {
   uint16_t fw_version_packed;   /* 2 bytes — (major << 8) | minor */
 } tarang_health_packet_t;       /* 16 bytes total */
 
-#define TARANG_BLE_HEALTH_CHAR_UUID "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
-
 /*******************************************************************************
- * Device Status Flags Bitfield (tarang_health_packet_t.status_flags)
+ * Reserved Device Status Flags
+ *
+ * The current generated GATT database does not expose a device-health
+ * characteristic. Keep these values reserved until that characteristic is
+ * added through Simplicity Studio; do not alias them onto an analytics UUID.
  ******************************************************************************/
 #define TARANG_STATUS_CHARGING          0x01u   /* Bit 0: 1=External power connected, 0=Battery */
 #define TARANG_STATUS_LOW_POWER_MODE    0x02u   /* Bit 1: 1=EM2 power-saving active, 0=EM0/EM1 */
@@ -279,8 +299,8 @@ typedef struct {
   uint32_t ir;
 } tarang_ppg_sample_t;
 
-/** IMU ring buffer size — 16 entries at 100Hz = 160ms history */
-#define TARANG_IMU_RING_SIZE            16
+/** IMU ring buffer size: 64 entries at 100 Hz = 640 ms alignment history. */
+#define TARANG_IMU_RING_SIZE            64
 
 /** PPG ring buffer size — 16 entries at 100Hz = 160ms history */
 #define TARANG_PPG_RING_SIZE            16

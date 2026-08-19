@@ -17,6 +17,17 @@ extern "C" {
 
 #define PPG_BUFFER_SIZE  1024u
 
+typedef struct {
+  uint8_t  spo2_pct;
+  uint8_t  pulse_rate_bpm;
+  uint8_t  signal_quality;
+  uint16_t perfusion_index_x100;
+  uint32_t window_end_sample;
+  bool     finger_present;
+  bool     motion_rejected;
+  bool     valid;
+} tarang_ppg_metrics_t;
+
 /***************************************************************************//**
  * Initialize PPG sensor (MAX30102).
  * Configures: sensor registers, GPIO PC06 interrupt, I2C bus.
@@ -30,6 +41,12 @@ void tarang_ppg_init(void);
  * Reads FIFO if interrupt has fired. Returns immediately if nothing pending.
  ******************************************************************************/
 void tarang_ppg_process(void);
+
+/* Supply the latest high-pass motion magnitude from the IMU in milli-g. */
+void tarang_ppg_set_motion_level_mg(uint16_t motion_mg);
+
+/* Copy the latest rolling-window result. Returns true only when valid. */
+bool tarang_ppg_get_metrics(tarang_ppg_metrics_t *metrics);
 
 /* ─── Status accessors ──────────────────────────────────────────────────── */
 uint32_t tarang_ppg_get_red(void);

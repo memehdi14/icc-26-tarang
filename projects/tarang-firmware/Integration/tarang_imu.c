@@ -14,6 +14,7 @@
  ******************************************************************************/
 
 #include "tarang_imu.h"
+#include "tarang_time.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -35,7 +36,7 @@
 /*******************************************************************************
  * MPU6050 Register Map
  ******************************************************************************/
-#define MPU6050_ADDR            0x68
+#define MPU6050_DEFAULT_ADDR    0x68
 #define MPU6050_WHO_AM_I        0x75
 #define MPU6050_ACCEL_XOUT_H    0x3B
 
@@ -67,6 +68,7 @@
  ******************************************************************************/
 static volatile uint8_t mpu_whoami = 0;
 static volatile bool mpu_found = false;
+static uint8_t mpu_address = MPU6050_DEFAULT_ADDR;
 
 static volatile int16_t accel_x = 0;
 static volatile int16_t accel_y = 0;
@@ -109,6 +111,17 @@ static volatile uint32_t interrupt_count = 0;
 static volatile uint32_t read_attempts = 0;
 static volatile uint32_t read_success = 0;
 static volatile uint32_t read_failures = 0;
+static volatile uint32_t consecutive_read_failures = 0;
+
+static tarang_imu_sample_t imu_ring[TARANG_IMU_RING_SIZE];
+static volatile uint8_t imu_ring_head = 0u;
+static volatile uint8_t imu_ring_count = 0u;
+static volatile uint64_t latest_sample_us = 0u;
+static volatile uint16_t motion_mg = 0u;
+static int32_t gravity_x_q8 = 0;
+static int32_t gravity_y_q8 = 0;
+static int32_t gravity_z_q8 = 0;
+static bool gravity_initialized = false;
 
 static volatile uint8_t int_pin_cfg_reg = 0;
 static volatile bool int_pin_cfg_ok = false;
@@ -136,6 +149,57 @@ static volatile uint32_t burst_read_ret_buserr     = 0;
 static volatile uint32_t burst_read_ret_arblost    = 0;
 static volatile uint32_t burst_read_ret_usagefault = 0;
 static volatile uint32_t burst_read_ret_other      = 0;
+
+static uint32_t imu_isqrt32(uint32_t value)
+{
+  if (value == 0u) return 0u;
+  uint32_t x = value;
+  uint32_t y = (x + 1u) >> 1u;
+  while (y < x) {
+    x = y;
+    y = (x + value / x) >> 1u;
+  }
+  return x;
+}
+
+static void imu_store_sample(void)
+{
+  uint64_t now_us = tarang_now_us();
+
+  if (!gravity_initialized) {
+    gravity_x_q8 = ((int32_t)accel_x) << 8;
+    gravity_y_q8 = ((int32_t)accel_y) << 8;
+    gravity_z_q8 = ((int32_t)accel_z) << 8;
+    gravity_initialized = true;
+  } else {
+    gravity_x_q8 += ((((int32_t)accel_x) << 8) - gravity_x_q8) / 32;
+    gravity_y_q8 += ((((int32_t)accel_y) << 8) - gravity_y_q8) / 32;
+    gravity_z_q8 += ((((int32_t)accel_z) << 8) - gravity_z_q8) / 32;
+  }
+
+  int32_t hx = (int32_t)accel_x - (gravity_x_q8 >> 8);
+  int32_t hy = (int32_t)accel_y - (gravity_y_q8 >> 8);
+  int32_t hz = (int32_t)accel_z - (gravity_z_q8 >> 8);
+  uint64_t mag_sq = (uint64_t)((int64_t)hx * hx)
+                  + (uint64_t)((int64_t)hy * hy)
+                  + (uint64_t)((int64_t)hz * hz);
+  if (mag_sq > UINT32_MAX) mag_sq = UINT32_MAX;
+  uint32_t mag_lsb = imu_isqrt32((uint32_t)mag_sq);
+  uint32_t mag_mg = (mag_lsb * 1000u + 8192u) / 16384u;
+  motion_mg = (uint16_t)(mag_mg > 65535u ? 65535u : mag_mg);
+
+  tarang_imu_sample_t *slot = &imu_ring[imu_ring_head];
+  slot->t_us = now_us;
+  slot->ax = accel_x;
+  slot->ay = accel_y;
+  slot->az = accel_z;
+  slot->gx = gyro_x;
+  slot->gy = gyro_y;
+  slot->gz = gyro_z;
+  imu_ring_head = (uint8_t)((imu_ring_head + 1u) % TARANG_IMU_RING_SIZE);
+  if (imu_ring_count < TARANG_IMU_RING_SIZE) imu_ring_count++;
+  latest_sample_us = now_us;
+}
 
 /*******************************************************************************
  * Private: I2C helpers and diagnostics
@@ -174,7 +238,7 @@ static bool MPU6050_ReadRegister(uint8_t reg, uint8_t *value)
 {
   I2C_TransferSeq_TypeDef seq;
 
-  seq.addr = MPU6050_ADDR << 1;
+  seq.addr = mpu_address << 1;
   seq.flags = I2C_FLAG_WRITE_READ;
 
   seq.buf[0].data = &reg;
@@ -199,7 +263,7 @@ static bool MPU6050_WriteRegister(uint8_t reg, uint8_t value)
 
   I2C_TransferSeq_TypeDef seq;
 
-  seq.addr = MPU6050_ADDR << 1;
+  seq.addr = mpu_address << 1;
   seq.flags = I2C_FLAG_WRITE;
 
   seq.buf[0].data = data;
@@ -215,7 +279,7 @@ static bool MPU6050_ReadIntStatusDiag(uint8_t *value)
 
   I2C_TransferSeq_TypeDef seq;
 
-  seq.addr  = MPU6050_ADDR << 1;
+  seq.addr  = mpu_address << 1;
   seq.flags = I2C_FLAG_WRITE_READ;
 
   seq.buf[0].data = &reg;
@@ -237,7 +301,7 @@ static bool MPU6050_Read14BytesDiag(uint8_t *data)
 
   I2C_TransferSeq_TypeDef seq;
 
-  seq.addr  = MPU6050_ADDR << 1;
+  seq.addr  = mpu_address << 1;
   seq.flags = I2C_FLAG_WRITE_READ;
 
   seq.buf[0].data = &reg;
@@ -260,7 +324,7 @@ static bool MPU6050_ReadStatusAndBurstCombined(uint8_t *data)
 
   I2C_TransferSeq_TypeDef seq;
 
-  seq.addr  = MPU6050_ADDR << 1;
+  seq.addr  = mpu_address << 1;
   seq.flags = I2C_FLAG_WRITE_READ;
 
   seq.buf[0].data = &reg;
@@ -300,7 +364,7 @@ void tarang_imu_init(void)
 
   /* Try primary address 0x68, then fallback to 0x69 if AD0 is high/floating */
   static const uint8_t addrs_to_try[] = { 0x68, 0x69 };
-  uint8_t active_addr = MPU6050_ADDR;  /* default */
+  uint8_t active_addr = MPU6050_DEFAULT_ADDR;
 
   for (int a = 0; a < 2 && !read_ok; a++) {
     active_addr = addrs_to_try[a];
@@ -341,23 +405,11 @@ void tarang_imu_init(void)
   }
 
   mpu_whoami = whoami;
+  mpu_address = active_addr;
 
   if ((whoami == 0x68) || (whoami == 0x70))
   {
     mpu_found = true;
-
-      /* Wake MPU6050 — use active_addr for all subsequent register ops */
-      /* NOTE: MPU6050_WriteRegister/ReadRegister still use MPU6050_ADDR (0x68).
-       * If we found the device at 0x69, we need to update the helpers.
-       * For now, if active_addr != 0x68, patch the macro approach by using
-       * inline I2C calls. But since the write/read helpers use the #define,
-       * we'll just override if needed. The simplest safe approach: if we
-       * found it at 0x69, print a warning but proceed with 0x68 since
-       * the WHO_AM_I read succeeded — the address IS 0x68 for transactions. */
-      if (active_addr != 0x68) {
-        printf("[IMU] WARNING: Device responded at 0x%02X but driver uses 0x68 for ops\r\n", active_addr);
-        printf("[IMU] If register writes fail, AD0 pin needs to be tied to GND\r\n");
-      }
 
       if (MPU6050_WriteRegister(MPU6050_PWR_MGMT_1, 0x00))
       {
@@ -548,11 +600,14 @@ void tarang_imu_process(void)
 
       sample_count++;
       read_success++;
+      consecutive_read_failures = 0u;
+      imu_store_sample();
     }
     else
     {
       read14_fail = true;
       read_failures++;
+      consecutive_read_failures++;
     }
   }
 #else
@@ -577,8 +632,11 @@ void tarang_imu_process(void)
     gyro_z = (int16_t)((raw[12] << 8) | raw[13]);
 
     sample_count++;
+    consecutive_read_failures = 0u;
+    imu_store_sample();
 
     /* Print every 100 samples (every 1 second at 100Hz) */
+#if TARANG_DEBUG_VERBOSE
     if ((sample_count % 100u) == 0u)
     {
       printf("[IMU] cnt=%lu ax=%d ay=%d az=%d gx=%d gy=%d gz=%d\r\n",
@@ -586,12 +644,14 @@ void tarang_imu_process(void)
              accel_x, accel_y, accel_z,
              gyro_x, gyro_y, gyro_z);
     }
+#endif
   }
   else
   {
     read14_ok = false;
     read14_fail = true;
     read_failures++;
+    consecutive_read_failures++;
   }
 #endif /* MPU6050_USE_COMBINED_BURST */
 
@@ -655,4 +715,114 @@ uint32_t tarang_imu_get_sample_count(void)
 uint32_t tarang_imu_get_interrupt_count(void)
 {
   return interrupt_count;
+}
+
+bool tarang_imu_is_healthy(void)
+{
+  if (!mpu_found || sample_count == 0u || consecutive_read_failures >= 4u) {
+    return false;
+  }
+  uint64_t now_us = tarang_now_us();
+  return latest_sample_us > 0u && now_us >= latest_sample_us
+      && (now_us - latest_sample_us) <= 500000u;
+}
+
+uint16_t tarang_imu_get_motion_mg(void)
+{
+  return motion_mg;
+}
+
+bool tarang_imu_get_latest_sample(tarang_imu_sample_t *sample)
+{
+  if (sample == NULL || imu_ring_count == 0u) return false;
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  uint8_t index = (uint8_t)((imu_ring_head + TARANG_IMU_RING_SIZE - 1u)
+                            % TARANG_IMU_RING_SIZE);
+  *sample = imu_ring[index];
+  CORE_EXIT_ATOMIC();
+  return true;
+}
+
+bool tarang_imu_get_sample_at_or_before(uint64_t timestamp_us,
+                                        tarang_imu_sample_t *sample)
+{
+  if (sample == NULL || imu_ring_count == 0u) return false;
+
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  uint8_t count = imu_ring_count;
+  uint8_t head = imu_ring_head;
+  bool found = false;
+  for (uint8_t age = 0u; age < count; age++) {
+    uint8_t index = (uint8_t)((head + TARANG_IMU_RING_SIZE - 1u - age)
+                              % TARANG_IMU_RING_SIZE);
+    if (imu_ring[index].t_us <= timestamp_us) {
+      *sample = imu_ring[index];
+      found = true;
+      break;
+    }
+  }
+  CORE_EXIT_ATOMIC();
+  return found;
+}
+
+static int16_t imu_lerp_i16(int16_t a, int16_t b,
+                            uint64_t numerator, uint64_t denominator)
+{
+  if (denominator == 0u) return a;
+  int64_t delta = (int64_t)b - a;
+  int64_t value = (int64_t)a + (delta * (int64_t)numerator)
+                                / (int64_t)denominator;
+  if (value > INT16_MAX) value = INT16_MAX;
+  if (value < INT16_MIN) value = INT16_MIN;
+  return (int16_t)value;
+}
+
+bool tarang_imu_get_interpolated_sample(uint64_t timestamp_us,
+                                        tarang_imu_sample_t *sample)
+{
+  if (sample == NULL || imu_ring_count == 0u) return false;
+
+  tarang_imu_sample_t before = {0};
+  tarang_imu_sample_t after = {0};
+  bool have_before = false;
+  bool have_after = false;
+
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_ATOMIC();
+  uint8_t count = imu_ring_count;
+  uint8_t oldest = (uint8_t)((imu_ring_head + TARANG_IMU_RING_SIZE - count)
+                             % TARANG_IMU_RING_SIZE);
+  for (uint8_t i = 0u; i < count; i++) {
+    tarang_imu_sample_t candidate =
+        imu_ring[(oldest + i) % TARANG_IMU_RING_SIZE];
+    if (candidate.t_us <= timestamp_us) {
+      before = candidate;
+      have_before = true;
+    }
+    if (candidate.t_us >= timestamp_us) {
+      after = candidate;
+      have_after = true;
+      break;
+    }
+  }
+  CORE_EXIT_ATOMIC();
+
+  if (!have_before) return false;
+  if (!have_after || after.t_us <= before.t_us) {
+    *sample = before;
+    return true;
+  }
+
+  uint64_t numerator = timestamp_us - before.t_us;
+  uint64_t denominator = after.t_us - before.t_us;
+  sample->t_us = timestamp_us;
+  sample->ax = imu_lerp_i16(before.ax, after.ax, numerator, denominator);
+  sample->ay = imu_lerp_i16(before.ay, after.ay, numerator, denominator);
+  sample->az = imu_lerp_i16(before.az, after.az, numerator, denominator);
+  sample->gx = imu_lerp_i16(before.gx, after.gx, numerator, denominator);
+  sample->gy = imu_lerp_i16(before.gy, after.gy, numerator, denominator);
+  sample->gz = imu_lerp_i16(before.gz, after.gz, numerator, denominator);
+  return true;
 }

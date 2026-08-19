@@ -18,7 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, init_db, SessionLocal
-from database.models import Device, Patient, DeviceDiagnostics, SystemSetting
+from database.models import DeviceDiagnostics, SystemSetting
 
 from routers import (
     telemetry,
@@ -37,31 +37,11 @@ from routers import (
 # ── Seed default data on first run ───────────────────────────────────────────
 
 def seed_defaults():
-    """Populate default patient, device diagnostics, and settings if tables are empty."""
-    default_device_id = os.getenv("TARANG_DEVICE_ID", "tarang-efr32-demo")
+    """Populate neutral diagnostics and settings; clinical data is user-created."""
     default_device_mac = os.getenv("TARANG_BLE_ADDRESS", "00:00:00:00:00:00")
     db = SessionLocal()
     try:
-        # Default patient (John Doe, ICU-04)
-        if not db.query(Patient).first():
-            db.add(Patient(
-                name="John Doe",
-                age=58,
-                gender="Male",
-                mrn="884219",
-                bed="ICU-04",
-                admit_date="2026-08-09",
-                attending_physician="Dr. Aris",
-                blood_type="O+",
-                allergies=["Penicillin", "Latex Adhesives"],
-                medical_history=[
-                    "Hypertension (Diagnosed 2018)",
-                    "Coronary Artery Stent - LAD (2021)",
-                    "Type 2 Diabetes Mellitus",
-                ],
-            ))
-
-        # Default device diagnostics snapshot
+        # Neutral diagnostics keep the bootstrap response schema stable.
         if not db.query(DeviceDiagnostics).first():
             db.add(DeviceDiagnostics(
                 ble_connected=False,
@@ -75,16 +55,7 @@ def seed_defaults():
                 battery_pct=0,
             ))
 
-        if not db.query(Device).first():
-            db.add(Device(
-                device_id=default_device_id,
-                name="EFR32MG26 Tarang Wearable",
-                mac_address=default_device_mac,
-                firmware_version="v1.0.0-EFR32MG26",
-                status="available",
-            ))
-
-        # Default system settings
+        # Non-clinical workstation defaults are safe to seed.
         if not db.query(SystemSetting).first():
             db.add(SystemSetting())
 

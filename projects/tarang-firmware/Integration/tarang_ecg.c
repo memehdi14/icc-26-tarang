@@ -2,9 +2,8 @@
  * @file tarang_ecg.c
  * @brief TARANG ECG acquisition module — implementation.
  *
- * Direct extraction from Separate Testing/ECG/july6/app.c.
- * UNCHANGED sensor logic. Only renamed app_init→tarang_ecg_init,
- * app_process_action→tarang_ecg_process, removed EMU_EnterEM2.
+ * Acquisition began from Separate Testing/ECG/july6/app.c. Integration adds
+ * DMA completion timestamps and chronological half-buffer draining.
  *
  * Chain: LETIMER0 (underflow pulse)
  *        → PRS async channel 2
@@ -64,6 +63,8 @@ static volatile uint32_t  ecg_overrun_count = 0;
 static volatile uint32_t  halves_completed  = 0;
 static volatile uint32_t  half0Pending      = 0;
 static volatile uint32_t  half1Pending      = 0;
+static volatile uint64_t  half0CompletedUs  = 0;
+static volatile uint64_t  half1CompletedUs  = 0;
 
 /***************************************************************************//**
  * LETIMER Interrupt — sample_count bookkeeping only.
@@ -91,6 +92,7 @@ static void ecg_dma_irq_handler(void)
   if ((halves_completed & 1U) == 1U)
   {
     if (half0Pending > 0U) { ecg_overrun_count++; }
+    half0CompletedUs = tarang_now_us();
     half0Ready = true;
     half0Pending++;
   }
@@ -98,6 +100,7 @@ static void ecg_dma_irq_handler(void)
   else
   {
     if (half1Pending > 0U) { ecg_overrun_count++; }
+    half1CompletedUs = tarang_now_us();
     half1Ready = true;
     half1Pending++;
   }
@@ -251,6 +254,27 @@ bool tarang_ecg_get_raw_streaming(void)
   return s_raw_streaming_enabled;
 }
 
+static void process_ecg_half(tarang_pipeline_t *pipeline,
+                             uint32_t first,
+                             uint32_t end,
+                             uint64_t completed_us)
+{
+  if (pipeline == NULL || completed_us == 0u) return;
+  uint32_t sample_count_in_half = end - first;
+  for (uint32_t i = first; i < end; i++) {
+    uint32_t position = i - first;
+    uint64_t offset_us = (uint64_t)(sample_count_in_half - 1u - position)
+                         * TARANG_ECG_SAMPLE_PERIOD_US;
+    uint32_t sample_ts_ms = completed_us >= offset_us
+        ? (uint32_t)((completed_us - offset_us) / 1000ULL) : 0u;
+    uint32_t raw_val = ecg_buffer[i] & 0x0FFFu;
+    tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts_ms);
+    if (s_raw_streaming_enabled) {
+      printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
+    }
+  }
+}
+
 /***************************************************************************//**
  * ECG process action — drain completed DMA half-buffers.
  *
@@ -266,6 +290,8 @@ void tarang_ecg_process(void)
 {
   bool drain_h0 = false;
   bool drain_h1 = false;
+  uint64_t h0_completed_us = 0u;
+  uint64_t h1_completed_us = 0u;
 
   /* Atomically snapshot and clear flags to avoid race with DMA ISR */
   CORE_DECLARE_IRQ_STATE;
@@ -274,43 +300,33 @@ void tarang_ecg_process(void)
     half0Ready   = false;
     half0Pending = 0;
     drain_h0     = true;
+    h0_completed_us = half0CompletedUs;
   }
   if (half1Ready) {
     half1Ready   = false;
     half1Pending = 0;
     drain_h1     = true;
+    h1_completed_us = half1CompletedUs;
   }
   CORE_EXIT_ATOMIC();
 
   tarang_pipeline_t *pipeline = tarang_pipeline_get_instance();
-  uint32_t now_ms = tarang_now_ms();
 
-  /* Drain half 0: samples [0 .. ECG_HALF_SAMPLES-1] */
-  if (drain_h0 && pipeline) {
-    for (uint32_t i = 0; i < ECG_HALF_SAMPLES; i++) {
-      uint32_t offset_ms = ((ECG_HALF_SAMPLES - 1u - i) * 1000u) / TARANG_ECG_SAMPLE_RATE_HZ;
-      uint32_t sample_ts = (now_ms >= offset_ms) ? (now_ms - offset_ms) : 0u;
-      /* 12-bit ADC data mask: ensures clean 0..4095 range and strips any metadata bits */
-      uint32_t raw_val = ecg_buffer[i] & 0x0FFFu;
-      tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts);
-      if (s_raw_streaming_enabled) {
-        printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
-      }
+  if (drain_h0 && drain_h1) {
+    if (h0_completed_us <= h1_completed_us) {
+      process_ecg_half(pipeline, 0u, ECG_HALF_SAMPLES, h0_completed_us);
+      process_ecg_half(pipeline, ECG_HALF_SAMPLES, ECG_BUFFER_SIZE,
+                       h1_completed_us);
+    } else {
+      process_ecg_half(pipeline, ECG_HALF_SAMPLES, ECG_BUFFER_SIZE,
+                       h1_completed_us);
+      process_ecg_half(pipeline, 0u, ECG_HALF_SAMPLES, h0_completed_us);
     }
-  }
-
-  /* Drain half 1: samples [ECG_HALF_SAMPLES .. ECG_BUFFER_SIZE-1] */
-  if (drain_h1 && pipeline) {
-    for (uint32_t i = ECG_HALF_SAMPLES; i < ECG_BUFFER_SIZE; i++) {
-      uint32_t offset_ms = ((ECG_BUFFER_SIZE - 1u - i) * 1000u) / TARANG_ECG_SAMPLE_RATE_HZ;
-      uint32_t sample_ts = (now_ms >= offset_ms) ? (now_ms - offset_ms) : 0u;
-      /* 12-bit ADC data mask: ensures clean 0..4095 range and strips any metadata bits */
-      uint32_t raw_val = ecg_buffer[i] & 0x0FFFu;
-      tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts);
-      if (s_raw_streaming_enabled) {
-        printf("[ECG] raw=%lu\r\n", (unsigned long)raw_val);
-      }
-    }
+  } else if (drain_h0) {
+    process_ecg_half(pipeline, 0u, ECG_HALF_SAMPLES, h0_completed_us);
+  } else if (drain_h1) {
+    process_ecg_half(pipeline, ECG_HALF_SAMPLES, ECG_BUFFER_SIZE,
+                     h1_completed_us);
   }
 }
 

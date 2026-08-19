@@ -15,6 +15,7 @@ from ble_gateway import (  # noqa: E402
     GatewayMetrics,
     GatewaySession,
 )
+from ble_protocol import ANALYTICS_PVC_UUID, ANALYTICS_SDNN_UUID  # noqa: E402
 
 
 class FakePublisher:
@@ -96,8 +97,36 @@ class GatewaySessionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["rhythm_status"], 2)
         self.assertEqual(payload["pattern_type"], "V-Run")
         self.assertAlmostEqual(payload["confidence"], 240 / 255.0)
-        self.assertEqual(payload["waveform"], [10.0, 20.0, 30.0, 40.0])
+        self.assertEqual(payload["waveform"], [0.01, 0.02, 0.03, 0.04])
         self.assertEqual(payload["annotations"][0]["label"], "V")
+
+    async def test_coalesces_scalar_analytics(self):
+        self.session.on_analytics_scalar(
+            ANALYTICS_PVC_UUID, None, bytearray([3])
+        )
+        self.session.on_analytics_scalar(
+            ANALYTICS_SDNN_UUID, None, bytearray(struct.pack("<H", 46))
+        )
+        await asyncio.sleep(0.3)
+
+        analytics = [
+            item for item in self.publisher.items if item[0] == "/api/analytics"
+        ]
+        self.assertEqual(len(analytics), 1)
+        self.assertEqual(analytics[0][1]["pvc_burden_pct"], 3.0)
+        self.assertEqual(analytics[0][1]["sdnn"], 46.0)
+
+    async def test_appends_fragmented_annotations(self):
+        self.session.on_event_meta(
+            None, bytearray(struct.pack("<HBBI", 8, 2, 240, 123456))
+        )
+        self.session.on_annotations(
+            None, bytearray(struct.pack("<HBB", 400, 0, 250))
+        )
+        self.session.on_annotations(
+            None, bytearray(struct.pack("<HBB", 800, 2, 245))
+        )
+        self.assertEqual(len(self.session._event.annotations), 2)
 
     async def test_malformed_packet_is_counted_and_not_forwarded(self):
         self.session.on_spo2(None, bytearray([255]))

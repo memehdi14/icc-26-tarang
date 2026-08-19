@@ -18,6 +18,7 @@
 #include "tarang_pipeline.h"
 #include "tarang_time.h"
 #include "tarang_ai.h"
+#include "tarang_imu.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -26,6 +27,73 @@
  * Private: last beat cache for packet building
  ******************************************************************************/
 static tarang_beat_input_t s_last_beat;
+
+static int16_t clamp_i16_from_float(float value)
+{
+  if (value > 32767.0f) return INT16_MAX;
+  if (value < -32768.0f) return INT16_MIN;
+  return (int16_t)(value >= 0.0f ? value + 0.5f : value - 0.5f);
+}
+
+static uint32_t clamp_clean_adc(float centered)
+{
+  float adc = centered + 2048.0f;
+  if (adc < 0.0f) adc = 0.0f;
+  if (adc > 4095.0f) adc = 4095.0f;
+  return (uint32_t)(adc + 0.5f);
+}
+
+static void store_clean_ecg_sample(tarang_pipeline_t *pipeline)
+{
+  float scaled = pipeline->dsp.debug_sample.zscored * 1000.0f;
+  pipeline->clean_ecg_ring[pipeline->clean_ecg_head] =
+      clamp_i16_from_float(scaled);
+  pipeline->clean_ecg_head = (uint16_t)((pipeline->clean_ecg_head + 1u)
+      % TARANG_EVENT_SNIPPET_SAMPLES);
+  if (pipeline->clean_ecg_count < TARANG_EVENT_SNIPPET_SAMPLES) {
+    pipeline->clean_ecg_count++;
+  }
+}
+
+static void store_annotation(tarang_pipeline_t *pipeline,
+                             uint32_t sample_idx,
+                             uint8_t beat_class,
+                             uint8_t confidence)
+{
+  tarang_pipeline_annotation_history_t *slot =
+      &pipeline->annotation_history[pipeline->annotation_head];
+  slot->sample_idx = sample_idx;
+  slot->beat_class = beat_class;
+  slot->confidence = confidence;
+  pipeline->annotation_head = (uint8_t)((pipeline->annotation_head + 1u)
+      % TARANG_EVENT_ANNOTATION_HISTORY);
+  if (pipeline->annotation_count < TARANG_EVENT_ANNOTATION_HISTORY) {
+    pipeline->annotation_count++;
+  }
+}
+
+static bool queue_pending_beat(tarang_pipeline_t *pipeline,
+                               const tarang_beat_output_t *beat,
+                               uint32_t timestamp_ms)
+{
+  if (pipeline->pending_count >= TARANG_MAX_PENDING_BEATS) {
+    pipeline->diag.dropped_frames++;
+    return false;
+  }
+
+  tarang_pending_beat_t *pending =
+      &pipeline->pending_beats[pipeline->pending_tail];
+  memcpy(pending->waveform, beat->waveform, sizeof(pending->waveform));
+  pending->timestamp_ms = timestamp_ms;
+  pending->r_peak_sample_idx = beat->r_peak_sample_idx;
+  pending->signal_quality = beat->signal_quality;
+  pending->rr_interval_ms = 0u;
+  pending->suspicious = false;
+  pipeline->pending_tail = (uint8_t)((pipeline->pending_tail + 1u)
+      % TARANG_MAX_PENDING_BEATS);
+  pipeline->pending_count++;
+  return true;
+}
 
 static int16_t probability_to_x1000(float probability)
 {
@@ -219,6 +287,9 @@ void tarang_pipeline_init(tarang_pipeline_t *pipeline)
   /* Initialize DSP chain (Pan-Tompkins, all filters) */
   tarang_dsp_init(&pipeline->dsp);
 
+  /* Initialize guarded IMU-referenced ECG motion cancellation. */
+  tarang_nlms_init(&pipeline->nlms);
+
   /* Initialize Clinical Event Engine */
   tarang_clinical_engine_init(&pipeline->engine);
 
@@ -229,6 +300,9 @@ void tarang_pipeline_init(tarang_pipeline_t *pipeline)
 
   printf("[PIPELINE] Tarang pipeline initialized.\r\n");
   printf("[PIPELINE] Tier 0: DSP heuristics  — ACTIVE\r\n");
+  printf("[PIPELINE] IMU-NLMS: %s\r\n",
+         TARANG_ENABLE_NLMS && TARANG_NLMS_APPLY_TO_DSP
+             ? "ACTIVE (guarded)" : "BYPASS");
   printf("[PIPELINE] Tier 1: Gate CNN (%lu B) — %s\r\n",
          (unsigned long)tarang_ai_gate_model_size(),
          ai_ok ? "ACTIVE" : "FAILED (degraded mode)");
@@ -306,13 +380,13 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
     uint8_t threshold = (CIRCUIT_BREAKER_WINDOW * TARANG_CIRCUIT_BREAKER_MAX_SUSP_PCT) / 100;  /* 20% of 30 = 6 */
     bool should_trip = pipeline->circuit_breaker_suspicious_count > threshold;
     if (should_trip && !pipeline->circuit_breaker_tripped) {
-      printf("[PIPELINE] ⚠ Circuit breaker TRIPPED: %u/%u beats suspicious (>20%%). "
-             "Disabling Tier-1 CNN until recovery.\r\n",
-             pipeline->circuit_breaker_suspicious_count, CIRCUIT_BREAKER_WINDOW);
+      printf("[PIPELINE] Suspicious-rate guard: %u/%u beats (>20%%), AI policy=%s.\r\n",
+             pipeline->circuit_breaker_suspicious_count,
+             CIRCUIT_BREAKER_WINDOW,
+             TARANG_ENABLE_AI_CIRCUIT_BREAKER ? "BYPASS" : "MONITOR_ONLY");
       pipeline->circuit_breaker_tripped = true;
     } else if (!should_trip && pipeline->circuit_breaker_tripped) {
-      printf("[PIPELINE] ✓ Circuit breaker RESET: %u/%u beats suspicious (<20%%). "
-             "Re-enabling Tier-1 CNN.\r\n",
+      printf("[PIPELINE] Suspicious-rate guard recovered: %u/%u beats.\r\n",
              pipeline->circuit_breaker_suspicious_count, CIRCUIT_BREAKER_WINDOW);
       pipeline->circuit_breaker_tripped = false;
     }
@@ -323,7 +397,8 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
     pipeline->diag.ai_trigger_count++;
 
     /* ── TIER 1: Gate CNN (disabled if circuit breaker tripped) ───────── */
-    if (!pipeline->circuit_breaker_tripped) {
+    if (!TARANG_ENABLE_AI_CIRCUIT_BREAKER
+        || !pipeline->circuit_breaker_tripped) {
       float rr_features[TARANG_RR_FEATURE_COUNT];
       compute_rr_features(pipeline, rr_interval_ms, rr_features);
 
@@ -421,6 +496,11 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
   telemetry->prr50_pct = pipeline->engine.prr50_pct;
   pipeline->beat_telemetry_pending = true;
 
+  store_annotation(pipeline,
+                   pipeline->current_rpeak_sample_idx,
+                   beat_class,
+                   confidence);
+
   /* ── BLE event check ────────────────────────────────────────────────── */
   if (pipeline->engine.rhythm_changed || pipeline->engine.significant_event) {
     pipeline->diag.ble_packet_count++;
@@ -434,11 +514,29 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
   if (!pipeline->initialized) return;
   pipeline->latest_sample_timestamp_ms = timestamp_ms;
 
-  static uint32_t s_pipeline_sample_counter = 0;
-  s_pipeline_sample_counter++;
-  if (s_pipeline_sample_counter % 500 == 0) {
-    printf("[AI] pipeline receiving samples, count=%lu\r\n", (unsigned long)s_pipeline_sample_counter);
-  }
+  uint64_t sample_timestamp_us = (uint64_t)timestamp_ms * 1000ULL;
+  tarang_imu_sample_t causal_imu = {0};
+  tarang_imu_sample_t aligned_imu = {0};
+  bool have_causal = tarang_imu_get_sample_at_or_before(
+      sample_timestamp_us, &causal_imu);
+  bool imu_fresh = have_causal
+      && sample_timestamp_us >= causal_imu.t_us
+      && (sample_timestamp_us - causal_imu.t_us) <= 50000ULL;
+  bool have_aligned = imu_fresh && tarang_imu_get_interpolated_sample(
+      sample_timestamp_us, &aligned_imu);
+  if (!have_aligned && have_causal) aligned_imu = causal_imu;
+
+  uint64_t nlms_start_us = tarang_now_us();
+  float centered = (float)(raw_adc & 0x0FFFu) - 2048.0f;
+  float cleaned = tarang_nlms_process_sample(
+      &pipeline->nlms,
+      centered,
+      have_causal ? &aligned_imu : NULL,
+      imu_fresh,
+      TARANG_ENABLE_NLMS && TARANG_NLMS_APPLY_TO_DSP);
+  pipeline->diag.nlms_time_us +=
+      (uint32_t)(tarang_now_us() - nlms_start_us);
+  uint32_t clean_adc = clamp_clean_adc(cleaned);
 
   /* Run the full DSP chain on this single ADC sample.
    * DSP internally manages:
@@ -453,7 +551,11 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
    *
    * Returns true only when a complete beat is ready (~1 per heartbeat). */
   tarang_beat_output_t dsp_beat;
-  bool beat_ready = tarang_dsp_process_sample(&pipeline->dsp, raw_adc, &dsp_beat);
+  bool beat_ready = tarang_dsp_process_sample(&pipeline->dsp,
+                                               clean_adc,
+                                               &dsp_beat);
+
+  store_clean_ecg_sample(pipeline);
 
   if (!beat_ready || !dsp_beat.valid) return;
 
@@ -468,10 +570,95 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
   uint32_t rpeak_ms = timestamp_ms >= rpeak_age_ms
       ? timestamp_ms - rpeak_age_ms : 0u;
 
-  pipeline->current_rpeak_sample_idx = dsp_beat.r_peak_sample_idx;
-  tarang_pipeline_on_rpeak(pipeline, rpeak_ms,
-                            dsp_beat.waveform,
-                            dsp_beat.signal_quality);
+  (void)queue_pending_beat(pipeline, &dsp_beat, rpeak_ms);
+}
+
+void tarang_pipeline_run_deferred(tarang_pipeline_t *pipeline)
+{
+  if (pipeline == NULL || !pipeline->initialized) return;
+
+  while (pipeline->pending_count > 0u) {
+    tarang_pending_beat_t beat = pipeline->pending_beats[pipeline->pending_head];
+    pipeline->pending_head = (uint8_t)((pipeline->pending_head + 1u)
+        % TARANG_MAX_PENDING_BEATS);
+    pipeline->pending_count--;
+
+    pipeline->current_rpeak_sample_idx = beat.r_peak_sample_idx;
+    tarang_pipeline_on_rpeak(pipeline,
+                             beat.timestamp_ms,
+                             beat.waveform,
+                             beat.signal_quality);
+  }
+}
+
+uint16_t tarang_pipeline_copy_event_snippet(
+    const tarang_pipeline_t *pipeline,
+    int16_t *samples,
+    uint16_t max_samples,
+    uint32_t *start_sample_idx)
+{
+  if (pipeline == NULL || samples == NULL || max_samples == 0u) return 0u;
+
+  uint16_t count = pipeline->clean_ecg_count;
+  if (count > max_samples) count = max_samples;
+  uint16_t oldest = (uint16_t)((pipeline->clean_ecg_head
+      + TARANG_EVENT_SNIPPET_SAMPLES - count)
+      % TARANG_EVENT_SNIPPET_SAMPLES);
+  for (uint16_t i = 0u; i < count; i++) {
+    samples[i] = pipeline->clean_ecg_ring[
+        (oldest + i) % TARANG_EVENT_SNIPPET_SAMPLES];
+  }
+
+  uint32_t latest_idx = pipeline->dsp.debug_sample.sample_idx;
+  if (start_sample_idx != NULL) {
+    *start_sample_idx = latest_idx + 1u - count;
+  }
+  return count;
+}
+
+uint8_t tarang_pipeline_copy_event_annotations(
+    const tarang_pipeline_t *pipeline,
+    uint32_t start_sample_idx,
+    uint16_t sample_count,
+    tarang_pipeline_event_annotation_t *annotations,
+    uint8_t max_annotations)
+{
+  if (pipeline == NULL || annotations == NULL || max_annotations == 0u) {
+    return 0u;
+  }
+
+  uint8_t written = 0u;
+  uint32_t end_sample_idx = start_sample_idx + sample_count;
+  uint8_t oldest = (uint8_t)((pipeline->annotation_head
+      + TARANG_EVENT_ANNOTATION_HISTORY - pipeline->annotation_count)
+      % TARANG_EVENT_ANNOTATION_HISTORY);
+
+  for (uint8_t i = 0u;
+       i < pipeline->annotation_count && written < max_annotations;
+       i++) {
+    const tarang_pipeline_annotation_history_t *entry =
+        &pipeline->annotation_history[
+            (oldest + i) % TARANG_EVENT_ANNOTATION_HISTORY];
+    if (entry->sample_idx < start_sample_idx
+        || entry->sample_idx >= end_sample_idx) {
+      continue;
+    }
+    uint32_t offset_samples = entry->sample_idx - start_sample_idx;
+    uint32_t offset_ms = (offset_samples * 1000u)
+                         / TARANG_ECG_SAMPLE_RATE_HZ;
+    annotations[written].offset_ms = offset_ms > UINT16_MAX
+        ? UINT16_MAX : (uint16_t)offset_ms;
+    annotations[written].beat_class = entry->beat_class;
+    annotations[written].confidence = entry->confidence;
+    written++;
+  }
+  return written;
+}
+
+const tarang_nlms_state_t *tarang_pipeline_get_nlms_state(
+    const tarang_pipeline_t *pipeline)
+{
+  return pipeline == NULL ? NULL : &pipeline->nlms;
 }
 
 bool tarang_pipeline_should_send_event(tarang_pipeline_t *pipeline)

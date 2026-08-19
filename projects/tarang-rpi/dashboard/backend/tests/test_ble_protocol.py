@@ -10,9 +10,12 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from ble_protocol import (  # noqa: E402
+    ANALYTICS_DUTY_UUID,
+    ANALYTICS_SDNN_UUID,
     ProtocolError,
     SnippetReassembler,
     decode_analytics,
+    decode_analytics_characteristic,
     decode_annotations,
     decode_event_meta,
     decode_event_ticker,
@@ -35,6 +38,19 @@ class BleProtocolTest(unittest.TestCase):
         self.assertEqual(decoded["sdnn"], 44.0)
         self.assertEqual(decoded["ai_duty_cycle_pct"], 1.5)
         self.assertEqual(decoded["em2_sleep_pct"], 92.0)
+
+    def test_decodes_generated_analytics_characteristics(self):
+        self.assertEqual(
+            decode_analytics_characteristic(
+                ANALYTICS_SDNN_UUID, struct.pack("<H", 47)
+            ),
+            ("sdnn", 47.0),
+        )
+        field, value = decode_analytics_characteristic(
+            ANALYTICS_DUTY_UUID, bytes([15])
+        )
+        self.assertEqual(field, "ai_duty_cycle_pct")
+        self.assertAlmostEqual(value, 1.5)
 
     def test_decodes_event_packets(self):
         meta = decode_event_meta(struct.pack("<HBBI", 42, 2, 245, 123456))
@@ -64,7 +80,7 @@ class BleProtocolTest(unittest.TestCase):
 
         self.assertIsNone(reassembler.add_chunk(chunk_1))
         waveform = reassembler.add_chunk(chunk_0)
-        self.assertEqual(waveform, [10.0, 20.0, 30.0, 40.0])
+        self.assertEqual(waveform, [0.01, 0.02, 0.03, 0.04])
         self.assertEqual(reassembler.received_chunks, 0)
 
     def test_rejects_invalid_chunk_header(self):
@@ -73,6 +89,19 @@ class BleProtocolTest(unittest.TestCase):
             reassembler.add_chunk(struct.pack("<HHh", 2, 2, 10))
         with self.assertRaises(ProtocolError):
             reassembler.add_chunk(struct.pack("<HHh", 0, 0, 10))
+
+    def test_accepts_default_mtu_chunk_count_for_four_seconds(self):
+        reassembler = SnippetReassembler()
+        for sequence in range(124):
+            self.assertIsNone(
+                reassembler.add_chunk(
+                    struct.pack("<HH8h", sequence, 125, *([sequence] * 8))
+                )
+            )
+        waveform = reassembler.add_chunk(
+            struct.pack("<HH8h", 124, 125, *([124] * 8))
+        )
+        self.assertEqual(len(waveform), 1000)
 
 
 if __name__ == "__main__":
