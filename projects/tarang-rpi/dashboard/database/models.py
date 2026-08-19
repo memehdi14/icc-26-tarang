@@ -6,7 +6,8 @@ Tables:
   - Mode A Time Series & Snapshot:
       vitals_samples, analytics_5min, clinical_events, ecg_snippets, beat_annotations
   - Management & Workstation:
-      patients, devices, monitoring_sessions, device_diagnostics, device_health_events, system_settings
+      patients, devices, monitoring_sessions, clinical_actions, device_diagnostics,
+      device_health_events, system_settings
   - Legacy Compatibility:
       telemetry_events
 """
@@ -279,6 +280,36 @@ class MonitoringSession(Base):
             "notes": self.notes,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "ended_at": self.ended_at.isoformat() if self.ended_at else None,
+        }
+
+
+class ClinicalAction(Base):
+    """Auditable workstation action such as paging the duty physician."""
+    __tablename__ = "clinical_actions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
+    session_id = Column(String(64), ForeignKey("monitoring_sessions.session_id"), nullable=True, index=True)
+    action_type = Column(String(40), nullable=False, index=True)
+    priority = Column(String(20), nullable=False, default="routine")
+    status = Column(String(20), nullable=False, default="queued", index=True)
+    reason = Column(String(500), nullable=True)
+    requested_by = Column(String(200), nullable=False, default="Clinical workstation")
+    created_at = Column(DateTime, default=func.now(), nullable=False, index=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "patientId": self.patient_id,
+            "sessionId": self.session_id,
+            "actionType": self.action_type,
+            "priority": self.priority,
+            "status": self.status,
+            "reason": self.reason,
+            "requestedBy": self.requested_by,
+            "createdAt": self.created_at.isoformat() if self.created_at else None,
+            "acknowledgedAt": self.acknowledged_at.isoformat() if self.acknowledged_at else None,
         }
 
 

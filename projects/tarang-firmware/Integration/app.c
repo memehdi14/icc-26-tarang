@@ -40,6 +40,7 @@
 #include "tarang_ppg.h"
 #include "tarang_imu.h"
 #include "tarang_ble.h"
+#include "tarang_time.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -55,6 +56,10 @@
 #include "sl_power_manager.h"
 #endif
 
+#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
+#include "sl_bt_api.h"
+#endif
+
 /*******************************************************************************
  * TEST MODE - Change these to select which sensors are active.
  ******************************************************************************/
@@ -67,16 +72,18 @@
   (TARANG_ENABLE_ECG || TARANG_ENABLE_PPG || TARANG_ENABLE_IMU)
 
 #if TARANG_ANY_SENSOR_ENABLED
-/* Sleeptimer handle for periodic 10ms wakeup */
+/* Sleeptimer handle for periodic 10ms sensor processing. */
 static sl_sleeptimer_timer_handle_t wakeup_timer;
 static void wakeup_callback(sl_sleeptimer_timer_handle_t *handle, void *data)
 {
   (void)handle;
   (void)data;
-  /* Empty — the sole purpose is to wake the CPU from EM1 every 10ms
-   * so the super loop runs and processes any pending sensor data. */
+  /* Wake the CPU every 10ms so the super loop runs and processes
+   * any pending sensor or BLE telemetry actions. */
 }
+#endif
 
+#if TARANG_ENABLE_PPG || TARANG_ENABLE_IMU
 /* Simple delay for sensor power-up stabilization */
 static void delay_ms(uint32_t ms)
 {
@@ -94,15 +101,11 @@ static void delay_ms(uint32_t ms)
 void app_init(void)
 {
   /*
-   * CRITICAL: Prevent the power manager from entering EM2/EM3.
-   * EM2 shuts down the BLE radio link layer (kills active connections)
-   * and I2C (kills PPG + IMU) and IADC/DMA (kills ECG).
-   * EM1 keeps all peripherals AND BLE radio alive while still saving power.
-   * Must be set BEFORE any peripheral usage (including boot tests).
+   * NOTE: Permanent EM1 lock is intentionally DISABLED to allow the system
+   * to enter EM2 deep sleep. The Silicon Labs Bluetooth Link Layer requires
+   * EM2 to properly clock and schedule radio advertising and connection events
+   * with the RTCC/BURTC low-frequency crystal oscillators.
    */
-#if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
-  sl_power_manager_add_em_requirement(SL_POWER_MANAGER_EM1);
-#endif
 
 #if TARANG_RUN_BOOT_TESTS
   /* === PHASE 1 & 2 VERIFICATION TEST AT BOOT === */
@@ -238,12 +241,14 @@ void app_init(void)
   printf("==========================================\r\n");
 
 #if TARANG_ANY_SENSOR_ENABLED
-  /* Wake the sensor-processing super loop every 10 ms. */
+  /* Sensor builds need a periodic fallback in addition to GPIO interrupts. */
   uint32_t ticks = sl_sleeptimer_ms_to_tick(10);
   sl_status_t timer_status = sl_sleeptimer_start_periodic_timer(
       &wakeup_timer, ticks, wakeup_callback, NULL, 0, 0);
   printf("[INIT] 10ms wakeup timer: 0x%08lX\r\n",
          (unsigned long)timer_status);
+#else
+  printf("[INIT] BLE reference runtime active (no application wake timer).\r\n");
 #endif
 }
 
@@ -267,52 +272,22 @@ void app_process_action(void)
   tarang_imu_process();
 #endif
 
-  /* ── BLE Telemetry Dispatch ─────────────────────────────────────────── */
+  /* ── BLE Telemetry Dispatch (Unconditional) ─────────────────────────── */
 #if TARANG_ENABLE_BLE
   tarang_ble_process(tarang_pipeline_get_instance());
 #endif
 
-  uint32_t current_count = 0;
-#if TARANG_ENABLE_ECG
-  current_count = tarang_ecg_get_sample_count();
-#elif TARANG_ENABLE_PPG
-  current_count = tarang_ppg_get_sample_count();
-#elif TARANG_ENABLE_IMU
-  current_count = tarang_imu_get_sample_count();
-#endif
-
-  /* ── I2C Bus Recovery ────────────────────────────────────────────────
-   *
-   * NOTE: Disabled — PR #24 PPG/IMU drivers don't have
-   * tarang_ppg_get_health() / tarang_i2c_quick_ping() / tarang_i2c_bus_clear()
-   * / tarang_imu_init_ex(). Recovery will be re-enabled when PPG/IMU
-   * drivers are upgraded with health tracking APIs.
-   * ─────────────────────────────────────────────────────────────────── */
-
   /* ── Periodic diagnostics (every ~2 seconds) ────────────────────────
    *
-   * Timebase selection:
-   *   - If ECG enabled:  use ECG sample_count (250 Hz → 500 samples = 2 sec)
-   *   - If PPG enabled:  use PPG sample_count (100 Hz → 200 samples = 2 sec)
-   *   - If IMU enabled:  use IMU sample_count (100 Hz → 200 samples = 2 sec)
-   * This ensures diagnostics print regardless of which sensors are active.
+   * Timebase: uses tarang_now_ms() so diagnostics print reliably even
+   * if physical sensors are disabled.
    * ─────────────────────────────────────────────────────────────────── */
-
-  static uint32_t last_diag = 0;
-  uint32_t diag_interval = 200;  /* default: 200 samples @ 100 Hz = 2 sec */
-
-#if TARANG_ENABLE_ECG
-  diag_interval = 500;   /* 500 samples @ 250 Hz = 2 sec */
-#elif TARANG_ENABLE_PPG
-  diag_interval = 200;   /* 200 samples @ 100 Hz = 2 sec */
-#elif TARANG_ENABLE_IMU
-  diag_interval = 200;   /* 200 samples @ 100 Hz = 2 sec */
-#endif
-
-  if (current_count - last_diag < diag_interval) {
+  static uint32_t last_diag_ms = 0;
+  uint32_t now_ms = tarang_now_ms();
+  if (now_ms - last_diag_ms < 2000u) {
     return;
   }
-  last_diag = current_count;
+  last_diag_ms = now_ms;
 
   printf("\r\n========= TARANG LIVE READINGS =========\r\n");
 
@@ -416,3 +391,16 @@ void app_process_action(void)
 
   printf("========================================\r\n");
 }
+
+/***************************************************************************//**
+ * Bluetooth stack event callback.
+ *
+ * Implemented directly in app.c to guarantee strong linkage over the weak
+ * default in autogen/sl_bluetooth.c.
+ ******************************************************************************/
+#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
+void sl_bt_on_event(sl_bt_msg_t *evt)
+{
+  tarang_ble_on_event(evt);
+}
+#endif

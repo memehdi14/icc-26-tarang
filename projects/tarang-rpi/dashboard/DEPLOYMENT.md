@@ -1,278 +1,298 @@
-# Tarang Clinical — Full Stack Deployment Guide
+# Tarang Raspberry Pi Deployment
 
-Complete guide to running the Tarang clinical telemetry stack on a **Raspberry Pi 4** (or any Linux machine). The same stack also runs on Windows/macOS for local development.
+This guide runs the Tarang backend, dashboard, and paired BLE gateway on a Raspberry Pi using BlueZ.
 
----
+## Architecture
 
-## System Architecture
-
+```text
+EFR32MG26 wearable
+    |
+    | bonded and encrypted BLE notifications/indications
+    v
+ble_gateway.py
+    |
+    | local HTTP
+    v
+FastAPI :8000 ----> SQLite
+    |
+    | REST + WebSocket
+    v
+Next.js :3000
 ```
-EFR32MG26 Wearable
-       │
- BLE 5.3 Notifications
-       ▼
-ble_gateway.py  ──────────► FastAPI (port 8000)
-                               │
-                     ┌─────────┴──────────┐
-                     │                    │
-              SQLite DB             WebSocket /ws/telemetry
-              (tarang_clinical.db)        │
-                                    Next.js Dashboard
-                                    (port 3000)
-```
 
----
+The EFR32 is the BLE peripheral/GATT server. The Raspberry Pi is the BLE central/GATT client.
 
-## Prerequisites
+## Requirements
 
-| Tool | Version | Install |
-|------|---------|---------|
-| Python | 3.11+ | `sudo apt install python3.11 python3-pip python3-venv` |
-| Node.js | 20+ | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo -E bash - && sudo apt install -y nodejs` |
-| npm | bundled with Node | — |
-| Git | any | `sudo apt install git` |
+- Raspberry Pi OS with BlueZ
+- Python 3.10 or newer
+- Node.js 18 or newer
+- EFR32 firmware with Security Manager and bonding enabled
+- The phone disconnected while the Pi is testing the wearable
 
----
+## First-Time Setup
 
-## Step 1 — Clone the Repository
+From the repository root:
 
 ```bash
-git clone https://github.com/memehdi14/icc-26-tarang.git
-cd icc-26-tarang
+cd projects/tarang-rpi
+chmod +x setup_rpi.sh start_all.sh update_rpi.sh
+./setup_rpi.sh
 ```
 
----
+The setup script:
 
-## Step 2 — Backend Setup
+1. Installs BlueZ, Python, Node.js, npm, curl, and Git.
+2. Enables the Bluetooth service.
+3. Creates `dashboard/backend/venv`.
+4. Installs Python dependencies.
+5. Runs backend and BLE protocol tests.
+6. Installs and builds the frontend.
+7. Creates `tarang.env` from `tarang.env.example` if needed.
+
+Log out and back in after the first setup if the user was newly added to the `bluetooth` group.
+
+## Configuration
+
+Edit:
+
+```text
+projects/tarang-rpi/tarang.env
+```
+
+Recommended hackathon configuration:
 
 ```bash
-cd projects/tarang-rpi/dashboard/backend
-
-# Create and activate a Python virtual environment
-python3 -m venv venv
-source venv/bin/activate          # Linux/macOS
-# venv\Scripts\activate           # Windows PowerShell
-
-# Install dependencies
-pip install -r requirements.txt
+TARANG_BACKEND_URL=http://127.0.0.1:8000
+TARANG_BLE_ADDRESS=64:02:8F:64:26:14
+TARANG_BLE_PAIR=true
+TARANG_DEVICE_ID=tarang-efr32-demo
+TARANG_SESSION_ID=
+TARANG_CORS_ORIGINS=*
+TARANG_FRONTEND_MODE=production
+TARANG_LOG_LEVEL=INFO
 ```
 
-### Start the Backend
+### Gateway variables
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `TARANG_BACKEND_URL` | `http://localhost:8000` | FastAPI destination |
+| `TARANG_BLE_ADDRESS` | unset | Preferred EFR32 identity address |
+| `TARANG_BLE_NAME_PREFIX` | `TARANG` | Name prefix used when address is unset |
+| `TARANG_BLE_PAIR` | `true` | Pair before protected GATT discovery |
+| `TARANG_BLE_SCAN_TIMEOUT` | `10` | Discovery timeout in seconds |
+| `TARANG_BLE_CONNECT_TIMEOUT` | `35` | Pair/connect timeout in seconds |
+| `TARANG_BLE_RECONNECT_DELAY` | `5` | Initial reconnect delay |
+| `TARANG_DIAGNOSTICS_INTERVAL` | `10` | Diagnostics heartbeat interval |
+| `TARANG_DEVICE_ID` | BLE address | Device identifier sent to the API |
+| `TARANG_SESSION_ID` | active backend lookup | Monitoring session association |
+| `TARANG_LOG_LEVEL` | `INFO` | Python logging level |
+
+When `TARANG_SESSION_ID` is empty, the gateway follows the active backend session assigned to `TARANG_DEVICE_ID`. Set it explicitly only when the Pi must be pinned to one session.
+
+## BLE-Only Validation
+
+Before starting the complete stack, validate the wearable directly:
 
 ```bash
-# From: projects/tarang-rpi/dashboard/backend/
-uvicorn main:app --host 0.0.0.0 --port 8000
+cd projects/tarang-rpi
+source dashboard/backend/venv/bin/activate
+python ble_test.py 64:02:8F:64:26:14
 ```
 
-You should see:
-```
-INFO:     Started server process
-INFO:     Waiting for application startup.
-[TARANG] Backend started. Database initialized.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
+The test performs pairing before service enumeration, validates all three Tarang services, subscribes to HR, SpO2, and event metadata, and listens for notifications.
 
-> **Database**: SQLite file is auto-created at `projects/tarang-rpi/dashboard/backend/tarang_clinical.db` on first run. No setup required.
-
-### Verify Backend
+Use unsecured mode only while testing firmware that has no protected GATT attributes:
 
 ```bash
-curl http://localhost:8000/api/health
-# → {"status":"ok"}
-
-curl http://localhost:8000/api/patients/884219
-# → {"name":"John Doe","bed":"ICU-04",...}
-
-curl http://localhost:8000/api/diagnostics/latest
-# → {"bleConnected":false,...}
+python ble_test.py 64:02:8F:64:26:14 --no-pair
 ```
 
----
+Do not routinely run `bluetoothctl remove`. Removing the device deletes the Pi-side bond and forces key negotiation again.
 
-## Step 3 — BLE Gateway (Real Hardware — Raspberry Pi Only)
-
-> Skip this step if running on Windows/macOS for development. Use the mock gateway instead.
+## Start the Complete Hub
 
 ```bash
-# In a NEW terminal, from project root:
+cd projects/tarang-rpi
+./start_all.sh
+```
+
+The launcher starts services in this order:
+
+1. FastAPI backend
+2. Backend health verification
+3. Production Next.js frontend
+4. Paired BLE gateway
+
+URLs:
+
+- Dashboard: `http://<pi-address>:3000`
+- API: `http://<pi-address>:8000`
+- OpenAPI: `http://<pi-address>:8000/docs`
+
+Press `Ctrl+C` to stop the complete process group.
+
+## Run Components Separately
+
+### Backend
+
+```bash
 cd projects/tarang-rpi/dashboard/backend
 source venv/bin/activate
-
-python ble_gateway.py
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-The gateway will:
-1. Scan for a BLE device advertising "TARANG", "EFR32", or "SILABS"
-2. Connect and subscribe to GATT characteristic `b4cf8877-ba1a-414c-a99d-de85a13fd66a`
-3. Forward every 16-byte packet to `http://localhost:8000/api/telemetry/ingest`
-4. Auto-reconnect if BLE drops
-
----
-
-## Step 3 (Alt) — Mock BLE Gateway (Windows / macOS / Dev)
+### Gateway
 
 ```bash
-# In a NEW terminal:
-cd projects/tarang-rpi/dashboard/backend
-source venv/bin/activate   # or venv\Scripts\activate on Windows
-
-python mock_ble_gateway.py
+cd projects/tarang-rpi
+set -a
+source tarang.env
+set +a
+dashboard/backend/venv/bin/python dashboard/backend/ble_gateway.py
 ```
 
-You will see live output like:
-```
-[MOCK-BLE] Starting mock telemetry gateway...
-[     1.0s] HR= 74 BPM | RR= 812ms | Beat=  N | Flags=0x00 | Pkt#1
-[     2.0s] HR= 75 BPM | RR= 800ms | Beat=PAC | Flags=0x00 | Pkt#2
-```
-
----
-
-## Step 4 — Frontend Setup
+### Frontend
 
 ```bash
 cd projects/tarang-rpi/dashboard/frontend
-
-# Install Node dependencies
-npm install
-
-# Start the Next.js development server
-npm run dev
+npm run start -- -H 0.0.0.0 -p 3000
 ```
 
-Open your browser at **http://localhost:3000**
+## Expected Gateway Sequence
 
----
+```text
+Backend ready at http://127.0.0.1:8000
+Scanning for configured device 64:02:8F:64:26:14
+Connecting to TARANG-2614 (...), pairing=True
+Connected and GATT verified
+Subscribed to b4cf8877-...
+...
+9 Mode A subscriptions active
+Vitals: HR=75 SpO2=98
+```
 
-## Step 5 — Full Stack Launch Order
+On first connection, BlueZ performs SMP pairing. Later connections reuse the stored bond.
 
-Run each in a separate terminal:
+## Database
 
-| # | Terminal | Command |
-|---|----------|---------|
-| 1 | Backend | `cd .../backend && source venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port 8000` |
-| 2 | Gateway | `python ble_gateway.py` *(RPi)* or `python mock_ble_gateway.py` *(dev)* |
-| 3 | Frontend | `cd .../frontend && npm run dev` |
+The default SQLite database is:
 
----
+```text
+projects/tarang-rpi/dashboard/database/tarang_clinical.db
+```
 
-## Step 6 — RPi Auto-Start with systemd
-
-Create systemd services to auto-start the backend and BLE gateway on boot.
-
-### Backend Service
+Override it with:
 
 ```bash
-sudo nano /etc/systemd/system/tarang-backend.service
+TARANG_DATABASE_URL=sqlite:////absolute/path/tarang_clinical.db
 ```
+
+SQLite WAL mode, foreign keys, and a five-second busy timeout are enabled automatically.
+
+## Tests
+
+```bash
+cd projects/tarang-rpi/dashboard/backend
+source venv/bin/activate
+python -m unittest discover -s tests -v
+```
+
+The suite uses an isolated temporary database and does not modify the deployment database.
+
+## Updating
+
+The update script refuses to overwrite a dirty working tree and uses a fast-forward-only Git pull:
+
+```bash
+cd projects/tarang-rpi
+./update_rpi.sh
+```
+
+It then updates Python dependencies, runs tests, installs exact frontend dependencies from `package-lock.json`, and rebuilds Next.js.
+
+## Optional systemd Service
+
+Create `/etc/systemd/system/tarang-hub.service` and replace the user/path if necessary:
 
 ```ini
 [Unit]
-Description=Tarang Clinical FastAPI Backend
-After=network.target
+Description=Tarang bedside hub
+After=network-online.target bluetooth.service
+Wants=network-online.target
+Requires=bluetooth.service
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/icc-26-tarang/projects/tarang-rpi/dashboard/backend
-ExecStart=/home/pi/icc-26-tarang/projects/tarang-rpi/dashboard/backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
-Restart=always
+User=teamocelleon
+WorkingDirectory=/home/teamocelleon/icc-26-tarang/projects/tarang-rpi
+EnvironmentFile=/home/teamocelleon/icc-26-tarang/projects/tarang-rpi/tarang.env
+ExecStart=/home/teamocelleon/icc-26-tarang/projects/tarang-rpi/start_all.sh
+Restart=on-failure
 RestartSec=5
+KillMode=control-group
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### BLE Gateway Service
-
-```bash
-sudo nano /etc/systemd/system/tarang-ble-gateway.service
-```
-
-```ini
-[Unit]
-Description=Tarang BLE Gateway
-After=tarang-backend.service bluetooth.service
-Requires=tarang-backend.service
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/icc-26-tarang/projects/tarang-rpi/dashboard/backend
-ExecStart=/home/pi/icc-26-tarang/projects/tarang-rpi/dashboard/backend/venv/bin/python ble_gateway.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Enable and Start
+Enable it:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable tarang-backend tarang-ble-gateway
-sudo systemctl start tarang-backend tarang-ble-gateway
-
-# Check status
-sudo systemctl status tarang-backend
-sudo systemctl status tarang-ble-gateway
-
-# View logs
-journalctl -u tarang-backend -f
-journalctl -u tarang-ble-gateway -f
+sudo systemctl enable --now tarang-hub
+journalctl -u tarang-hub -f
 ```
-
----
-
-## Step 7 — Use PostgreSQL Instead of SQLite (Optional)
-
-Install PostgreSQL:
-```bash
-sudo apt install postgresql postgresql-client
-sudo -u postgres createuser tarang
-sudo -u postgres createdb tarang_clinical -O tarang
-sudo -u postgres psql -c "ALTER USER tarang PASSWORD 'yourpassword';"
-```
-
-Set the environment variable before starting the backend:
-```bash
-export TARANG_DATABASE_URL="postgresql://tarang:yourpassword@localhost:5432/tarang_clinical"
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-No code changes needed — SQLAlchemy handles both backends identically.
-
----
-
-## API Reference
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/health` | Health check |
-| `GET` | `api/telemetry/latest` | Latest telemetry event |
-| `GET` | `/api/telemetry/history?minutes=5` | Last N minutes of events |
-| `POST` | `/api/telemetry/ingest` | BLE gateway posts decoded packets |
-| `WS` | `/ws/telemetry` | Live telemetry WebSocket push |
-| `GET` | `/api/patients/{mrn}` | Fetch patient by MRN |
-| `PUT` | `/api/patients/{mrn}` | Update patient info |
-| `GET` | `/api/diagnostics/latest` | Latest device diagnostics |
-| `POST` | `/api/diagnostics/update` | Update device state |
-| `GET` | `/api/settings` | Get system settings |
-| `PUT` | `/api/settings` | Save system settings |
-
-Interactive API docs (auto-generated): **http://localhost:8000/docs**
-
----
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| `ModuleNotFoundError: fastapi` | Activate venv: `source venv/bin/activate` |
-| `Address already in use` | Another process on 8000: `lsof -ti:8000 \| xargs kill` |
-| BLE device not found | Run `bluetoothctl scan on`, ensure EFR32 is powered and advertising |
-| CORS error in browser | Check backend is running and `NEXT_PUBLIC_API_URL` in `.env.local` is correct |
-| Dashboard shows "Offline Mode" badge | Backend not reachable on port 8000 |
-| `bleak` errors on Windows | BLE Gateway only works on RPi; use `mock_ble_gateway.py` on Windows |
+### Pairing fails immediately
+
+Confirm the firmware boot log contains:
+
+```text
+[BLE] enable bonding: OK
+```
+
+Then inspect the firmware's `[BLE][SM] Bonding failed` reason. Do not delete the bond repeatedly without recording that reason.
+
+### Required subscriptions fail
+
+If GATT attributes require bonding, confirm `TARANG_BLE_PAIR=true`. The gateway treats HR, SpO2, and event metadata subscriptions as mandatory and reconnects instead of pretending the session is healthy.
+
+### Device is not found
+
+```bash
+bluetoothctl
+power on
+scan on
+```
+
+Verify that `TARANG-2614` appears and that the configured identity address is correct.
+
+### Bond keys are genuinely mismatched
+
+Only after confirming a key mismatch, remove the bond from both peers:
+
+```bash
+bluetoothctl remove 64:02:8F:64:26:14
+```
+
+Erase the corresponding EFR32 bond through the firmware's maintenance flow or a controlled NVM reset, then pair once again. Removing only one side creates another mismatch.
+
+### Pi connects but receives no data
+
+- Disconnect the phone; the current firmware tracks one application connection.
+- Confirm all required subscriptions succeeded.
+- Confirm the firmware reports CCCD `SUBSCRIBED` events.
+- Remember that the current BLE-only firmware checkpoint sends test vitals while ECG/AI flags are disabled.
+
+### Backend is unavailable
+
+```bash
+curl --fail http://127.0.0.1:8000/api/health
+```
+
+The gateway waits for this endpoint before scanning and retries failed HTTP deliveries three times through a bounded queue.

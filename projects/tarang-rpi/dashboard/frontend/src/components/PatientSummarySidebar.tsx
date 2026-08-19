@@ -1,147 +1,109 @@
 'use client';
 
 import React from 'react';
-import { PatientInfo, ClinicalTelemetryPacket } from '../types/telemetry';
-import { User, AlertTriangle, Cpu, Heart, CheckCircle2, ShieldAlert, FileText, PhoneCall } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, CheckCircle2, FileDown, PhoneCall, RefreshCw } from 'lucide-react';
+import { ClinicalTelemetryPacket, PatientInfo } from '../types/telemetry';
 
 interface PatientSummarySidebarProps {
   patient: PatientInfo;
   telemetry: ClinicalTelemetryPacket;
+  canExportEcg: boolean;
+  exportBusy: boolean;
+  pageBusy: boolean;
+  actionMessage?: string | null;
+  onExportEcg: () => void;
+  onPagePhysician: () => void;
 }
 
 function decodeRhythm(flags: number): string {
-  if (!flags) return 'Normal Sinus Rhythm';
+  if (!flags) return 'Normal sinus rhythm';
   const names: string[] = [];
-  if (flags & 0x01) names.push('AFib Detected');
-  if (flags & 0x02) names.push('Sinus Tachycardia');
-  if (flags & 0x04) names.push('Sinus Bradycardia');
+  if (flags & 0x01) names.push('AFib');
+  if (flags & 0x02) names.push('Tachycardia');
+  if (flags & 0x04) names.push('Bradycardia');
   if (flags & 0x08) names.push('Bigeminy');
   if (flags & 0x10) names.push('Trigeminy');
-  if (flags & 0x20) names.push('V-Run');
-  if (flags & 0x40) names.push('SVT-Run');
-  if (flags & 0x80) names.push('VT Suspected!');
-  return names.length > 0 ? names.join(' | ') : 'Normal Sinus Rhythm';
+  if (flags & 0x20) names.push('V-run');
+  if (flags & 0x40) names.push('SVT run');
+  if (flags & 0x80) names.push('VT suspected');
+  return names.join(' / ');
 }
 
-export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({ patient, telemetry }) => {
-  const confidenceStr = telemetry.confidence ? `${((telemetry.confidence / 255) * 100).toFixed(1)}%` : '98.4%';
-  const rhythmText = decodeRhythm(telemetry.rhythm_flags);
+export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({
+  patient,
+  telemetry,
+  canExportEcg,
+  exportBusy,
+  pageBusy,
+  actionMessage,
+  onExportEcg,
+  onPagePhysician,
+}) => {
+  const confidence = telemetry.confidence ? `${((telemetry.confidence / 255) * 100).toFixed(1)}%` : 'Pending';
+  const initials = patient.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 
   return (
-    <aside style={{ width: '320px', backgroundColor: 'var(--color-surface-container-lowest)', borderLeft: '1px solid var(--color-outline-variant)' }} className="flex flex-col h-screen fixed right-0 top-0 z-20 overflow-y-auto p-4 space-y-4">
-      {/* Patient Header Card */}
-      <div className="card-clinical p-4 space-y-3 bg-gradient-to-br from-[var(--color-surface-container-low)] to-white">
+    <aside className="patient-rail" aria-label="Patient clinical summary">
+      <section className="border-b border-[var(--color-outline-variant)] p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <span className="eyebrow text-[var(--color-primary)]">Patient summary</span>
+          <span className="rounded bg-[var(--color-primary)] px-2 py-1 font-mono text-[10px] font-bold text-white">Bed {patient.bed}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-[var(--color-surface-container-high)] text-base font-bold text-[var(--color-primary)]">{initials}</div>
+          <div className="min-w-0"><h2 className="truncate text-lg font-extrabold">{patient.name}</h2><p className="eyebrow mt-1">MRN {patient.id}</p></div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 divide-x divide-[var(--color-outline-variant)] border-y border-[var(--color-outline-variant)] py-3 text-center">
+          <div><p className="eyebrow">Age</p><p className="mt-1 font-mono text-sm font-bold">{patient.age}</p></div>
+          <div><p className="eyebrow">Sex</p><p className="mt-1 text-sm font-bold">{patient.gender}</p></div>
+          <div><p className="eyebrow">Blood</p><p className="mt-1 font-mono text-sm font-bold">{patient.bloodType}</p></div>
+        </div>
+      </section>
+
+      {patient.allergies.length > 0 && (
+        <section className="border-b border-[var(--color-outline-variant)] bg-[var(--color-error-container)] p-5 text-[var(--color-error)]">
+          <h3 className="flex items-center gap-2 text-xs font-bold"><AlertTriangle size={16} /> Active allergies</h3>
+          <p className="mt-2 text-sm font-semibold">{patient.allergies.join(', ')}</p>
+        </section>
+      )}
+
+      <section className="border-b border-[var(--color-outline-variant)] p-5">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono font-bold tracking-wider px-2 py-0.5 rounded bg-[var(--color-primary-container)] text-white">
-            BED {patient.bed}
-          </span>
-          <span className="text-xs font-mono text-[var(--color-on-surface-variant)]">MRN: {patient.id}</span>
+          <h3 className="flex items-center gap-2 text-sm font-bold"><BrainCircuit size={17} className="text-[var(--color-primary)]" /> Edge analysis</h3>
+          <span className="eyebrow text-[var(--color-success)]">Tier 0-3 active</span>
         </div>
-
-        <div className="flex items-center gap-3 pt-1">
-          <div className="w-12 h-12 rounded-full bg-[var(--color-surface-container-high)] text-[var(--color-primary)] flex items-center justify-center font-extrabold text-lg border border-[var(--color-outline-variant)]">
-            {patient.name.split(' ').map(n => n[0]).join('')}
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-[var(--color-on-surface)] leading-tight">{patient.name}</h2>
-            <p className="text-xs text-[var(--color-on-surface-variant)] font-medium">
-              {patient.age} yrs • {patient.gender} • Blood Group: <span className="font-mono font-bold text-[var(--color-primary)]">{patient.bloodType}</span>
-            </p>
-          </div>
+        <div className="mt-4 border-l-2 border-[var(--color-primary-container)] pl-3">
+          <p className="eyebrow">Detected rhythm</p>
+          <p className="mt-1 flex items-center gap-2 text-sm font-bold text-[var(--color-primary)]"><CheckCircle2 size={15} /> {decodeRhythm(telemetry.rhythm_flags)}</p>
+          <p className="mt-2 font-mono text-[10px] text-[var(--color-on-surface-variant)]">Model confidence {confidence}</p>
         </div>
-      </div>
+        <dl className="mt-4 divide-y divide-[var(--color-surface-container-high)] text-xs">
+          <div className="flex justify-between py-2.5"><dt className="text-[var(--color-on-surface-variant)]">PAC burden</dt><dd className="font-mono font-bold">{telemetry.pac_burden_pct ?? 0}%</dd></div>
+          <div className="flex justify-between py-2.5"><dt className="text-[var(--color-on-surface-variant)]">PVC burden</dt><dd className="font-mono font-bold">{telemetry.pvc_burden_pct ?? 0}%</dd></div>
+          <div className="flex justify-between py-2.5"><dt className="text-[var(--color-on-surface-variant)]">SDNN / RMSSD</dt><dd className="font-mono font-bold">{telemetry.sdnn_ms ?? 0} / {telemetry.rmssd_ms ?? 0} ms</dd></div>
+        </dl>
+      </section>
 
-      {/* Allergies Warning Chips */}
-      <div className="card-clinical-inset p-3 bg-red-50/50 border-red-200">
-        <div className="flex items-center gap-1.5 text-xs font-bold text-red-800 mb-2">
-          <AlertTriangle className="w-4 h-4 text-red-600" />
-          <span>Active Patient Allergies</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {patient.allergies.map((allergy, idx) => (
-            <span key={idx} className="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-900 border border-red-300">
-              {allergy}
-            </span>
-          ))}
-        </div>
-      </div>
+      <section className="border-b border-[var(--color-outline-variant)] p-5">
+        <h3 className="text-sm font-bold">Medical history</h3>
+        {patient.medicalHistory.length === 0 ? (
+          <p className="mt-3 text-xs text-[var(--color-on-surface-variant)]">No medical history recorded.</p>
+        ) : (
+          <ul className="mt-3 space-y-2 text-xs text-[var(--color-on-surface-variant)]">
+            {patient.medicalHistory.map((item) => <li key={item} className="flex gap-2"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-primary)]" />{item}</li>)}
+          </ul>
+        )}
+      </section>
 
-      {/* TFLite AI Clinical Insights */}
-      <div className="card-clinical p-4 space-y-3 border-[var(--color-primary-container)]">
-        <div className="flex items-center justify-between pb-2 border-b border-[var(--color-outline-variant)]">
-          <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-primary)]">
-            <Cpu className="w-4 h-4" />
-            <span>TFLite Cascade Insights</span>
-          </div>
-          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--color-surface-container-high)] text-[var(--color-primary)]">
-            Tier 0-3 Active
-          </span>
-        </div>
-
-        {/* Current Rhythm Classification */}
-        <div className="p-2.5 rounded-lg bg-[var(--color-surface-container-low)] border border-[var(--color-outline-variant)] flex items-center justify-between">
-          <div>
-            <p className="text-[11px] text-[var(--color-on-surface-variant)] font-medium">Detected Rhythm</p>
-            <p className="text-sm font-bold text-[var(--color-primary)] flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              {rhythmText}
-            </p>
-          </div>
-          <div className="text-right font-mono">
-            <p className="text-[10px] text-[var(--color-on-surface-variant)]">Model Confidence</p>
-            <p className="text-xs font-bold text-[var(--color-on-surface)]">{confidenceStr}</p>
-          </div>
-        </div>
-
-        {/* PAC / PVC Arrhythmia Burden */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="p-2 rounded bg-[var(--color-surface-container-low)] border border-[var(--color-outline-variant)]">
-            <span className="text-[10px] text-[var(--color-on-surface-variant)] block">PAC Burden</span>
-            <span className="font-mono font-bold text-sm text-[var(--color-on-surface)]">{telemetry.pac_burden_pct ?? 0}%</span>
-          </div>
-          <div className="p-2 rounded bg-[var(--color-surface-container-low)] border border-[var(--color-outline-variant)]">
-            <span className="text-[10px] text-[var(--color-on-surface-variant)] block">PVC Burden</span>
-            <span className="font-mono font-bold text-sm text-[var(--color-on-surface)]">{telemetry.pvc_burden_pct ?? 0}%</span>
-          </div>
-        </div>
-
-        {/* HRV Autonomous Metrics */}
-        <div className="space-y-1 pt-1">
-          <div className="flex justify-between text-xs font-medium">
-            <span className="text-[var(--color-on-surface-variant)]">HRV SDNN:</span>
-            <span className="font-mono font-bold text-[var(--color-on-surface)]">{telemetry.sdnn_ms ?? 0} ms</span>
-          </div>
-          <div className="flex justify-between text-xs font-medium">
-            <span className="text-[var(--color-on-surface-variant)]">HRV RMSSD:</span>
-            <span className="font-mono font-bold text-[var(--color-on-surface)]">{telemetry.rmssd_ms ?? 0} ms</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Medical History */}
-      <div className="card-clinical p-4 space-y-2">
-        <h3 className="text-xs font-bold text-[var(--color-on-surface)] uppercase tracking-wider">Medical History</h3>
-        <ul className="space-y-1.5 text-xs text-[var(--color-on-surface-variant)]">
-          {patient.medicalHistory.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] mt-1.5 flex-shrink-0"></span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Quick Clinical Actions */}
-      <div className="space-y-2 pt-2">
-        <button className="w-full py-2.5 px-3 rounded-lg bg-[var(--color-primary)] text-white text-xs font-bold flex items-center justify-center gap-2 hover:bg-[var(--color-primary-container)] transition-colors shadow-sm">
-          <FileText className="w-4 h-4" />
-          <span>Export 10s ECG PDF Strip</span>
+      <section className="space-y-2 p-5">
+        <button onClick={onExportEcg} disabled={!canExportEcg || exportBusy} className="button-primary w-full">
+          {exportBusy ? <RefreshCw size={16} className="animate-spin" /> : <FileDown size={16} />} Export event ECG
         </button>
-        <button className="w-full py-2 px-3 rounded-lg border border-[var(--color-outline-variant)] text-[var(--color-on-surface)] text-xs font-semibold flex items-center justify-center gap-2 hover:bg-[var(--color-surface-container)] transition-colors">
-          <PhoneCall className="w-4 h-4 text-[var(--color-primary)]" />
-          <span>Page Duty Physician</span>
+        <button onClick={onPagePhysician} disabled={pageBusy} className="button-secondary w-full">
+          {pageBusy ? <RefreshCw size={16} className="animate-spin" /> : <PhoneCall size={16} />} Page duty physician
         </button>
-      </div>
+        {actionMessage && <p className="mt-3 rounded border border-[var(--color-outline-variant)] bg-white p-2.5 text-[11px] text-[var(--color-on-surface-variant)]" role="status">{actionMessage}</p>}
+      </section>
     </aside>
   );
 };

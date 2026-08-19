@@ -35,6 +35,11 @@
 - `GET /api/sessions/{session_id}/events`
 - `POST /api/telemetry/ingest`
 - `POST /api/health/ingest`
+- `GET /api/events/{event_id}/snippet`
+- `GET /api/events/{event_id}/pdf`
+- `POST /api/clinical-actions/page-physician`
+- `GET /api/clinical-actions?mrn=&session_id=`
+- `GET|PUT /api/settings`
 - `WS /ws/telemetry`
 
 ## External integration API
@@ -56,7 +61,14 @@ The versioned resources are FHIR-inspired, not certified FHIR resources. Put a v
 - Frontend WebSocket URL: `NEXT_PUBLIC_WS_URL`.
 - Gateway backend URL: `TARANG_BACKEND_URL`.
 - Gateway device selector: `TARANG_BLE_ADDRESS` (optional; otherwise it scans).
+- Gateway name selector: `TARANG_BLE_NAME_PREFIX` (defaults to `TARANG`).
+- Gateway pairing: `TARANG_BLE_PAIR=true` pairs before protected GATT discovery.
+- Gateway API device identifier: `TARANG_DEVICE_ID` (defaults to the BLE address).
 - Gateway active session: `TARANG_SESSION_ID` (set this to the ID returned by `POST /api/sessions`).
+
+When `TARANG_SESSION_ID` is unset, the gateway polls the backend for the active
+session assigned to `TARANG_DEVICE_ID`. An explicit value pins ingestion to one
+session and disables automatic session switching.
 
 Run the backend smoke test before deployment:
 

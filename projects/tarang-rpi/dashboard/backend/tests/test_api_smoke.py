@@ -159,6 +159,42 @@ class ApiSmokeTest(unittest.TestCase):
         self.assertEqual(len(snippet_res.json()["waveform"]), 1000)
         self.assertEqual(len(snippet_res.json()["annotations"]), 4)
 
+        pdf_response = self.client.get(f"/api/events/{event_id}/pdf")
+        self.assertEqual(pdf_response.status_code, 200)
+        self.assertEqual(pdf_response.headers["content-type"], "application/pdf")
+        self.assertTrue(pdf_response.content.startswith(b"%PDF-1.4"))
+        self.assertGreater(len(pdf_response.content), 1000)
+
+        page_response = self.client.post("/api/clinical-actions/page-physician", json={
+            "mrn": "DEMO-001",
+            "session_id": session_id,
+            "priority": "urgent",
+            "reason": "Review ventricular run",
+            "requested_by": "Dr. Test",
+        })
+        self.assertEqual(page_response.status_code, 201)
+        self.assertEqual(page_response.json()["status"], "queued")
+        self.assertEqual(page_response.json()["actionType"], "page_physician")
+
+        actions_response = self.client.get("/api/clinical-actions", params={"mrn": "DEMO-001"})
+        self.assertEqual(actions_response.status_code, 200)
+        self.assertEqual(len(actions_response.json()), 1)
+
+        settings_response = self.client.put("/api/settings", json={
+            "hrLowThreshold": 55,
+            "hrHighThreshold": 115,
+            "rrLowThreshold": 9,
+            "rrHighThreshold": 25,
+            "attendingDoctor": "Dr. Test",
+        })
+        self.assertEqual(settings_response.status_code, 200)
+        self.assertEqual(settings_response.json()["attendingDoctor"], "Dr. Test")
+        invalid_settings = self.client.put("/api/settings", json={
+            "hrLowThreshold": 130,
+            "hrHighThreshold": 100,
+        })
+        self.assertEqual(invalid_settings.status_code, 422)
+
         # Stop Session
         stop_response = self.client.post(f"/api/sessions/{session_id}/stop")
         self.assertEqual(stop_response.status_code, 200)

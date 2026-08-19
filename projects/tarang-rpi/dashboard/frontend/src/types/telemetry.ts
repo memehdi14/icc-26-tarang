@@ -70,6 +70,7 @@ export interface ClinicalTelemetryPacket {
 }
 
 export interface PatientInfo {
+  dbId?: number;
   name: string;
   age: number;
   gender: 'Male' | 'Female' | 'Other';
@@ -80,6 +81,40 @@ export interface PatientInfo {
   bloodType: string;
   allergies: string[];
   medicalHistory: string[];
+}
+
+export interface PatientCreateInput {
+  name: string;
+  mrn: string;
+  age: number;
+  gender: 'Male' | 'Female' | 'Other';
+  bed: string;
+  admit_date: string;
+  attending_physician: string;
+  blood_type: string;
+  allergies: string[];
+  medical_history: string[];
+}
+
+export interface DeviceRecord {
+  id: number;
+  device_id: string;
+  name: string;
+  mac_address?: string | null;
+  firmware_version?: string | null;
+  status: string;
+  assigned_patient_id?: number | null;
+  last_seen_at?: string | null;
+}
+
+export interface MonitoringSession {
+  id: number;
+  session_id: string;
+  patient_id: number;
+  device_id?: string | null;
+  status: string;
+  bed?: string | null;
+  started_at?: string | null;
 }
 
 export interface TelemetryDiagnostics {
@@ -99,6 +134,8 @@ export interface TelemetryDiagnostics {
 }
 
 export interface DeviceHealthTelemetry {
+  id?: number;
+  receivedAt?: string;
   uptimeS: number;
   ecgLeadOff: boolean;
   ecgSqi: number;

@@ -38,6 +38,11 @@
 #define SL_BT_INVALID_CONNECTION_HANDLE 0xFFu
 #endif
 
+/* Bonding is enabled only when the generated project includes Security Manager. */
+#ifndef TARANG_BLE_ENABLE_BONDING
+#define TARANG_BLE_ENABLE_BONDING 1
+#endif
+
 /* ── Fallback handles for robust compilation if gatt_db.h differs ─────────── */
 #ifndef gattdb_vitals_heart_rate
   #if defined(gattdb_telemetry_data)
@@ -48,39 +53,63 @@
 #endif
 
 #ifndef gattdb_vitals_spo2
-  #define gattdb_vitals_spo2 23
+  #define gattdb_vitals_spo2 24
 #endif
 
 #ifndef gattdb_vitals_timestamp
-  #define gattdb_vitals_timestamp 25
+  #define gattdb_vitals_timestamp 27
 #endif
 
 #ifndef gattdb_analytics_pvc_burden
-  #define gattdb_analytics_pvc_burden 28
+  #define gattdb_analytics_pvc_burden 30
+#endif
+
+#ifndef gattdb_analytics_pac_burden
+  #define gattdb_analytics_pac_burden 33
+#endif
+
+#ifndef gattdb_analytics_sdnn
+  #define gattdb_analytics_sdnn 36
+#endif
+
+#ifndef gattdb_analytics_rmssd
+  #define gattdb_analytics_rmssd 39
+#endif
+
+#ifndef gattdb_analytics_prr50
+  #define gattdb_analytics_prr50 42
+#endif
+
+#ifndef gattdb_analytics_ai_duty_cycle
+  #define gattdb_analytics_ai_duty_cycle 45
+#endif
+
+#ifndef gattdb_analytics_em2_sleep
+  #define gattdb_analytics_em2_sleep 48
 #endif
 
 #ifndef gattdb_event_rhythm_status
-  #define gattdb_event_rhythm_status 35
+  #define gattdb_event_rhythm_status 52
 #endif
 
 #ifndef gattdb_event_meta
-  #define gattdb_event_meta 37
+  #define gattdb_event_meta 55
 #endif
 
 #ifndef gattdb_event_ecg_chunk
-  #define gattdb_event_ecg_chunk 39
+  #define gattdb_event_ecg_chunk 58
 #endif
 
 #ifndef gattdb_event_ecg_control
-  #define gattdb_event_ecg_control 41
+  #define gattdb_event_ecg_control 61
 #endif
 
 #ifndef gattdb_event_beat_annotations
-  #define gattdb_event_beat_annotations 43
+  #define gattdb_event_beat_annotations 64
 #endif
 
 #ifndef gattdb_event_glitch_ticker
-  #define gattdb_event_glitch_ticker 45
+  #define gattdb_event_glitch_ticker 67
 #endif
 
 #ifndef gattdb_device_health
@@ -112,11 +141,6 @@ static uint32_t last_vitals_send_ms    = 0;
 static uint32_t last_analytics_send_ms = 0;
 static uint16_t next_event_id          = 1;
 
-/* Sleep & Power tracking metrics */
-static uint32_t active_cpu_time_us     = 0;
-static uint32_t em2_sleep_time_us      = 0;
-static uint32_t last_power_sample_ms   = 0;
-
 static bool tarang_ble_status_ok(const char *operation, sl_status_t status)
 {
   if (status == SL_STATUS_OK) {
@@ -142,7 +166,14 @@ bool tarang_ble_is_connected(void)
 
 bool tarang_ble_is_notifications_enabled(void)
 {
-  return (sub_vitals_hr || sub_event_rhythm || sub_analytics_burden);
+  return (sub_vitals_hr
+          || sub_vitals_spo2
+          || sub_analytics_burden
+          || sub_event_rhythm
+          || sub_event_meta
+          || sub_event_ecg_chunk
+          || sub_event_annotations
+          || sub_event_ticker);
 }
 
 /******************************************************************************
@@ -158,23 +189,15 @@ bool tarang_ble_send_vitals(uint16_t hr_bpm, uint8_t spo2_pct, uint32_t ts_ms)
   sl_status_t sc;
   bool ok = true;
 
-  /* Heart Rate (uint16) */
-  sc = sl_bt_gatt_server_send_notification(
-      tarang_ble_conn_handle,
-      gattdb_vitals_heart_rate,
-      sizeof(hr_bpm),
-      (const uint8_t *)&hr_bpm);
+  /* Keep local values current so clients may read as well as subscribe. */
+  sc = sl_bt_gatt_server_write_attribute_value(
+      gattdb_vitals_heart_rate, 0, sizeof(hr_bpm), (const uint8_t *)&hr_bpm);
   if (sc != SL_STATUS_OK) ok = false;
 
-  /* SpO2 (uint8) */
-  sc = sl_bt_gatt_server_send_notification(
-      tarang_ble_conn_handle,
-      gattdb_vitals_spo2,
-      sizeof(spo2_pct),
-      (const uint8_t *)&spo2_pct);
+  sc = sl_bt_gatt_server_write_attribute_value(
+      gattdb_vitals_spo2, 0, sizeof(spo2_pct), (const uint8_t *)&spo2_pct);
   if (sc != SL_STATUS_OK) ok = false;
 
-  /* Timestamp (uint32) */
   sc = sl_bt_gatt_server_write_attribute_value(
       gattdb_vitals_timestamp,
       0,
@@ -182,8 +205,33 @@ bool tarang_ble_send_vitals(uint16_t hr_bpm, uint8_t spo2_pct, uint32_t ts_ms)
       (const uint8_t *)&ts_ms);
   if (sc != SL_STATUS_OK) ok = false;
 
-  printf("[BLE][VITALS] Sent: HR=%u BPM, SpO2=%u%%, TS=%lu ms\r\n",
-         hr_bpm, spo2_pct, (unsigned long)ts_ms);
+  if (sub_vitals_hr) {
+    sc = sl_bt_gatt_server_send_notification(
+        tarang_ble_conn_handle,
+        gattdb_vitals_heart_rate,
+        sizeof(hr_bpm),
+        (const uint8_t *)&hr_bpm);
+    if (sc != SL_STATUS_OK) {
+      printf("[BLE][VITALS] HR notify failed: 0x%08lX\r\n", (unsigned long)sc);
+      ok = false;
+    }
+  }
+
+  if (sub_vitals_spo2) {
+    sc = sl_bt_gatt_server_send_notification(
+        tarang_ble_conn_handle,
+        gattdb_vitals_spo2,
+        sizeof(spo2_pct),
+        (const uint8_t *)&spo2_pct);
+    if (sc != SL_STATUS_OK) {
+      printf("[BLE][VITALS] SpO2 notify failed: 0x%08lX\r\n", (unsigned long)sc);
+      ok = false;
+    }
+  }
+
+  printf("[BLE][VITALS] Published: HR=%u SpO2=%u TS=%lu subscribers=%u/%u\r\n",
+         hr_bpm, spo2_pct, (unsigned long)ts_ms,
+         sub_vitals_hr ? 1u : 0u, sub_vitals_spo2 ? 1u : 0u);
   return ok;
 #else
   (void)hr_bpm; (void)spo2_pct; (void)ts_ms;
@@ -332,6 +380,7 @@ bool tarang_ble_trigger_clinical_event(
  ******************************************************************************/
 void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_packet_t *pkt)
 {
+  (void)pipeline;
   if (!pkt) return;
   memset(pkt, 0, sizeof(tarang_health_packet_t));
 
@@ -461,10 +510,10 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
 }
 
 /******************************************************************************
- *        BLUETOOTH STACK EVENT HANDLER (called by Simplicity SDK)
+ *        BLUETOOTH STACK EVENT HANDLER
  ******************************************************************************/
 #if defined(SL_CATALOG_BLUETOOTH_PRESENT)
-void sl_bt_on_event(sl_bt_msg_t *evt)
+void tarang_ble_on_event(sl_bt_msg_t *evt)
 {
   sl_status_t sc;
 
@@ -478,8 +527,23 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       sc = sl_bt_advertiser_create_set(&tarang_advertising_set_handle);
       if (!tarang_ble_status_ok("create advertising set", sc)) break;
 
-      sl_bt_sm_configure(0, sl_bt_sm_io_capability_noinputnooutput);
-      sl_bt_sm_set_bondable_mode(0);
+#if defined(SL_CATALOG_BLUETOOTH_FEATURE_SM_PRESENT)
+      sc = sl_bt_sm_configure(0, sl_bt_sm_io_capability_noinputnooutput);
+      tarang_ble_status_ok("configure security manager", sc);
+
+      if (TARANG_BLE_ENABLE_BONDING) {
+        sc = sl_bt_sm_store_bonding_configuration(8, 2);
+        tarang_ble_status_ok("configure persistent bonding store", sc);
+      }
+
+      sc = sl_bt_sm_set_bondable_mode(TARANG_BLE_ENABLE_BONDING ? 1 : 0);
+      tarang_ble_status_ok(TARANG_BLE_ENABLE_BONDING
+                           ? "enable bonding"
+                           : "disable bonding for direct-connect bring-up",
+                           sc);
+#else
+      printf("[BLE] Security Manager not installed; using direct unpaired connection.\r\n");
+#endif
 
       /* Dynamic Device Name: TARANG-<last 4 hex of MAC> */
       {
@@ -490,9 +554,12 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
           char name_buf[16];
           snprintf(name_buf, sizeof(name_buf), "TARANG-%02X%02X",
                    address.addr[1], address.addr[0]);
-          sl_bt_gatt_server_write_attribute_value(
+          sc = sl_bt_gatt_server_write_attribute_value(
               gattdb_device_name, 0, strlen(name_buf), (const uint8_t *)name_buf);
+          if (!tarang_ble_status_ok("write device name", sc)) break;
           printf("[BLE] Device name: %s\r\n", name_buf);
+        } else {
+          tarang_ble_status_ok("get identity address", sc);
         }
       }
 
@@ -501,6 +568,7 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
           sl_bt_advertiser_general_discoverable);
       if (!tarang_ble_status_ok("generate advertising data", sc)) break;
 
+      /* 100ms advertising interval: 160 * 0.625ms = 100ms */
       sc = sl_bt_advertiser_set_timing(
           tarang_advertising_set_handle,
           160, 160, 0, 0);
@@ -521,37 +589,62 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       tarang_ble_conn_handle = evt->data.evt_connection_opened.connection;
       printf("[BLE] Connection opened! Handle=0x%02X\r\n", tarang_ble_conn_handle);
 
-      /* Set 20ms connection interval (16 * 1.25ms = 20ms) */
-      sc = sl_bt_connection_set_parameters(
-          tarang_ble_conn_handle,
-          16,
-          16,
-          0,
-          100,
-          0,
-          0xFFFF);
-      if (sc != SL_STATUS_OK) {
-        printf("[BLE] Set params note: 0x%04lX\r\n", (unsigned long)sc);
-      }
+      last_vitals_send_ms    = tarang_now_ms();
+      last_analytics_send_ms = tarang_now_ms();
+      printf("[BLE] Waiting for Central-initiated bonding and GATT subscription.\r\n");
+      break;
+    }
 
-      last_vitals_send_ms    = 0;
-      last_analytics_send_ms = 0;
+    case sl_bt_evt_connection_parameters_id:
+    {
+      const sl_bt_evt_connection_parameters_t *parameters =
+          &evt->data.evt_connection_parameters;
+      printf("[BLE] Connection security=%u interval=%u timeout=%u\r\n",
+             parameters->security_mode,
+             parameters->interval,
+             parameters->timeout);
       break;
     }
 
     /* ── Auto-confirm bonding if requested ──── */
+#if defined(SL_CATALOG_BLUETOOTH_FEATURE_SM_PRESENT) && TARANG_BLE_ENABLE_BONDING
+    case sl_bt_evt_sm_bonded_id:
+    {
+      const sl_bt_evt_sm_bonded_t *bonded = &evt->data.evt_sm_bonded;
+      printf("[BLE][SM] Bonded: conn=0x%02X handle=0x%02X security=%u\r\n",
+             bonded->connection,
+             bonded->bonding,
+             bonded->security_mode);
+      break;
+    }
+
+    case sl_bt_evt_sm_bonding_failed_id:
+    {
+      const sl_bt_evt_sm_bonding_failed_t *failed =
+          &evt->data.evt_sm_bonding_failed;
+      printf("[BLE][SM] Bonding failed: conn=0x%02X reason=0x%04X\r\n",
+             failed->connection,
+             (unsigned)failed->reason);
+      break;
+    }
+
     case sl_bt_evt_sm_confirm_bonding_id:
     {
       uint8_t conn = evt->data.evt_sm_confirm_bonding.connection;
       printf("[BLE][SM] Confirming bonding on conn=0x%02X\r\n", conn);
-      sl_bt_sm_bonding_confirm(conn, 1);
+      sc = sl_bt_sm_bonding_confirm(conn, 1);
+      tarang_ble_status_ok("confirm bonding request", sc);
       break;
     }
+#endif
 
     /* ── Connection Closed ──── */
     case sl_bt_evt_connection_closed_id:
     {
-      printf("[BLE] Connection closed. Restarting advertising...\r\n");
+      uint16_t reason = evt->data.evt_connection_closed.reason;
+      printf("[BLE] Connection closed: reason=0x%04X. Restarting advertising...\r\n",
+             (unsigned)reason);
+
       tarang_ble_conn_handle = SL_BT_INVALID_CONNECTION_HANDLE;
       sub_vitals_hr         = false;
       sub_vitals_spo2       = false;
@@ -565,17 +658,17 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
       sc = sl_bt_legacy_advertiser_generate_data(
           tarang_advertising_set_handle,
           sl_bt_advertiser_general_discoverable);
-      app_assert_status(sc);
+      if (!tarang_ble_status_ok("regenerate advertising data", sc)) break;
 
       sc = sl_bt_advertiser_set_timing(
           tarang_advertising_set_handle,
           160, 160, 0, 0);
-      app_assert_status(sc);
+      if (!tarang_ble_status_ok("restore advertising timing", sc)) break;
 
       sc = sl_bt_legacy_advertiser_start(
           tarang_advertising_set_handle,
           sl_bt_legacy_advertiser_connectable);
-      app_assert_status(sc);
+      tarang_ble_status_ok("restart connectable advertising", sc);
       break;
     }
 
@@ -609,6 +702,13 @@ void sl_bt_on_event(sl_bt_msg_t *evt)
 
         printf("[BLE] CCCD: char=0x%04X -> %s\r\n",
                (unsigned)characteristic, enabled ? "SUBSCRIBED" : "UNSUBSCRIBED");
+
+        if (enabled
+            && (characteristic == gattdb_vitals_heart_rate
+                || characteristic == gattdb_vitals_spo2)) {
+          tarang_ble_send_vitals(75, 98, tarang_now_ms());
+          last_vitals_send_ms = tarang_now_ms();
+        }
       }
       break;
     }

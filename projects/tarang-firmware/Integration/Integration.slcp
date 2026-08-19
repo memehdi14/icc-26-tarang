@@ -94,6 +94,9 @@ component:
   id: bluetooth_feature_legacy_advertiser
 - package: simplicity_sdk
   vendor: silabs
+  id: bluetooth_feature_sm
+- package: simplicity_sdk
+  vendor: silabs
   id: bluetooth_feature_system
 - package: simplicity_sdk
   vendor: silabs
@@ -196,10 +199,22 @@ autoselected_components:
   id: bluetooth_controller_release_libraries
 - package: simplicity_sdk
   vendor: silabs
+  id: bluetooth_crypto
+- package: simplicity_sdk
+  vendor: silabs
   id: bluetooth_crypto_lib_psa
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_device_compatibility
+- package: simplicity_sdk
+  vendor: silabs
+  id: bluetooth_feature_builtin_bonding_database
+- package: simplicity_sdk
+  vendor: silabs
+  id: bluetooth_feature_local_privacy
+- package: simplicity_sdk
+  vendor: silabs
+  id: bluetooth_feature_rpa_resolution
 - package: simplicity_sdk
   vendor: silabs
   id: bluetooth_gattdb_definition
@@ -468,6 +483,24 @@ autoselected_components:
   id: memory_profiler_api
 - package: simplicity_sdk
   vendor: silabs
+  id: nvm3_default
+- package: simplicity_sdk
+  vendor: silabs
+  id: nvm3_default_config
+- package: simplicity_sdk
+  vendor: silabs
+  id: nvm3_default_flash_backend
+- package: simplicity_sdk
+  vendor: silabs
+  id: nvm3_optimization_disable
+- package: simplicity_sdk
+  vendor: silabs
+  id: nvm3_source
+- package: simplicity_sdk
+  vendor: silabs
+  id: nvm3_trace_config
+- package: simplicity_sdk
+  vendor: silabs
   id: power_manager_core
 - package: simplicity_sdk
   vendor: silabs
@@ -532,6 +565,12 @@ autoselected_components:
 - package: simplicity_sdk
   vendor: silabs
   id: psa_driver_common
+- package: simplicity_sdk
+  vendor: silabs
+  id: psa_its
+- package: simplicity_sdk
+  vendor: silabs
+  id: psa_its_source
 - package: simplicity_sdk
   vendor: silabs
   id: psa_se_driver

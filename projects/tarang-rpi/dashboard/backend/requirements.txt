@@ -2,6 +2,6 @@ fastapi>=0.115.0
 uvicorn[standard]>=0.34.0
 sqlalchemy>=2.0.0
 websockets>=14.0
-bleak>=0.22.0
+bleak>=1.0.1,<4.0
 pydantic>=2.0
 httpx>=0.28.0

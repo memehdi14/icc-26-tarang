@@ -126,6 +126,19 @@ bool tarang_ble_trigger_clinical_event(
  ******************************************************************************/
 void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_packet_t *pkt);
 
+#if defined(SL_COMPONENT_CATALOG_PRESENT)
+#include "sl_component_catalog.h"
+#endif
+
+#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
+#include "sl_bt_api.h"
+#else
+struct sl_bt_msg;
+typedef struct sl_bt_msg sl_bt_msg_t;
+#endif
+
+void tarang_ble_on_event(sl_bt_msg_t *evt);
+
 #ifdef __cplusplus
 }
 #endif

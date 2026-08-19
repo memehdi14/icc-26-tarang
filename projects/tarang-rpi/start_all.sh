@@ -1,60 +1,96 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# TARANG RASPBERRY PI ONE-CLICK LAUNCHER
-# Launches Backend (8000), Frontend (3000), and BLE Gateway concurrently
-# ==============================================================================
-set -e
+set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/dashboard/backend"
 FRONTEND_DIR="$SCRIPT_DIR/dashboard/frontend"
+ENV_FILE="${TARANG_ENV_FILE:-$SCRIPT_DIR/tarang.env}"
+PYTHON="$BACKEND_DIR/venv/bin/python"
+BACKEND_HEALTH_URL="http://127.0.0.1:8000/api/health"
 
-echo "=========================================="
-echo "  🏥 Launching TARANG Bedside Hub System  "
-echo "=========================================="
+if [[ -f "$ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+else
+    echo "[WARN] $ENV_FILE not found; using environment/default values."
+fi
+
+if [[ ! -x "$PYTHON" ]]; then
+    echo "[ERROR] Python environment missing at $PYTHON"
+    echo "Run ./setup_rpi.sh first."
+    exit 1
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+    echo "[ERROR] curl is required for startup health checks."
+    exit 1
+fi
+
+PIDS=()
+shutting_down=0
 
 cleanup() {
-    echo ""
-    echo "[!] Shutting down all Tarang processes..."
-    kill $(jobs -p) 2>/dev/null || true
-    exit 0
+    if [[ "$shutting_down" -eq 1 ]]; then
+        return
+    fi
+    shutting_down=1
+    echo
+    echo "[TARANG] Stopping services..."
+    if [[ ${#PIDS[@]} -gt 0 ]]; then
+        kill "${PIDS[@]}" 2>/dev/null || true
+        wait "${PIDS[@]}" 2>/dev/null || true
+    fi
 }
-trap cleanup SIGINT SIGTERM
+trap cleanup EXIT INT TERM
 
-# 1. Start FastAPI Backend
-echo "[1/3] Starting FastAPI Backend on http://0.0.0.0:8000..."
+echo "[1/3] Starting FastAPI backend on port 8000..."
 cd "$BACKEND_DIR"
-if [ -d "venv" ]; then
-    source venv/bin/activate
+"$PYTHON" -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+PIDS+=("$!")
+
+backend_ready=0
+for _ in $(seq 1 30); do
+    if curl --silent --fail "$BACKEND_HEALTH_URL" >/dev/null; then
+        backend_ready=1
+        break
+    fi
+    sleep 1
+done
+if [[ "$backend_ready" -ne 1 ]]; then
+    echo "[ERROR] Backend did not become healthy within 30 seconds."
+    exit 1
 fi
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &
-BACKEND_PID=$!
 
-# Wait 2 seconds for backend initialization
-sleep 2
-
-# 2. Start Next.js Frontend
-echo "[2/3] Starting Next.js Frontend Dashboard on http://0.0.0.0:3000..."
+echo "[2/3] Starting frontend on port 3000..."
 cd "$FRONTEND_DIR"
-npm run dev -- -H 0.0.0.0 -p 3000 &
-FRONTEND_PID=$!
+if [[ "${TARANG_FRONTEND_MODE:-production}" == "development" ]]; then
+    npm run dev -- -H 0.0.0.0 -p 3000 &
+else
+    if [[ ! -d ".next" ]]; then
+        echo "[ERROR] Frontend production build is missing. Run ./setup_rpi.sh."
+        exit 1
+    fi
+    npm run start -- -H 0.0.0.0 -p 3000 &
+fi
+PIDS+=("$!")
 
-# Wait 3 seconds for frontend server
-sleep 3
-
-# 3. Start BLE Gateway
-echo "[3/3] Starting BLE Gateway (scanning for TARANG wearable)..."
+echo "[3/3] Starting paired BLE gateway..."
 cd "$BACKEND_DIR"
-python3 ble_gateway.py &
-GATEWAY_PID=$!
+"$PYTHON" ble_gateway.py &
+PIDS+=("$!")
 
-echo ""
-echo "=========================================================="
-echo "  🟢 TARANG HUB IS RUNNING!"
-echo "  • Dashboard URL: http://localhost:3000"
-echo "  • Backend API:   http://localhost:8000"
-echo "  • BLE Gateway:   Active (Auto-connecting to TARANG Pod)"
-echo "  Press Ctrl+C to stop all services."
-echo "=========================================================="
+echo
+echo "TARANG hub is running"
+echo "  Dashboard: http://localhost:3000"
+echo "  API:       http://localhost:8000"
+echo "  BLE:       pairing and reconnect enabled"
+echo "Press Ctrl+C to stop all services."
 
-wait
+set +e
+wait -n "${PIDS[@]}"
+status=$?
+set -e
+echo "[ERROR] A Tarang service exited with status $status."
+exit "$status"

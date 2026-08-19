@@ -11,11 +11,13 @@ Or from the backend directory:
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from database.connection import init_db, SessionLocal
+from database.connection import get_db, init_db, SessionLocal
 from database.models import Device, Patient, DeviceDiagnostics, SystemSetting
 
 from routers import (
@@ -28,6 +30,7 @@ from routers import (
     settings as settings_router,
     health as health_router,
     mode_a_events,
+    clinical_actions,
 )
 
 
@@ -35,6 +38,8 @@ from routers import (
 
 def seed_defaults():
     """Populate default patient, device diagnostics, and settings if tables are empty."""
+    default_device_id = os.getenv("TARANG_DEVICE_ID", "tarang-efr32-demo")
+    default_device_mac = os.getenv("TARANG_BLE_ADDRESS", "00:00:00:00:00:00")
     db = SessionLocal()
     try:
         # Default patient (John Doe, ICU-04)
@@ -61,7 +66,7 @@ def seed_defaults():
             db.add(DeviceDiagnostics(
                 ble_connected=False,
                 device_name="EFR32MG26 (Tarang SoC)",
-                device_mac="70:B3:D5:70:9A:C4",
+                device_mac=default_device_mac,
                 firmware_version="v1.0.0-EFR32MG26",
                 rssi_dbm=-100,
                 packets_received=0,
@@ -72,9 +77,9 @@ def seed_defaults():
 
         if not db.query(Device).first():
             db.add(Device(
-                device_id="tarang-efr32-demo",
+                device_id=default_device_id,
                 name="EFR32MG26 Tarang Wearable",
-                mac_address="70:B3:D5:70:9A:C4",
+                mac_address=default_device_mac,
                 firmware_version="v1.0.0-EFR32MG26",
                 status="available",
             ))
@@ -136,6 +141,7 @@ app.include_router(devices.router)
 app.include_router(sessions.router)
 app.include_router(integrations.router)
 app.include_router(mode_a_events.router)
+app.include_router(clinical_actions.router)
 
 # Mount WebSocket endpoint at /ws/telemetry (separate from REST prefix)
 app.add_api_websocket_route("/ws/telemetry", telemetry.websocket_telemetry)
@@ -153,5 +159,6 @@ def health():
 
 
 @app.get("/api/health", tags=["health"])
-def api_health():
-    return {"status": "ok"}
+def api_health(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "ok", "database": "ok"}

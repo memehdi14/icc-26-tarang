@@ -1,83 +1,116 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Sidebar } from '../src/components/Sidebar';
 import { WorkstationView } from '../src/components/WorkstationView';
 import { PatientSummarySidebar } from '../src/components/PatientSummarySidebar';
 import { DiagnosticsView } from '../src/components/DiagnosticsView';
 import { SettingsView } from '../src/components/SettingsView';
 import { DeviceInitialization } from '../src/components/DeviceInitialization';
+import { PatientOnboarding } from '../src/components/PatientOnboarding';
+import { TopBar } from '../src/components/TopBar';
 import {
-  VitalsSample,
   Analytics5Min,
   ClinicalEvent,
-  EcgSnippet,
   ClinicalTelemetryPacket,
   DeviceHealthTelemetry,
+  DeviceRecord,
+  EcgSnippet,
+  MonitoringSession,
+  PatientCreateInput,
   PatientInfo,
-  TelemetryDiagnostics,
   SystemSettings,
+  TelemetryDiagnostics,
+  VitalsSample,
 } from '../src/types/telemetry';
 
-// ── API Configuration ─────────────────────────────────────────────────────────
+type AppPhase = 'worklist' | 'initializing' | 'dashboard';
+type ActiveTab = 'workstation' | 'diagnostics' | 'settings';
+
 function getApiBase(): string {
   if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
     const envUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (envUrl && !envUrl.includes('localhost')) {
-      return envUrl;
-    }
-    return `${window.location.protocol}//${host}:8000`;
+    if (envUrl && !envUrl.includes('localhost')) return envUrl;
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
   }
   return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 }
 
 function getWsUrl(): string {
   if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    const envWs = process.env.NEXT_PUBLIC_WS_URL;
-    if (envWs && !envWs.includes('localhost')) {
-      return envWs;
-    }
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${wsProto}//${host}:8000/ws/telemetry`;
+    const envUrl = process.env.NEXT_PUBLIC_WS_URL;
+    if (envUrl && !envUrl.includes('localhost')) return envUrl;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.hostname}:8000/ws/telemetry`;
   }
   return process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/telemetry';
 }
 
-const PATIENT_MRN = '884219';
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${getApiBase()}${path}`, init);
+  if (!response.ok) {
+    let message = `${response.status} ${response.statusText}`;
+    try {
+      const body = await response.json();
+      message = typeof body.detail === 'string' ? body.detail : message;
+    } catch {
+      // Preserve the HTTP status when the response is not JSON.
+    }
+    throw new Error(message);
+  }
+  return response.json() as Promise<T>;
+}
 
-const DEFAULT_PATIENT: PatientInfo = {
-  name: 'John Doe',
-  age: 58,
-  gender: 'Male',
-  id: PATIENT_MRN,
-  bed: 'ICU-04',
-  admitDate: '2026-08-09',
-  attendingPhysician: 'Dr. Aris',
-  bloodType: 'O+',
-  allergies: ['Penicillin', 'Latex Adhesives'],
-  medicalHistory: [
-    'Hypertension (Diagnosed 2018)',
-    'Coronary Artery Stent - LAD (2021)',
-    'Type 2 Diabetes Mellitus',
-  ],
+function normalizePatient(raw: Record<string, unknown>): PatientInfo {
+  const gender = raw.gender === 'Male' || raw.gender === 'Female' ? raw.gender : 'Other';
+  return {
+    dbId: typeof raw.id === 'number' ? raw.id : undefined,
+    name: String(raw.name ?? 'Unnamed patient'),
+    age: Number(raw.age ?? 0),
+    gender,
+    id: String(raw.mrn ?? raw.id ?? ''),
+    bed: String(raw.bed ?? 'Unassigned'),
+    admitDate: String(raw.admit_date ?? 'Not recorded'),
+    attendingPhysician: String(raw.attending_physician ?? 'Unassigned'),
+    bloodType: String(raw.blood_type ?? 'Unknown'),
+    allergies: Array.isArray(raw.allergies) ? raw.allergies.map(String) : [],
+    medicalHistory: Array.isArray(raw.medical_history) ? raw.medical_history.map(String) : [],
+  };
+}
+
+const EMPTY_VITALS: VitalsSample = {
+  heartRateBpm: null,
+  spo2Pct: null,
+  deviceId: 'tarang-efr32-demo',
+  ts: null,
+};
+
+const EMPTY_ANALYTICS: Analytics5Min = {
+  pvcBurdenPct: 0,
+  pacBurdenPct: 0,
+  sdnn: 0,
+  rmssd: 0,
+  prr50: 0,
+  aiDutyCyclePct: 0,
+  em2SleepPct: 0,
+  deviceId: 'tarang-efr32-demo',
+  ts: null,
 };
 
 const DEFAULT_DIAGNOSTICS: TelemetryDiagnostics = {
-  bleConnected: true,
-  deviceName: 'EFR32MG26 (Tarang SoC)',
-  deviceMac: '70:B3:D5:70:9A:C4',
-  firmwareVersion: 'v1.0.0-ModeA',
-  rssiDbm: -58,
+  bleConnected: false,
+  deviceName: 'EFR32MG26 Tarang Wearable',
+  deviceMac: 'Not discovered',
+  firmwareVersion: 'Unknown',
+  rssiDbm: -100,
   packetsReceived: 0,
   packetsDropped: 0,
   latencyMs: 0,
-  batteryPct: 94,
-  ecgDmaHealth: true,
-  ppgI2cHealth: true,
-  imuFifoHealth: true,
-  lastSyncTimestamp: '—',
+  batteryPct: 0,
+  ecgDmaHealth: false,
+  ppgI2cHealth: false,
+  imuFifoHealth: false,
+  lastSyncTimestamp: 'Never',
 };
 
 const DEFAULT_SETTINGS: SystemSettings = {
@@ -86,230 +119,372 @@ const DEFAULT_SETTINGS: SystemSettings = {
   spo2LowThreshold: 92,
   rrLowThreshold: 10,
   rrHighThreshold: 24,
-  bleSyncIntervalMs: 2000,
+  bleSyncIntervalMs: 1000,
   gridDensity: 'standard',
   audioAlertsEnabled: true,
-  attendingDoctor: 'Dr. Aris',
+  attendingDoctor: 'Unassigned',
 };
 
 export default function Page() {
-  const [activeTab, setActiveTab] = useState<'workstation' | 'diagnostics' | 'settings'>('workstation');
-  const [isDeviceReady, setIsDeviceReady] = useState<boolean>(true);
-  const [bleConnected, setBleConnected] = useState<boolean>(true);
-  const [backendOnline, setBackendOnline] = useState<boolean>(true);
+  const [phase, setPhase] = useState<AppPhase>('worklist');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('workstation');
+  const [bootstrapLoading, setBootstrapLoading] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [backendOnline, setBackendOnline] = useState(false);
+  const [bleConnected, setBleConnected] = useState(false);
 
-  // ── Mode A State ────────────────────────────────────────────────────────────
-  const [vitals, setVitals] = useState<VitalsSample>({
-    heartRateBpm: 75,
-    spo2Pct: 98,
-    deviceId: 'tarang-efr32-demo',
-    ts: new Date().toISOString(),
-  });
+  const [patients, setPatients] = useState<PatientInfo[]>([]);
+  const [devices, setDevices] = useState<DeviceRecord[]>([]);
+  const [sessions, setSessions] = useState<MonitoringSession[]>([]);
+  const [patient, setPatient] = useState<PatientInfo | null>(null);
+  const [activeSession, setActiveSession] = useState<MonitoringSession | null>(null);
+  const [activeDeviceId, setActiveDeviceId] = useState<string | null>(null);
 
-  const [analytics, setAnalytics] = useState<Analytics5Min>({
-    pvcBurdenPct: 0.4,
-    pacBurdenPct: 1.2,
-    sdnn: 44,
-    rmssd: 38,
-    prr50: 8.5,
-    aiDutyCyclePct: 1.5,
-    em2SleepPct: 92.0,
-    deviceId: 'tarang-efr32-demo',
-    ts: new Date().toISOString(),
-  });
-
+  const [vitals, setVitals] = useState<VitalsSample>(EMPTY_VITALS);
+  const [analytics, setAnalytics] = useState<Analytics5Min>(EMPTY_ANALYTICS);
   const [latestEvent, setLatestEvent] = useState<ClinicalEvent | null>(null);
   const [activeSnippet, setActiveSnippet] = useState<EcgSnippet | null>(null);
   const [glitchTicker, setGlitchTicker] = useState<ClinicalEvent[]>([]);
-
-  const [patient, setPatient] = useState<PatientInfo>(DEFAULT_PATIENT);
   const [diagnostics, setDiagnostics] = useState<TelemetryDiagnostics>(DEFAULT_DIAGNOSTICS);
-  const [deviceHealth, setDeviceHealth] = useState<DeviceHealthTelemetry | undefined>(undefined);
+  const [deviceHealth, setDeviceHealth] = useState<DeviceHealthTelemetry | undefined>();
   const [settings, setSettings] = useState<SystemSettings>(DEFAULT_SETTINGS);
 
-  // Initial Data Fetching
-  useEffect(() => {
-    const apiBase = getApiBase();
+  const [loadingEventId, setLoadingEventId] = useState<number | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [pageBusy, setPageBusy] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-    async function loadData() {
-      try {
-        const [vitalsRes, analyticsRes, eventsRes, patientRes, diagRes] = await Promise.allSettled([
-          fetch(`${apiBase}/api/vitals/latest`),
-          fetch(`${apiBase}/api/analytics/latest`),
-          fetch(`${apiBase}/api/events/latest?limit=15`),
-          fetch(`${apiBase}/api/patients/${PATIENT_MRN}`),
-          fetch(`${apiBase}/api/diagnostics/latest`),
-        ]);
-
-        if (vitalsRes.status === 'fulfilled' && vitalsRes.value.ok) {
-          const v = await vitalsRes.value.json();
-          if (v && v.heartRateBpm) setVitals(v);
-        }
-
-        if (analyticsRes.status === 'fulfilled' && analyticsRes.value.ok) {
-          const a = await analyticsRes.value.json();
-          if (a) setAnalytics(a);
-        }
-
-        if (eventsRes.status === 'fulfilled' && eventsRes.value.ok) {
-          const evts = await eventsRes.value.json();
-          if (Array.isArray(evts) && evts.length > 0) {
-            setGlitchTicker(evts);
-            setLatestEvent(evts[0]);
-          }
-        }
-
-        if (patientRes.status === 'fulfilled' && patientRes.value.ok) {
-          const p = await patientRes.value.json();
-          if (p && p.name) setPatient(p);
-        }
-
-        if (diagRes.status === 'fulfilled' && diagRes.value.ok) {
-          const d = await diagRes.value.json();
-          if (d) setDiagnostics(d);
-        }
-
-        setBackendOnline(true);
-      } catch (err) {
-        console.warn('Initial data load exception:', err);
-      }
+  const loadBootstrap = useCallback(async () => {
+    setBootstrapLoading(true);
+    setBootstrapError(null);
+    try {
+      const [health, patientRows, deviceRows, sessionRows, savedSettings, currentDiagnostics] = await Promise.all([
+        requestJson<{ status: string; database: string }>('/api/health'),
+        requestJson<Record<string, unknown>[]>('/api/patients'),
+        requestJson<DeviceRecord[]>('/api/devices'),
+        requestJson<MonitoringSession[]>('/api/sessions'),
+        requestJson<SystemSettings>('/api/settings'),
+        requestJson<TelemetryDiagnostics>('/api/diagnostics/latest'),
+      ]);
+      if (health.status !== 'ok' || health.database !== 'ok') throw new Error('Clinical database is not ready');
+      setPatients(patientRows.map(normalizePatient));
+      setDevices(deviceRows);
+      setSessions(sessionRows);
+      setSettings(savedSettings);
+      setDiagnostics(currentDiagnostics);
+      setBleConnected(currentDiagnostics.bleConnected);
+      setBackendOnline(true);
+    } catch (error) {
+      setBackendOnline(false);
+      setBleConnected(false);
+      setBootstrapError(error instanceof Error ? error.message : 'Unable to load clinical services');
+    } finally {
+      setBootstrapLoading(false);
     }
-
-    loadData();
   }, []);
 
-  // WebSocket Live Updates
+  useEffect(() => {
+    loadBootstrap();
+  }, [loadBootstrap]);
+
+  const loadMonitoringData = useCallback(async (session: MonitoringSession) => {
+    const query = new URLSearchParams();
+    if (session.session_id) query.set('session_id', session.session_id);
+    if (session.device_id) query.set('device_id', session.device_id);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    const [latestVitals, latestAnalytics, events, currentDiagnostics] = await Promise.all([
+      requestJson<VitalsSample>(`/api/vitals/latest${suffix}`),
+      requestJson<Analytics5Min>(`/api/analytics/latest${suffix}`),
+      requestJson<ClinicalEvent[]>(`/api/events/latest${suffix}${suffix ? '&' : '?'}limit=30`),
+      requestJson<TelemetryDiagnostics>('/api/diagnostics/latest'),
+    ]);
+    setVitals(latestVitals.id ? latestVitals : EMPTY_VITALS);
+    setAnalytics(latestAnalytics.id ? latestAnalytics : EMPTY_ANALYTICS);
+    setGlitchTicker(events);
+    setLatestEvent(events[0] ?? null);
+    setActiveSnippet(null);
+    setDiagnostics(currentDiagnostics);
+    setBleConnected(currentDiagnostics.bleConnected);
+
+    const firstEvent = events[0];
+    if (firstEvent?.id) {
+      try {
+        setActiveSnippet(await requestJson<EcgSnippet>(`/api/events/${firstEvent.id}/snippet`));
+      } catch {
+        setActiveSnippet(null);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const wsUrl = getWsUrl();
-    let ws: WebSocket | null = null;
-    let reconnectTimer: NodeJS.Timeout;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+    let disposed = false;
 
     const connect = () => {
-      ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        setBackendOnline(true);
-        setBleConnected(true);
-      };
-
-      ws.onmessage = (event) => {
+      if (disposed) return;
+      socket = new WebSocket(wsUrl);
+      socket.onopen = () => setBackendOnline(true);
+      socket.onmessage = (message) => {
         try {
-          const raw = JSON.parse(event.data);
+          const raw = JSON.parse(message.data);
+          const currentSessionId = activeSession?.session_id;
+          const packetSessionId = raw.data?.sessionId ?? raw.event?.sessionId ?? raw.session_id;
+          if (currentSessionId && packetSessionId && packetSessionId !== currentSessionId) return;
 
           if (raw.type === 'vitals_sample' && raw.data) {
             setVitals(raw.data);
-            setBleConnected(true);
           } else if (raw.type === 'analytics_5min' && raw.data) {
             setAnalytics(raw.data);
           } else if (raw.type === 'clinical_event' && raw.event) {
-            const newEvt: ClinicalEvent = raw.event;
-            setLatestEvent(newEvt);
-            setGlitchTicker((prev) => [newEvt, ...prev.slice(0, 29)]);
-            if (raw.snippet) {
-              setActiveSnippet(raw.snippet);
-            }
+            setLatestEvent(raw.event);
+            setGlitchTicker((current) => [raw.event, ...current.filter((item) => item.id !== raw.event.id)].slice(0, 30));
+            if (raw.snippet) setActiveSnippet(raw.snippet);
           } else if (raw.type === 'diagnostics' && raw.data) {
             setDiagnostics(raw.data);
-            setBleConnected(raw.data.bleConnected);
+            setBleConnected(Boolean(raw.data.bleConnected));
           } else if (raw.type === 'device_health' && raw.data) {
             setDeviceHealth(raw.data);
           } else if (raw.current_hr !== undefined) {
-            // Legacy packet fallback
             setVitals({
               heartRateBpm: raw.current_hr,
-              spo2Pct: raw.spo2_pct ?? 98,
-              deviceId: 'tarang-efr32-demo',
+              spo2Pct: raw.spo2_pct ?? null,
+              deviceId: activeDeviceId ?? 'tarang-efr32-demo',
               ts: new Date().toISOString(),
             });
-            setBleConnected(true);
           }
           setBackendOnline(true);
         } catch {
-          console.warn('[Tarang WS] Error parsing message');
+          console.warn('[Tarang] Ignored malformed WebSocket message');
         }
       };
-
-      ws.onerror = () => {
+      socket.onerror = () => setBackendOnline(false);
+      socket.onclose = () => {
         setBackendOnline(false);
-      };
-
-      ws.onclose = () => {
         setBleConnected(false);
-        reconnectTimer = setTimeout(connect, 3000);
+        if (!disposed) reconnectTimer = setTimeout(connect, 3000);
       };
     };
 
     connect();
-
     return () => {
+      disposed = true;
       clearTimeout(reconnectTimer);
-      ws?.close();
+      socket?.close();
     };
+  }, [activeDeviceId, activeSession?.session_id]);
+
+  const createPatient = useCallback(async (input: PatientCreateInput) => {
+    const created = await requestJson<Record<string, unknown>>('/api/patients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const normalized = normalizePatient(created);
+    setPatients((current) => [...current, normalized].sort((a, b) => a.name.localeCompare(b.name)));
   }, []);
 
-  const handleSaveSettings = useCallback(async (newSettings: SystemSettings) => {
-    setSettings(newSettings);
-    const apiBase = getApiBase();
-    try {
-      await fetch(`${apiBase}/api/settings`, {
-        method: 'PUT',
+  const startMonitoring = useCallback(async (selectedPatient: PatientInfo, deviceId?: string) => {
+    let session = sessions.find(
+      (candidate) => candidate.status === 'active' && candidate.patient_id === selectedPatient.dbId
+    );
+    if (!session) {
+      session = await requestJson<MonitoringSession>('/api/sessions', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings),
+        body: JSON.stringify({ mrn: selectedPatient.id, device_id: deviceId, bed: selectedPatient.bed }),
       });
+      setSessions((current) => [session as MonitoringSession, ...current]);
+    }
+    if (!session) throw new Error('Monitoring session could not be created');
+    setPatient(selectedPatient);
+    setActiveSession(session);
+    setActiveDeviceId(session.device_id ?? deviceId ?? null);
+    const boundDeviceId = session.device_id ?? deviceId;
+    if (boundDeviceId) {
+      setDevices((current) => current.map((device) => device.device_id === boundDeviceId
+        ? { ...device, status: 'in_use', assigned_patient_id: selectedPatient.dbId ?? null }
+        : device));
+    }
+    setDeviceHealth(undefined);
+    setActionMessage(null);
+    setActiveTab('workstation');
+    await loadMonitoringData(session);
+    setPhase('initializing');
+  }, [loadMonitoringData, sessions]);
+
+  const completeInitialization = useCallback(() => setPhase('dashboard'), []);
+
+  const retryInitialization = useCallback(async () => {
+    try {
+      const [health, currentDiagnostics] = await Promise.all([
+        requestJson<DeviceHealthTelemetry>('/api/health/device'),
+        requestJson<TelemetryDiagnostics>('/api/diagnostics/latest'),
+      ]);
+      setBackendOnline(true);
+      setDiagnostics(currentDiagnostics);
+      setBleConnected(currentDiagnostics.bleConnected);
+      if (health.id && currentDiagnostics.bleConnected) setDeviceHealth(health);
     } catch {
-      console.warn('[Tarang] Could not persist settings');
+      setBackendOnline(false);
+      setBleConnected(false);
     }
   }, []);
 
-  const legacyTelemetry: ClinicalTelemetryPacket = {
+  const saveSettings = useCallback(async (newSettings: SystemSettings) => {
+    const saved = await requestJson<SystemSettings>('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newSettings),
+    });
+    setSettings(saved);
+  }, []);
+
+  const selectEvent = useCallback(async (event: ClinicalEvent) => {
+    if (!event.id) return;
+    setLoadingEventId(event.id);
+    setActionMessage(null);
+    try {
+      const snippet = await requestJson<EcgSnippet>(`/api/events/${event.id}/snippet`);
+      setLatestEvent(event);
+      setActiveSnippet(snippet);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (loadError) {
+      setActionMessage(loadError instanceof Error ? loadError.message : 'ECG snippet is unavailable');
+    } finally {
+      setLoadingEventId(null);
+    }
+  }, []);
+
+  const exportEcg = useCallback(async () => {
+    const eventId = activeSnippet?.eventId;
+    if (!eventId) return;
+    setExportBusy(true);
+    setActionMessage(null);
+    try {
+      const response = await fetch(`${getApiBase()}/api/events/${eventId}/pdf`);
+      if (!response.ok) throw new Error('Unable to generate the ECG PDF');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `tarang-${patient?.id ?? 'patient'}-event-${eventId}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setActionMessage('ECG PDF downloaded');
+    } catch (exportError) {
+      setActionMessage(exportError instanceof Error ? exportError.message : 'Unable to export ECG PDF');
+    } finally {
+      setExportBusy(false);
+    }
+  }, [activeSnippet?.eventId, patient?.id]);
+
+  const pagePhysician = useCallback(async () => {
+    if (!patient) return;
+    setPageBusy(true);
+    setActionMessage(null);
+    try {
+      const action = await requestJson<{ id: number; status: string }>('/api/clinical-actions/page-physician', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mrn: patient.id,
+          session_id: activeSession?.session_id,
+          priority: latestEvent?.rhythmStatus === 2 ? 'critical' : 'urgent',
+          reason: latestEvent?.patternType
+            ? `${latestEvent.patternType} event requires clinical review`
+            : 'Clinical review requested from the telemetry workstation',
+          requested_by: settings.attendingDoctor,
+        }),
+      });
+      setActionMessage(`Duty physician page queued, reference #${action.id}`);
+    } catch (pageError) {
+      setActionMessage(pageError instanceof Error ? pageError.message : 'Unable to page the duty physician');
+    } finally {
+      setPageBusy(false);
+    }
+  }, [activeSession?.session_id, latestEvent?.patternType, latestEvent?.rhythmStatus, patient, settings.attendingDoctor]);
+
+  const legacyTelemetry: ClinicalTelemetryPacket = useMemo(() => ({
     timestamp_ms: Date.now(),
     beat_class: 0,
-    confidence: 250,
-    rr_interval_ms: vitals.heartRateBpm ? Math.round(60000 / vitals.heartRateBpm) : 800,
+    confidence: latestEvent?.confidence ? Math.round(latestEvent.confidence * 255) : 0,
+    rr_interval_ms: vitals.heartRateBpm ? Math.round(60000 / vitals.heartRateBpm) : 0,
     rhythm_flags: latestEvent?.rhythmStatus ?? 0,
     pac_burden_pct: analytics.pacBurdenPct,
     pvc_burden_pct: analytics.pvcBurdenPct,
-    current_hr: vitals.heartRateBpm ?? 75,
+    current_hr: vitals.heartRateBpm ?? 0,
     sdnn_ms: Math.round(analytics.sdnn),
     rmssd_ms: Math.round(analytics.rmssd),
-    spo2_pct: vitals.spo2Pct ?? 98,
-  };
+    spo2_pct: vitals.spo2Pct ?? undefined,
+  }), [analytics, latestEvent, vitals]);
+
+  const activeDevice = devices.find((device) => device.device_id === activeDeviceId);
+
+  if (phase === 'worklist') {
+    return (
+      <PatientOnboarding
+        patients={patients}
+        devices={devices}
+        sessions={sessions}
+        loading={bootstrapLoading}
+        error={bootstrapError}
+        onRetry={loadBootstrap}
+        onCreatePatient={createPatient}
+        onStartMonitoring={startMonitoring}
+      />
+    );
+  }
+
+  if (phase === 'initializing' && patient) {
+    return (
+      <DeviceInitialization
+        backendOnline={backendOnline}
+        bleConnected={bleConnected}
+        telemetry={legacyTelemetry}
+        deviceHealth={deviceHealth}
+        deviceName={activeDevice?.name ?? diagnostics.deviceName}
+        sessionLabel={activeSession?.session_id}
+        onComplete={completeInitialization}
+        onRetry={retryInitialization}
+        onBack={() => setPhase('worklist')}
+      />
+    );
+  }
+
+  if (!patient) return null;
 
   return (
-    <div className="min-h-screen bg-[var(--color-surface)]">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} bleConnected={bleConnected} />
+    <div className="app-shell">
+      <TopBar
+        patient={patient}
+        bleConnected={bleConnected}
+        backendOnline={backendOnline}
+        pageBusy={pageBusy}
+        onEmergency={pagePhysician}
+        onOpenWorkstation={() => setActiveTab('workstation')}
+        onOpenSettings={() => setActiveTab('settings')}
+      />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        bleConnected={bleConnected}
+        patientName={patient.name}
+        attendingDoctor={settings.attendingDoctor}
+        onChangePatient={() => setPhase('worklist')}
+      />
 
       {!backendOnline && (
-        <div
-          style={{ position: 'fixed', top: 12, right: 12, zIndex: 9999 }}
-          className="text-[10px] px-2 py-1 rounded-full font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300"
-        >
-          ⚡ Offline Mode — Start backend on :8000
+        <div className="fixed left-1/2 top-[82px] z-50 -translate-x-1/2 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 font-mono text-[10px] font-bold text-amber-900">
+          Backend reconnecting
         </div>
       )}
 
-      <main
-        style={{
-          paddingLeft: '272px',
-          paddingRight: activeTab === 'workstation' && isDeviceReady ? '336px' : '16px',
-          paddingTop: '20px',
-          paddingBottom: '32px',
-        }}
-        className="transition-all duration-200"
-      >
-        {activeTab === 'workstation' && !isDeviceReady && (
-          <DeviceInitialization
-            bleConnected={bleConnected}
-            telemetry={legacyTelemetry}
-            deviceHealth={deviceHealth}
-            onComplete={() => setIsDeviceReady(true)}
-            onRetry={() => {
-              window.location.reload();
-            }}
-          />
-        )}
-
-        {activeTab === 'workstation' && isDeviceReady && (
+      <main className={`app-main ${activeTab === 'workstation' ? 'app-main--with-rail' : ''}`}>
+        {activeTab === 'workstation' && (
           <WorkstationView
             vitals={vitals}
             analytics={analytics}
@@ -318,20 +493,25 @@ export default function Page() {
             glitchTicker={glitchTicker}
             patient={patient}
             onClearSnapshot={() => setActiveSnippet(null)}
+            onSelectEvent={selectEvent}
+            loadingEventId={loadingEventId}
           />
         )}
-
-        {activeTab === 'diagnostics' && (
-          <DiagnosticsView diagnostics={diagnostics} deviceHealth={deviceHealth} />
-        )}
-
-        {activeTab === 'settings' && (
-          <SettingsView settings={settings} onSaveSettings={handleSaveSettings} />
-        )}
+        {activeTab === 'diagnostics' && <DiagnosticsView diagnostics={diagnostics} deviceHealth={deviceHealth} />}
+        {activeTab === 'settings' && <SettingsView settings={settings} onSaveSettings={saveSettings} />}
       </main>
 
-      {activeTab === 'workstation' && isDeviceReady && (
-        <PatientSummarySidebar patient={patient} telemetry={legacyTelemetry} />
+      {activeTab === 'workstation' && (
+        <PatientSummarySidebar
+          patient={patient}
+          telemetry={legacyTelemetry}
+          canExportEcg={Boolean(activeSnippet?.eventId && activeSnippet.waveform?.length)}
+          exportBusy={exportBusy}
+          pageBusy={pageBusy}
+          actionMessage={actionMessage}
+          onExportEcg={exportEcg}
+          onPagePhysician={pagePhysician}
+        />
       )}
     </div>
   );
