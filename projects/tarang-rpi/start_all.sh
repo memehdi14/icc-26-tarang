@@ -45,9 +45,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+export PYTHONUNBUFFERED=1
+
 echo "[1/3] Starting FastAPI backend on port 8000..."
 cd "$BACKEND_DIR"
-"$PYTHON" -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+"$PYTHON" -u -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 PIDS+=("$!")
 
 backend_ready=0
@@ -78,7 +80,7 @@ PIDS+=("$!")
 
 echo "[3/3] Starting paired BLE gateway..."
 cd "$BACKEND_DIR"
-"$PYTHON" ble_gateway.py &
+"$PYTHON" -u ble_gateway.py &
 PIDS+=("$!")
 
 # Check if kiosk mode requested via CLI flag --kiosk or env TARANG_KIOSK=1
