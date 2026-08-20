@@ -528,6 +528,7 @@ class GatewaySession:
                     await client.start_notify(uuid, handler)
                     active.add(uuid)
                     LOG.info("Subscribed to %s", uuid)
+                    await asyncio.sleep(0.06)  # Pacing delay to prevent link layer congestion
                     break
                 except Exception as exc:
                     if attempt == 0:

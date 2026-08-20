@@ -144,6 +144,22 @@ static uint32_t last_vitals_send_ms    = 0;
 static uint32_t last_analytics_send_ms = 0;
 static uint16_t next_event_id          = 1;
 
+/*
+ * Warmup guard: suppress ALL notifications for the first few seconds after
+ * connection open.  This prevents the notification storm that was killing the
+ * link — the RPi subscribes to 14 CCCDs back-to-back, and each CCCD write
+ * was immediately triggering a data burst.  At MTU 23 that congests the TX
+ * queue faster than the radio can drain it, causing a supervision timeout.
+ */
+static uint32_t connection_opened_ms   = 0;
+#define TARANG_BLE_WARMUP_MS           3500u  /* 3.5s: covers 14 CCCDs + pairing */
+
+static bool tarang_ble_warmup_done(void)
+{
+  if (connection_opened_ms == 0u) return false;
+  return (tarang_now_ms() - connection_opened_ms) >= TARANG_BLE_WARMUP_MS;
+}
+
 #define TARANG_EVENT_MAX_ANNOTATIONS TARANG_EVENT_ANNOTATION_HISTORY
 
 typedef struct {
@@ -691,6 +707,11 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
     return;
   }
 
+  /* ── Guard: wait until the subscription storm from the central is over ── */
+  if (!tarang_ble_warmup_done()) {
+    return;
+  }
+
   uint32_t now_ms = tarang_now_ms();
 
   /* ── 1. Periodic Vitals Sync (every 2-3 seconds) ──────────────────── */
@@ -889,9 +910,41 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
              tarang_ble_conn_handle,
              tarang_ble_bonding_handle);
 
-      last_vitals_send_ms    = tarang_now_ms();
-      last_analytics_send_ms = tarang_now_ms();
-      printf("[BLE] Waiting for Central-initiated bonding and GATT subscription.\r\n");
+      /*
+       * FIX 1: Request MTU 247 — the default 23 causes maximum packet
+       * fragmentation and TX queue saturation during the notification storm.
+       * Both EFR32 and BlueZ support 247; we just need someone to ask.
+       */
+      sc = sl_bt_gatt_server_set_max_mtu(247, NULL);
+      tarang_ble_status_ok("request MTU 247", sc);
+
+      /*
+       * FIX 2: Request connection parameters that give the radio enough
+       * breathing room.  BlueZ's defaults can be too aggressive (7.5ms
+       * interval with a short supervision timeout).  We ask for:
+       *   - Interval: 30-50ms  (48-80 * 1.25ms)
+       *   - Slave latency: 0   (respond every interval)
+       *   - Supervision timeout: 8s (640 * 10ms)
+       * The central may reject, but in practice BlueZ and phones accept.
+       */
+      sc = sl_bt_connection_set_preferred_phy(
+          opened->connection, 0x01, 0x01);  /* 1M PHY both directions */
+      tarang_ble_status_ok("request 1M PHY", sc);
+
+      sc = sl_bt_connection_set_parameters(
+          opened->connection,
+          48,    /* min interval: 48 * 1.25ms = 60ms */
+          80,    /* max interval: 80 * 1.25ms = 100ms */
+          0,     /* slave latency: 0 (respond every event) */
+          640);  /* supervision timeout: 640 * 10ms = 6.4s */
+      tarang_ble_status_ok("request connection parameters", sc);
+
+      /* Start the warmup timer — no notifications until CCCD storm is over */
+      connection_opened_ms = tarang_now_ms();
+      last_vitals_send_ms    = connection_opened_ms;
+      last_analytics_send_ms = connection_opened_ms;
+      printf("[BLE] Warmup: suppressing notifications for %ums while central subscribes.\r\n",
+             (unsigned)TARANG_BLE_WARMUP_MS);
       break;
     }
 
@@ -1048,21 +1101,17 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
         printf("[BLE] CCCD: char=0x%04X -> %s\r\n",
                (unsigned)characteristic, enabled ? "SUBSCRIBED" : "UNSUBSCRIBED");
 
-        if (enabled
-            && (characteristic == gattdb_vitals_heart_rate
-                || characteristic == gattdb_vitals_spo2)) {
-          last_vitals_send_ms = tarang_now_ms() - 2500u;
-        }
-        if (enabled
-            && (characteristic == gattdb_analytics_pvc_burden
-                || characteristic == gattdb_analytics_pac_burden
-                || characteristic == gattdb_analytics_sdnn
-                || characteristic == gattdb_analytics_rmssd
-                || characteristic == gattdb_analytics_prr50
-                || characteristic == gattdb_analytics_ai_duty_cycle
-                || characteristic == gattdb_analytics_em2_sleep)) {
-          last_analytics_send_ms = tarang_now_ms() - 300000u;
-        }
+        /*
+         * FIX 3: Do NOT force an immediate send on CCCD subscribe.
+         * The old code set last_vitals_send_ms = now - 2500 and
+         * last_analytics_send_ms = now - 300000, causing an immediate
+         * burst of notifications during the subscription storm.  This
+         * was the primary cause of the connect-disconnect loop.
+         *
+         * Instead, the warmup guard already suppresses all sends for
+         * TARANG_BLE_WARMUP_MS after connection open.  After warmup,
+         * the first natural timer tick will send the data.
+         */
       }
 
       if ((status_flags & sl_bt_gatt_server_confirmation) != 0u

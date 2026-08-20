@@ -283,6 +283,7 @@ async def run_session(device, target_name: str) -> None:
                 await client.start_notify(char_uuid, handler)
                 print(f"  ✓ Subscribed to {desc}")
                 subscribed_count += 1
+                await asyncio.sleep(0.06)  # Pacing delay between CCCD writes
                 break
             except Exception as e:
                 if attempt == 0:
