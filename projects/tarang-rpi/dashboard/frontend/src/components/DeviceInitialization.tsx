@@ -148,105 +148,112 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
 
   return (
     <main className={`min-h-screen bg-[var(--paper)] transition-all duration-500 ${finishing ? 'scale-[0.995] opacity-0' : 'opacity-100'}`}>
-      <header className="flex h-[64px] items-center justify-between border-b border-[var(--line)] px-6 bg-[var(--paper-card)]">
+      <header className="flex h-[58px] items-center justify-between border-b border-[var(--line)] px-6 bg-white">
         <div className="flex items-center gap-3">
-          <img src="/images/tarang-logo.png" alt="Tarang" className="h-7 w-auto object-contain" />
+          <img
+            src="/logo_mark.svg"
+            alt="Tarang"
+            className="h-7 w-7 shrink-0 object-contain"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/tarang_logo.png'; }}
+          />
           <div>
             <p className="text-sm font-bold text-[var(--ink)]">Tarang Clinical</p>
-            <p className="discovery-eyebrow !text-[9px]">Device Commissioning</p>
+            <p className="text-[10px] text-[var(--muted)]">Device commissioning</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <img src="/images/ocelleon-logo.png" alt="Ocelleon" className="hidden sm:block h-3.5 w-auto opacity-75" />
-          <button onClick={onBack} className="discovery-pill-secondary !py-1.5 !px-3 !text-xs"><ArrowLeft size={14} /> Back to Worklist</button>
+          <button onClick={onBack} className="discovery-pill-secondary !py-1 !px-3 !text-xs">
+            <ArrowLeft size={13} /> Back to worklist
+          </button>
         </div>
       </header>
 
-      <div className="mx-auto max-w-5xl px-6 py-8 max-sm:px-4">
-        <section className="view-header view-enter">
+      <div className="mx-auto max-w-5xl px-6 py-6 max-sm:px-4">
+        <section className="view-header view-enter !pb-3">
           <div>
-            <span className="discovery-eyebrow mb-1.5">{sessionLabel || 'Encrypted GATT Session'}</span>
-            <h1>Commissioning {deviceName}</h1>
-            <p aria-live="polite">{statusText}</p>
+            <span className="text-xs font-semibold text-[var(--muted)]">{sessionLabel || 'Encrypted telemetry session'}</span>
+            <h1 className="text-2xl font-bold text-[var(--ink)]">Connecting {deviceName}</h1>
+            <p className="text-xs text-[var(--ink-soft)] mt-0.5" aria-live="polite">{statusText}</p>
           </div>
           <div className="text-right">
-            <p className="eyebrow">Pipeline Readiness</p>
-            <p className="font-mono text-3xl font-bold text-[var(--accent)]">{Math.round((displayStage / 4) * 100)}%</p>
+            <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Readiness</p>
+            <p className="font-mono text-2xl font-bold text-[var(--clinical-teal)]">{Math.round((displayStage / 4) * 100)}%</p>
           </div>
         </section>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-7 max-lg:grid-cols-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-6 max-lg:grid-cols-1">
           <section className="view-enter" style={{ animationDelay: '70ms' }}>
-            <div className="mb-2.5 flex items-center justify-between">
+            <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
-                <Activity size={15} className="text-[var(--accent)]" /> Biosignal Pipeline Stream
+                <Activity size={14} className="text-[var(--clinical-teal)]" /> Physiological signal calibration
               </div>
               <span className="font-mono text-[10px] text-[var(--muted)]">
-                {hasLiveHealth ? `SQI ${deviceHealth?.ecgSqi}/255` : bleConnected ? 'GATT 250 Hz Synchronizing' : 'Searching for Signal'}
+                {hasLiveHealth ? `SQI ${deviceHealth?.ecgSqi}/255` : bleConnected ? '250 Hz acquisition' : 'Scanning'}
               </span>
             </div>
-            <div className="waveform-grid relative h-[230px] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper-card)] shadow-sm">
-              <canvas ref={canvasRef} width={920} height={230} className="block h-full w-full" />
-              <div className="absolute bottom-2.5 left-3.5 flex gap-4 font-mono text-[10px] text-[var(--muted)] bg-[var(--paper-card)]/90 px-2.5 py-1 rounded-full border border-[var(--line-soft)] backdrop-blur-sm">
-                <span>Calibration Sweep</span><span>{telemetry.current_hr || '--'} bpm verified</span>
+            <div className="waveform-grid relative h-[210px] overflow-hidden rounded-lg border border-[var(--line)] bg-white shadow-xs">
+              <canvas ref={canvasRef} width={920} height={210} className="block h-full w-full" />
+              <div className="absolute bottom-2.5 left-3 flex gap-3 font-mono text-[10px] text-[var(--muted)] bg-white/90 px-2.5 py-0.5 rounded border border-[var(--line-soft)]">
+                <span>Signal calibration</span>
+                <span>{telemetry.current_hr || '--'} bpm</span>
               </div>
             </div>
 
-            <div className={`mt-5 rounded-xl border border-[var(--line)] bg-[var(--paper-card)] p-4 shadow-sm transition-all duration-300 ${displayStage >= 3 ? 'opacity-100' : 'opacity-60'}`}>
-              <div className="mb-3 flex items-end justify-between">
+            <div className="mt-4 rounded-lg border border-[var(--line)] bg-white p-4 shadow-xs">
+              <div className="mb-2.5 flex items-center justify-between border-b border-[var(--line-soft)] pb-2">
                 <div>
-                  <p className="text-xs font-bold text-[var(--ink)] uppercase tracking-wider">Edge Inference Weights Arena</p>
-                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">Quantized INT8 CNN loaded into EFR32MG26 SRAM memory</p>
+                  <p className="text-xs font-bold text-[var(--ink)] uppercase tracking-wider">Edge inference pipeline</p>
+                  <p className="text-[10px] text-[var(--muted)]">Quantized INT8 cascade on EFR32MG26</p>
                 </div>
-                <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent-soft)] text-[var(--accent)]">
-                  Tier 1-2 Arrhythmia Engine
+                <span className="font-mono text-[10px] font-medium text-[var(--clinical-teal)]">
+                  Tier 0-3 active
                 </span>
               </div>
-              <div className="grid grid-cols-[repeat(18,minmax(0,1fr))] gap-1.5" aria-label="Inference weights loading">
-                {Array.from({ length: 54 }).map((_, index) => (
-                  <span
-                    key={index}
-                    className={`h-4 rounded-sm transition-all duration-300 ${
-                      displayStage >= 3
-                        ? 'bg-[var(--accent)] animate-pulse'
-                        : index % 3 === 0
-                        ? 'bg-[var(--clinical-teal)] opacity-40'
-                        : 'bg-[var(--line)]'
-                    }`}
-                    style={{ animationDelay: `${(index * 25) % 800}ms` }}
-                  />
-                ))}
+              <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                <div className="p-2 rounded bg-[var(--paper-2)] border border-[var(--line-soft)]">
+                  <p className="text-[10px] text-[var(--muted)]">Tier 0</p>
+                  <p className="font-semibold text-[var(--ink)]">DSP heuristic</p>
+                </div>
+                <div className="p-2 rounded bg-[var(--paper-2)] border border-[var(--line-soft)]">
+                  <p className="text-[10px] text-[var(--muted)]">Tier 1</p>
+                  <p className="font-semibold text-[var(--ink)]">Gate CNN</p>
+                </div>
+                <div className="p-2 rounded bg-[var(--paper-2)] border border-[var(--line-soft)]">
+                  <p className="text-[10px] text-[var(--muted)]">Tier 2</p>
+                  <p className="font-semibold text-[var(--ink)]">SV Head</p>
+                </div>
+                <div className="p-2 rounded bg-[var(--paper-2)] border border-[var(--line-soft)]">
+                  <p className="text-[10px] text-[var(--muted)]">Tier 3</p>
+                  <p className="font-semibold text-[var(--ink)]">Event engine</p>
+                </div>
               </div>
             </div>
           </section>
 
-          <aside className="view-enter rounded-xl border border-[var(--line)] bg-[var(--paper-card)] p-5 shadow-sm" style={{ animationDelay: '130ms' }}>
-            <div className="mb-3.5 flex items-center justify-between border-b border-[var(--line-soft)] pb-2.5">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Readiness Pipeline</h2>
-              <span className="discovery-eyebrow !text-[9px]">Automated</span>
+          <aside className="view-enter rounded-lg border border-[var(--line)] bg-white p-4 shadow-xs" style={{ animationDelay: '130ms' }}>
+            <div className="mb-3 flex items-center justify-between border-b border-[var(--line-soft)] pb-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Readiness pipeline</h2>
+              <span className="text-[10px] font-mono text-[var(--muted)]">Automated</span>
             </div>
-            <ol>
+            <ol className="divide-y divide-[var(--line-soft)]">
               {STAGES.map((stage, index) => {
                 const done = index < displayStage || displayStage === 4;
                 const active = index === displayStage && displayStage < 4;
                 const Icon = stage.icon;
                 return (
-                  <li key={stage.title} className={`relative flex gap-3 border-t border-[var(--line-soft)] py-3 first:border-0 ${!done && !active ? 'opacity-40' : ''}`}>
-                    <div className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border transition-all duration-300 ${
+                  <li key={stage.title} className={`flex items-start gap-2.5 py-2.5 ${!done && !active ? 'opacity-40' : ''}`}>
+                    <div className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border text-xs ${
                       done
-                        ? 'border-[var(--clinical-teal)] bg-[var(--clinical-teal)] text-white shadow-sm'
+                        ? 'border-[var(--clinical-teal)] bg-[var(--clinical-teal)] text-white'
                         : active
-                        ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] animate-pulse'
+                        ? 'border-[var(--deep-ocean)] bg-blue-50 text-[var(--deep-ocean)]'
                         : 'border-[var(--line)] text-[var(--muted)]'
                     }`}>
-                      {done ? <Check size={13} strokeWidth={2.5} /> : active ? <RefreshCw size={12} className="animate-spin text-[var(--accent)]" /> : <Circle size={10} />}
+                      {done ? <Check size={11} strokeWidth={2.5} /> : active ? <RefreshCw size={10} className="animate-spin" /> : <Circle size={8} />}
                     </div>
                     <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 text-xs font-bold text-[var(--ink)]">
-                        <Icon size={13} className={done ? 'text-[var(--clinical-teal)]' : active ? 'text-[var(--accent)]' : 'text-[var(--muted)]'} />
-                        {stage.title}
-                      </p>
-                      <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted)]">{stage.detail}</p>
+                      <p className="text-xs font-semibold text-[var(--ink)]">{stage.title}</p>
+                      <p className="text-[10px] text-[var(--muted)] leading-tight mt-0.5">{stage.detail}</p>
                     </div>
                   </li>
                 );
@@ -254,11 +261,10 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
             </ol>
 
             {(!backendOnline || !bleConnected || !telemetryReady) && (
-              <div className="mt-4 border-t border-[var(--line-soft)] pt-4">
-                <p className="mb-2.5 text-[11px] text-[var(--muted)] leading-relaxed">
-                  The dashboard will advance automatically as soon as the GATT link is bonded.
-                </p>
-                <button onClick={onRetry} className="discovery-pill-primary w-full !py-2 !text-xs"><RefreshCw size={13} /> Re-scan BLE</button>
+              <div className="mt-3 border-t border-[var(--line-soft)] pt-3">
+                <button onClick={onRetry} className="discovery-pill-primary w-full !py-1.5 !text-xs justify-center">
+                  <RefreshCw size={12} /> <span>Re-scan BLE</span>
+                </button>
               </div>
             )}
           </aside>

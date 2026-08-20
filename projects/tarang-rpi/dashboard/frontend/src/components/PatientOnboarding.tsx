@@ -169,111 +169,118 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
 
   return (
     <main className="min-h-screen bg-[var(--paper)]">
-      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--paper-card)]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-[64px] max-w-[1440px] items-center justify-between px-6">
+      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-white/95 backdrop-blur-md">
+        <div className="mx-auto flex h-[58px] max-w-[1440px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <img src="/images/tarang-logo.png" alt="Tarang" className="h-7 w-auto object-contain" />
+            <img
+              src="/logo_mark.svg"
+              alt="Tarang"
+              className="h-7 w-7 shrink-0 object-contain"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/tarang_logo.png'; }}
+            />
             <div>
               <div className="text-sm font-bold text-[var(--ink)]">Tarang Clinical</div>
-              <div className="discovery-eyebrow !text-[9px] !gap-1">ICU Telemetry Worklist</div>
+              <div className="text-[10px] text-[var(--muted)]">Patient worklist</div>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="hidden items-center gap-3 border-r border-[var(--line)] pr-4 sm:flex">
-              <img src="/images/ocelleon-logo.png" alt="Team Ocelleon" className="h-3.5 w-auto opacity-75" />
-              <img src="/images/silabs-logo.jpg" alt="Silicon Labs" className="h-3.5 w-auto rounded opacity-60" />
-            </div>
-            <button onClick={() => setShowCreate(true)} className="discovery-pill-primary">
-              <Plus size={15} /> <span>New Patient</span>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowCreate(true)} className="discovery-pill-primary !py-1.5 !px-3 !text-xs">
+              <Plus size={14} /> <span>New patient</span>
             </button>
           </div>
         </div>
       </header>
 
       <div className="mx-auto max-w-[1440px] px-6 py-6 max-sm:px-4">
-        <div className="view-header view-enter">
+        <div className="view-header view-enter !pb-4">
           <div>
-            <span className="discovery-eyebrow mb-1">Telemetry Management</span>
-            <h1>Patient Worklist</h1>
-            <p>Select an admitted patient to begin live BLE cardiac telemetry and arrhythmia capture.</p>
+            <span className="text-xs font-semibold text-[var(--muted)]">Telemetry management</span>
+            <h1 className="text-2xl font-bold text-[var(--ink)]">Patient worklist</h1>
+            <p className="text-xs text-[var(--ink-soft)] mt-0.5">Select an admitted patient to begin live BLE telemetry.</p>
           </div>
-          <div className="flex divide-x divide-[var(--line)] border border-[var(--line)] rounded-lg bg-[var(--paper-card)] shadow-sm">
-            <div className="px-4 py-2.5"><p className="eyebrow">Patients</p><p className="font-mono text-lg font-bold text-[var(--ink)]">{patients.length}</p></div>
-            <div className="px-4 py-2.5"><p className="eyebrow">Active</p><p className="font-mono text-lg font-bold text-[var(--clinical-teal)]">{activeSessionCount}</p></div>
-            <div className="px-4 py-2.5"><p className="eyebrow">Pods Ready</p><p className="font-mono text-lg font-bold text-[var(--ink)]">{availableDevices.length}</p></div>
+          <div className="flex divide-x divide-[var(--line)] border border-[var(--line)] rounded-lg bg-white shadow-xs">
+            <div className="px-4 py-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Patients</p><p className="font-mono text-base font-bold text-[var(--ink)]">{patients.length}</p></div>
+            <div className="px-4 py-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Active</p><p className="font-mono text-base font-bold text-[var(--clinical-teal)]">{activeSessionCount}</p></div>
+            <div className="px-4 py-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Devices ready</p><p className="font-mono text-base font-bold text-[var(--ink)]">{availableDevices.length}</p></div>
           </div>
         </div>
 
         {(error || actionError) && (
-          <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-[#fff1f2] px-4 py-2.5 text-xs text-[var(--cardiac-rose)]" role="alert">
+          <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700" role="alert">
             <span className="flex items-center gap-2 font-medium"><AlertCircle size={15} />{actionError || error}</span>
-            {error && <button onClick={onRetry} className="icon-button" title="Retry"><RefreshCw size={15} /></button>}
+            {error && <button onClick={onRetry} className="icon-button" title="Retry"><RefreshCw size={14} /></button>}
           </div>
         )}
 
-        <section className="clinical-panel view-enter overflow-hidden" style={{ animationDelay: '70ms' }}>
-          <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] px-5 py-3.5 max-sm:flex-col max-sm:items-stretch">
+        <section className="rounded-lg border border-[var(--line)] bg-white overflow-hidden shadow-xs view-enter" style={{ animationDelay: '70ms' }}>
+          <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] px-5 py-3 bg-[var(--paper-2)] max-sm:flex-col max-sm:items-stretch">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
-              <UsersRound size={16} className="text-[var(--accent)]" /> Admitted Patients
+              <UsersRound size={15} className="text-[var(--clinical-teal)]" /> Admitted patients
             </div>
             <label className="relative w-80 max-sm:w-full">
-              <Search size={15} className="pointer-events-none absolute left-3 top-2.5 text-[var(--muted)]" />
+              <Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-[var(--muted)]" />
               <span className="sr-only">Search patients</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, MRN, bed, physician..." className="form-field !mt-0 !pl-8.5 !py-1.5 !text-xs" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, MRN, bed, physician..." className="form-field !mt-0 !pl-8.5 !py-1.5 !text-xs !bg-white" />
             </label>
           </div>
 
           <div className="overflow-x-auto max-md:hidden">
             <table className="w-full min-w-[980px] border-collapse text-left">
-              <thead className="bg-[var(--color-surface-container-low)]">
-                <tr className="eyebrow">
-                  <th className="px-5 py-3 font-semibold">Patient</th>
-                  <th className="px-4 py-3 font-semibold">Location</th>
-                  <th className="px-4 py-3 font-semibold">Clinical context</th>
-                  <th className="px-4 py-3 font-semibold">Monitoring state</th>
-                  <th className="px-4 py-3 font-semibold">Tarang device</th>
-                  <th className="px-5 py-3 text-right font-semibold">Action</th>
+              <thead className="bg-[var(--paper-2)] border-b border-[var(--line)]">
+                <tr className="text-[11px] text-[var(--muted)] uppercase tracking-wider">
+                  <th className="px-5 py-2.5 font-semibold">Patient</th>
+                  <th className="px-4 py-2.5 font-semibold">Location</th>
+                  <th className="px-4 py-2.5 font-semibold">Clinical context</th>
+                  <th className="px-4 py-2.5 font-semibold">Status</th>
+                  <th className="px-4 py-2.5 font-semibold">Tarang device</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[var(--color-surface-container-high)]">
+              <tbody className="divide-y divide-[var(--line-soft)] text-xs">
                 {filteredPatients.map((patient) => {
                   const activeSession = sessions.find((session) => session.status === 'active' && session.patient_id === patient.dbId);
                   const assignedDevice = devices.find((device) => device.assigned_patient_id === patient.dbId);
                   const selectedDevice = selectedDevices[patient.id] || activeSession?.device_id || assignedDevice?.device_id || availableDevices[0]?.device_id || '';
                   const initials = patient.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
                   return (
-                    <tr key={patient.id} className="transition-colors hover:bg-[var(--color-surface)]">
-                      <td className="px-5 py-4">
+                    <tr key={patient.id} className="transition-colors hover:bg-[var(--paper-2)]/50">
+                      <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[var(--color-surface-container-high)] text-sm font-bold text-[var(--color-primary)]">{initials}</div>
-                          <div><p className="font-bold">{patient.name}</p><p className="eyebrow mt-0.5">MRN {patient.id}</p></div>
+                          <div className="grid h-9 w-9 shrink-0 place-items-center rounded bg-[var(--paper-2)] text-xs font-bold text-[var(--ink)]">{initials}</div>
+                          <div><p className="font-semibold text-[var(--ink)]">{patient.name}</p><p className="text-[10px] text-[var(--muted)] font-mono">MRN {patient.id}</p></div>
                         </div>
                       </td>
-                      <td className="px-4 py-4"><p className="flex items-center gap-2 text-sm font-semibold"><Bed size={15} /> Bed {patient.bed}</p><p className="eyebrow mt-1">Admitted {patient.admitDate}</p></td>
-                      <td className="px-4 py-4"><p className="text-sm">{patient.age} yr / {patient.gender}</p><p className="eyebrow mt-1">{patient.attendingPhysician}</p></td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex items-center gap-2 text-xs font-bold ${activeSession ? 'text-[var(--color-success)]' : 'text-[var(--color-on-surface-variant)]'}`}>
-                          <CircleDot size={14} /> {activeSession ? 'Active telemetry' : 'Not monitored'}
+                      <td className="px-4 py-3.5"><p className="flex items-center gap-1.5 font-medium"><Bed size={13} /> Bed {patient.bed}</p><p className="text-[10px] text-[var(--muted)]">Admitted {patient.admitDate}</p></td>
+                      <td className="px-4 py-3.5"><p>{patient.age} yr / {patient.gender}</p><p className="text-[10px] text-[var(--muted)]">{patient.attendingPhysician}</p></td>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex items-center gap-1.5 font-medium ${activeSession ? 'text-[var(--clinical-teal)]' : 'text-[var(--muted)]'}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${activeSession ? 'bg-[var(--clinical-teal)]' : 'bg-[var(--muted)]'}`} />
+                          {activeSession ? 'Active telemetry' : 'Unassigned'}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-3.5">
                         <select
                           aria-label={`Tarang device for ${patient.name}`}
                           value={selectedDevice}
                           disabled={!!activeSession}
                           onChange={(event) => setSelectedDevices((current) => ({ ...current, [patient.id]: event.target.value }))}
-                          className="form-field !mt-0 max-w-[220px] font-mono text-xs disabled:bg-[var(--color-surface-container-low)]"
+                          className="form-field !mt-0 max-w-[240px] font-mono text-xs disabled:bg-[var(--paper-2)] disabled:text-[var(--muted)]"
                         >
                           {!selectedDevice && <option value="">No device available</option>}
-                          {devices.filter((device) => device.status !== 'in_use' || device.device_id === activeSession?.device_id).map((device) => (
-                            <option key={device.device_id} value={device.device_id}>{device.name} / {device.device_id}</option>
-                          ))}
+                          {devices.map((device) => {
+                            const isAssignedToOther = device.status === 'in_use' && device.device_id !== activeSession?.device_id;
+                            return (
+                              <option key={device.device_id} value={device.device_id} disabled={isAssignedToOther}>
+                                {device.name || device.device_id} ({device.status === 'in_use' ? 'In Use' : 'Available'})
+                              </option>
+                            );
+                          })}
                         </select>
                       </td>
-                      <td className="px-5 py-4 text-right">
-                        <button onClick={() => startPatient(patient)} disabled={busyMrn === patient.id || (!selectedDevice && !activeSession)} className="button-primary min-w-[126px]">
-                          {busyMrn === patient.id ? <RefreshCw size={16} className="animate-spin" /> : activeSession ? <Activity size={16} /> : <Bluetooth size={16} />}
-                          {activeSession ? 'Resume' : 'Start'} <ArrowRight size={15} />
+                      <td className="px-5 py-3.5 text-right">
+                        <button onClick={() => startPatient(patient)} disabled={busyMrn === patient.id || (!selectedDevice && !activeSession)} className="discovery-pill-primary !py-1 !px-3 !text-xs min-w-[110px]">
+                          {busyMrn === patient.id ? <RefreshCw size={13} className="animate-spin" /> : activeSession ? <Activity size={13} /> : <Bluetooth size={13} />}
+                          <span>{activeSession ? 'Resume' : 'Start'}</span> <ArrowRight size={13} />
                         </button>
                       </td>
                     </tr>

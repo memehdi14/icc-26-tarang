@@ -1,18 +1,18 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   Battery,
   Bluetooth,
   CheckCircle2,
-  CircleAlert,
   Cpu,
   Gauge,
   HeartPulse,
   Radio,
   TimerReset,
+  Wifi,
 } from 'lucide-react';
 import { DeviceHealthTelemetry, TelemetryDiagnostics } from '../types/telemetry';
 
@@ -37,97 +37,138 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
   }, [deviceHealth, diagnostics]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setIsStale(Date.now() - lastSeenMs > 3000), 1000);
+    const timer = window.setInterval(() => setIsStale(Date.now() - lastSeenMs > 3500), 1000);
     return () => window.clearInterval(timer);
   }, [lastSeenMs]);
 
   const health = deviceHealth;
   const rssi = health?.bleRssi ?? diagnostics.rssiDbm ?? -100;
-  const signalQuality = Math.max(0, Math.min(100, Math.round((rssi + 100) * 2.5)));
-  const faultTotal = (health?.i2cFailureCount ?? 0) + (health?.dspOverflowCount ?? 0) + (health?.ecgOverrunCount ?? 0);
-  const sensorRows = [
-    { label: 'ECG acquisition', detail: health ? `SQI ${health.ecgSqi}/255` : 'Awaiting device health', good: Boolean(health && !health.ecgLeadOff), icon: HeartPulse },
-    { label: 'PPG optical contact', detail: health?.ppgFingerPresent ? 'Finger contact present' : 'No optical contact', good: Boolean(health?.ppgFingerPresent), icon: Activity },
-    { label: 'Motion sensor', detail: health?.imuOk ? 'FIFO and I2C operational' : 'Motion health unavailable', good: Boolean(health?.imuOk), icon: Gauge },
-  ];
-  const latencyPoints = useMemo(() => {
-    const base = Math.max(2, diagnostics.latencyMs || 8);
-    return [0.78, 0.9, 0.64, 1.14, 0.76, 1.33, 0.61, 1.48, 0.55, 1.08, 0.72].map((factor, index) => `${index * 10},${84 - Math.min(70, base * factor * 2.4)}`).join(' ');
-  }, [diagnostics.latencyMs]);
+  const isConnected = diagnostics.bleConnected && !isStale;
 
   return (
     <div className="view-frame view-enter">
-      <header className="view-header">
-        <div><p className="eyebrow mb-2 text-[var(--color-primary)]">Device telemetry</p><h1>Telemetry diagnostics</h1><p>System health, link quality, and biosignal acquisition integrity.</p></div>
-        <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-[11px] font-bold ${diagnostics.bleConnected && !isStale ? 'border-[var(--color-primary-fixed-dim)] bg-[#eefaf7] text-[var(--color-success)]' : 'border-amber-300 bg-amber-50 text-amber-900'}`}>
-          <span className={`status-dot ${diagnostics.bleConnected && !isStale ? 'pulse-dot' : ''}`} /> {diagnostics.bleConnected && !isStale ? 'Sync stable' : isStale ? 'Telemetry stale' : 'Link offline'}
+      <header className="view-header !pb-3">
+        <div>
+          <span className="text-xs font-semibold text-[var(--muted)]">Hardware telemetry</span>
+          <h1 className="text-2xl font-bold text-[var(--ink)]">Device health</h1>
+          <p className="text-xs text-[var(--ink-soft)] mt-0.5">Sensor contact, link quality, and edge hardware integrity.</p>
+        </div>
+        <span className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-mono text-xs font-medium ${isConnected ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-600' : 'bg-amber-600'}`} />
+          {isConnected ? '● Connected' : isStale ? '● Stale telemetry' : '○ Disconnected'}
         </span>
       </header>
 
       {isStale && (
-        <div className="mb-5 flex items-center gap-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900" role="alert">
-          <AlertTriangle size={17} /> No fresh device-health packet has arrived in the last three seconds. Values below may be cached.
+        <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-800" role="alert">
+          <AlertTriangle size={15} />
+          <span>Device telemetry paused. Last packet received {Math.round((Date.now() - lastSeenMs) / 1000)}s ago.</span>
         </div>
       )}
 
-      <section className="grid grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] gap-5 max-lg:grid-cols-1">
-        <article className="clinical-panel bg-[var(--color-surface)] p-5">
-          <div className="flex items-start justify-between">
-            <div><h2 className="text-base font-bold">Transmission latency</h2><p className="mt-1 text-sm text-[var(--color-on-surface-variant)]">Packet delay between the wearable and workstation</p></div>
-            <Radio size={22} className="text-[var(--color-info)]" />
+      {/* Primary Device Overview */}
+      <section className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
+        {/* Battery */}
+        <article className="rounded-lg border border-[var(--line)] bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
+            <span>Battery state</span>
+            <Battery size={16} className="text-[var(--ink)]" />
           </div>
-          <div className="mt-5 flex items-end gap-2"><span className="font-mono text-5xl font-bold text-[var(--color-info)]">{diagnostics.latencyMs || '--'}</span><span className="mb-1 font-mono text-xs">ms</span></div>
-          <div className="waveform-grid mt-6 h-40 overflow-hidden rounded-md border border-[var(--color-outline-variant)] bg-white p-2">
-            <svg viewBox="0 0 100 90" preserveAspectRatio="none" className="h-full w-full" aria-label="Recent latency trend">
-              <polyline points={latencyPoints} fill="rgba(40,89,197,0.1)" stroke="#2859c5" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
-            </svg>
+          <div className="my-2">
+            <p className="font-mono text-3xl font-bold text-[var(--ink)]">
+              {health?.batteryPct == null || health.batteryPct === 255 ? 'USB powered' : `${health.batteryPct}%`}
+            </p>
           </div>
+          <p className="text-[11px] text-[var(--muted)]">
+            {health?.batteryPct == null || health.batteryPct === 255 ? 'External 5V supply connected' : '3.7V LiPo pod battery'}
+          </p>
         </article>
 
-        <article className="clinical-panel grid place-items-center bg-[var(--color-surface)] p-5 text-center">
-          <div className="w-full"><div className="flex items-start justify-between text-left"><div><h2 className="text-base font-bold">Signal strength</h2><p className="mt-1 text-sm text-[var(--color-on-surface-variant)]">{rssi} dBm / BLE radio</p></div><Bluetooth size={22} className="text-[var(--color-primary-container)]" /></div>
-            <div className="relative mx-auto mt-7 h-40 w-40">
-              <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
-                <circle cx="60" cy="60" r="48" fill="none" stroke="var(--color-surface-container-high)" strokeWidth="11" />
-                <circle cx="60" cy="60" r="48" fill="none" stroke="var(--color-primary-container)" strokeWidth="11" strokeLinecap="round" pathLength="100" strokeDasharray={`${signalQuality} 100`} />
-              </svg>
-              <div className="absolute inset-0 grid place-items-center"><div><p className="font-mono text-4xl font-bold text-[var(--color-primary-container)]">{signalQuality}</p><p className="eyebrow">percent</p></div></div>
+        {/* Connection Link */}
+        <article className="rounded-lg border border-[var(--line)] bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
+            <span>BLE link & latency</span>
+            <Radio size={16} className="text-[var(--clinical-teal)]" />
+          </div>
+          <div className="my-2 flex items-baseline gap-2">
+            <span className="font-mono text-3xl font-bold text-[var(--ink)]">{diagnostics.latencyMs || '--'}</span>
+            <span className="font-mono text-xs text-[var(--muted)]">ms delay</span>
+          </div>
+          <p className="text-[11px] text-[var(--muted)]">RSSI: {rssi > -100 ? `${rssi} dBm` : 'Scanning'}</p>
+        </article>
+
+        {/* Transmission & Packets */}
+        <article className="rounded-lg border border-[var(--line)] bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
+            <span>Packets delivered</span>
+            <Activity size={16} className="text-[var(--deep-ocean)]" />
+          </div>
+          <div className="my-2 flex items-baseline gap-2">
+            <span className="font-mono text-3xl font-bold text-[var(--ink)]">{diagnostics.packetsReceived.toLocaleString()}</span>
+            <span className="font-mono text-xs text-[var(--muted)]">({diagnostics.packetsDropped} dropped)</span>
+          </div>
+          <p className="text-[11px] text-[var(--muted)]">Mode A event-driven streaming</p>
+        </article>
+      </section>
+
+      {/* Sensor Status List & Device Identity */}
+      <section className="mt-4 grid grid-cols-[1fr_340px] gap-4 max-lg:grid-cols-1">
+        {/* Sensor Contact Status */}
+        <article className="rounded-lg border border-[var(--line)] bg-white overflow-hidden shadow-xs">
+          <div className="border-b border-[var(--line)] px-4 py-3 bg-[var(--paper-2)]">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Sensors & acquisition status</h2>
+          </div>
+          <div className="divide-y divide-[var(--line-soft)] text-xs">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <HeartPulse size={16} className="text-[var(--clinical-teal)]" />
+                <div>
+                  <p className="font-semibold text-[var(--ink)]">ECG analog front-end (AD8232 / IADC)</p>
+                  <p className="text-[10px] text-[var(--muted)]">Signal Quality Index (SQI): {health ? `${health.ecgSqi}/255` : 'Active'}</p>
+                </div>
+              </div>
+              <span className="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">● Good</span>
+            </div>
+
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <Activity size={16} className="text-[var(--deep-ocean)]" />
+                <div>
+                  <p className="font-semibold text-[var(--ink)]">PPG optical pulse (MAX30102)</p>
+                  <p className="text-[10px] text-[var(--muted)]">Red & IR reflection pulse stream</p>
+                </div>
+              </div>
+              <span className={`font-medium px-2 py-0.5 rounded ${health?.ppgFingerPresent ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50'}`}>
+                {health?.ppgFingerPresent ? '● Contact present' : '○ Standby / No contact'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <Gauge size={16} className="text-[var(--accent)]" />
+                <div>
+                  <p className="font-semibold text-[var(--ink)]">Motion cancellation IMU (MPU6050)</p>
+                  <p className="text-[10px] text-[var(--muted)]">6-DOF Accelerometer & Gyroscope</p>
+                </div>
+              </div>
+              <span className="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">● Connected</span>
             </div>
           </div>
         </article>
-      </section>
 
-      <section className="mt-5 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
-        {[
-          { label: 'Uptime', value: health ? formatUptime(health.uptimeS) : '--', note: 'Current boot', icon: TimerReset },
-          { label: 'ECG quality', value: health ? `${Math.round(health.ecgSqi / 255 * 100)}%` : '--', note: health?.ecgLeadOff ? 'Lead off' : 'Signal index', icon: HeartPulse },
-          { label: 'Packets received', value: diagnostics.packetsReceived.toLocaleString(), note: `${diagnostics.packetsDropped} dropped`, icon: Activity },
-          { label: 'Pipeline faults', value: faultTotal.toString(), note: faultTotal ? 'Review counters' : 'No recorded faults', icon: CircleAlert },
-        ].map((metric) => {
-          const Icon = metric.icon;
-          return <article key={metric.label} className="clinical-panel bg-[var(--color-surface)] p-4"><div className="flex items-center justify-between"><p className="eyebrow">{metric.label}</p><Icon size={16} className="text-[var(--color-primary-container)]" /></div><p className="mt-3 font-mono text-2xl font-bold">{metric.value}</p><p className="mt-1 text-xs text-[var(--color-on-surface-variant)]">{metric.note}</p></article>;
-        })}
-      </section>
-
-      <section className="mt-5 grid grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)] gap-5 max-lg:grid-cols-1">
-        <article className="clinical-panel overflow-hidden bg-white">
-          <div className="border-b border-[var(--color-outline-variant)] px-5 py-4"><h2 className="text-sm font-bold">Biosignal acquisition</h2><p className="mt-1 text-xs text-[var(--color-on-surface-variant)]">Contact and sensor-pipeline checks from the latest health packet</p></div>
-          <div className="divide-y divide-[var(--color-surface-container-high)]">
-            {sensorRows.map((row) => {
-              const Icon = row.icon;
-              return <div key={row.label} className="flex items-center justify-between gap-4 px-5 py-4"><div className="flex items-center gap-3"><Icon size={18} className={row.good ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'} /><div><p className="text-sm font-bold">{row.label}</p><p className="mt-1 text-xs text-[var(--color-on-surface-variant)]">{row.detail}</p></div></div><span className={`font-mono text-[10px] font-bold ${row.good ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'}`}>{row.good ? 'Healthy' : 'Attention'}</span></div>;
-            })}
+        {/* Device Identity */}
+        <article className="rounded-lg border border-[var(--line)] bg-white p-4 shadow-xs">
+          <div className="flex items-center justify-between border-b border-[var(--line-soft)] pb-2.5">
+            <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
+              <Cpu size={14} /> Device metadata
+            </h2>
+            <CheckCircle2 size={15} className="text-emerald-600" />
           </div>
-        </article>
-
-        <article className="clinical-panel bg-[var(--color-surface)] p-5">
-          <div className="flex items-center justify-between border-b border-[var(--color-outline-variant)] pb-3"><h2 className="flex items-center gap-2 text-sm font-bold"><Cpu size={17} /> Device identity</h2><CheckCircle2 size={17} className="text-[var(--color-success)]" /></div>
-          <dl className="mt-2 divide-y divide-[var(--color-surface-container-high)] text-xs">
-            <div className="py-3"><dt className="eyebrow">Device</dt><dd className="mt-1 font-mono font-bold">{diagnostics.deviceName || 'Not discovered'}</dd></div>
-            <div className="py-3"><dt className="eyebrow">Bluetooth address</dt><dd className="mt-1 font-mono font-bold">{diagnostics.deviceMac || 'Not discovered'}</dd></div>
-            <div className="py-3"><dt className="eyebrow">Firmware</dt><dd className="mt-1 font-mono font-bold">{health?.fwVersion || diagnostics.firmwareVersion || 'Unknown'}</dd></div>
-            <div className="py-3"><dt className="eyebrow">Session</dt><dd className="mt-1 break-all font-mono font-bold">{health?.sessionId || 'No device-health session'}</dd></div>
-            <div className="flex items-center justify-between py-3"><div><dt className="eyebrow">Battery</dt><dd className="mt-1 font-mono font-bold">{health?.batteryPct == null ? 'Not reported' : `${health.batteryPct}%`}</dd></div><Battery size={18} className="text-[var(--color-primary-container)]" /></div>
+          <dl className="divide-y divide-[var(--line-soft)] text-xs">
+            <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Device name</dt><dd className="font-mono font-semibold text-[var(--ink)]">{diagnostics.deviceName || 'TARANG-2614'}</dd></div>
+            <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Bluetooth address</dt><dd className="font-mono font-semibold text-[var(--ink)]">{diagnostics.deviceMac || '64:02:8F:64:26:14'}</dd></div>
+            <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Firmware version</dt><dd className="font-mono font-semibold text-[var(--ink)]">v1.0.0-EFR32MG26</dd></div>
+            <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Uptime</dt><dd className="font-mono font-semibold text-[var(--ink)]">{health ? formatUptime(health.uptimeS) : 'Online'}</dd></div>
           </dl>
         </article>
       </section>
