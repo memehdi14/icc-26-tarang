@@ -933,10 +933,12 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
 
       sc = sl_bt_connection_set_parameters(
           opened->connection,
-          48,    /* min interval: 48 * 1.25ms = 60ms */
-          80,    /* max interval: 80 * 1.25ms = 100ms */
-          0,     /* slave latency: 0 (respond every event) */
-          640);  /* supervision timeout: 640 * 10ms = 6.4s */
+          24,     /* min interval: 24 * 1.25ms = 30ms */
+          40,     /* max interval: 40 * 1.25ms = 50ms */
+          0,      /* slave latency: 0 (respond every event) */
+          600,    /* supervision timeout: 600 * 10ms = 6.0s */
+          0,      /* ce_len min */
+          0xFFFF);/* ce_len max */
       tarang_ble_status_ok("request connection parameters", sc);
 
       /* Start the warmup timer — no notifications until CCCD storm is over */
