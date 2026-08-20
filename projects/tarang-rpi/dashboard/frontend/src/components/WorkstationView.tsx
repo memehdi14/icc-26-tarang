@@ -62,11 +62,9 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
 }) => {
   const rhythm = rhythmPresentation(latestEvent);
   const RhythmIcon = rhythm.icon;
-  const rhythmTone = rhythm.tone === 'critical'
-    ? 'border border-red-300 bg-red-50 text-red-800'
-    : rhythm.tone === 'warning'
-      ? 'border border-amber-300 bg-amber-50 text-amber-800'
-      : 'border border-emerald-300 bg-emerald-50 text-emerald-800';
+  const rhythmTone = (rhythm.tone === 'critical' || rhythm.tone === 'warning')
+    ? 'border border-red-200 bg-red-50 text-red-700'
+    : 'border border-emerald-200 bg-emerald-50 text-emerald-800';
 
   return (
     <div className="view-frame view-enter">

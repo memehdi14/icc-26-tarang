@@ -53,14 +53,14 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
           <h1 className="text-2xl font-bold text-[var(--ink)]">Device health</h1>
           <p className="text-xs text-[var(--ink-soft)] mt-0.5">Sensor contact, link quality, and edge hardware integrity.</p>
         </div>
-        <span className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-mono text-xs font-medium ${isConnected ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-600' : 'bg-amber-600'}`} />
+        <span className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-mono text-xs font-medium ${isConnected ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-600' : 'bg-red-600'}`} />
           {isConnected ? '● Connected' : isStale ? '● Stale telemetry' : '○ Disconnected'}
         </span>
       </header>
 
       {isStale && (
-        <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-xs text-amber-800" role="alert">
+        <div className="mb-4 flex items-center gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700" role="alert">
           <AlertTriangle size={15} />
           <span>Device telemetry paused. Last packet received {Math.round((Date.now() - lastSeenMs) / 1000)}s ago.</span>
         </div>
