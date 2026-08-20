@@ -15,6 +15,7 @@
 
 #include "tarang_imu.h"
 #include "tarang_time.h"
+#include "tarang_validation_stream.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -135,6 +136,47 @@ static volatile bool read14_fail = false;
 /* Diagnostics: per-transaction I2CSPM_Transfer() return code capture */
 static volatile I2C_TransferReturn_TypeDef last_status_read_ret = i2cTransferDone;
 static volatile I2C_TransferReturn_TypeDef last_burst_read_ret  = i2cTransferDone;
+
+#if TARANG_VALIDATION_STREAM_ACTIVE
+#define TARANG_VALIDATION_IMU_BLOCK_SAMPLES 10u
+#define TARANG_VALIDATION_IMU_SAMPLE_BYTES  14u
+
+static uint8_t s_validation_imu_payload[
+    9u + TARANG_VALIDATION_IMU_BLOCK_SAMPLES
+       * TARANG_VALIDATION_IMU_SAMPLE_BYTES];
+static uint8_t s_validation_imu_count = 0u;
+static size_t s_validation_imu_length = 0u;
+
+static void imu_emit_validation_sample(void)
+{
+  if (s_validation_imu_count == 0u) {
+    tarang_validation_put_u32(&s_validation_imu_payload[0], sample_count);
+    tarang_validation_put_u32(&s_validation_imu_payload[4],
+                              (uint32_t)(latest_sample_us / 1000ULL));
+    s_validation_imu_payload[8] = 0u;
+    s_validation_imu_length = 9u;
+  }
+
+  uint8_t *sample = &s_validation_imu_payload[s_validation_imu_length];
+  tarang_validation_put_u16(&sample[0], (uint16_t)accel_x);
+  tarang_validation_put_u16(&sample[2], (uint16_t)accel_y);
+  tarang_validation_put_u16(&sample[4], (uint16_t)accel_z);
+  tarang_validation_put_u16(&sample[6], (uint16_t)gyro_x);
+  tarang_validation_put_u16(&sample[8], (uint16_t)gyro_y);
+  tarang_validation_put_u16(&sample[10], (uint16_t)gyro_z);
+  tarang_validation_put_u16(&sample[12], motion_mg);
+  s_validation_imu_length += TARANG_VALIDATION_IMU_SAMPLE_BYTES;
+  s_validation_imu_count++;
+  s_validation_imu_payload[8] = s_validation_imu_count;
+
+  if (s_validation_imu_count >= TARANG_VALIDATION_IMU_BLOCK_SAMPLES) {
+    tarang_validation_emit('I', s_validation_imu_payload,
+                           s_validation_imu_length);
+    s_validation_imu_count = 0u;
+    s_validation_imu_length = 0u;
+  }
+}
+#endif
 
 static volatile uint32_t status_read_ret_done        = 0;
 static volatile uint32_t status_read_ret_nack        = 0;
@@ -602,6 +644,9 @@ void tarang_imu_process(void)
       read_success++;
       consecutive_read_failures = 0u;
       imu_store_sample();
+#if TARANG_VALIDATION_STREAM_ACTIVE
+      imu_emit_validation_sample();
+#endif
     }
     else
     {
@@ -634,6 +679,9 @@ void tarang_imu_process(void)
     sample_count++;
     consecutive_read_failures = 0u;
     imu_store_sample();
+#if TARANG_VALIDATION_STREAM_ACTIVE
+    imu_emit_validation_sample();
+#endif
 
     /* Print every 100 samples (every 1 second at 100Hz) */
 #if TARANG_DEBUG_VERBOSE

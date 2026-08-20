@@ -92,6 +92,7 @@ next-env.d.ts
 tarang_clinical.db
 
 # DSP Captures & Generated Plots
+projects/tarang-firmware/Integration/captures/
 projects/tarang-dsp/integration_validation/plots/
 projects/tarang-dsp/integration_validation/captures/
 projects/tarang-dsp/dsp_diagnostic_output/

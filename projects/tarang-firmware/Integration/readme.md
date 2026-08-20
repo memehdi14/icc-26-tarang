@@ -4,7 +4,8 @@ This directory contains the functional-validation firmware for **Project TARANG*
 
 The authoritative pipeline, wire contract, known limitations, deployment flow,
 and validation gates are in
-**[TARANG_END_TO_END_ARCHITECTURE.md](TARANG_END_TO_END_ARCHITECTURE.md)**.
+**[TARANG_END_TO_END_ARCHITECTURE.md](documentation/TARANG_END_TO_END_ARCHITECTURE.md)**.
+The complete document index is in **[documentation/README.md](documentation/README.md)**.
 This is research firmware and is not a certified diagnostic medical device.
 
 ---
@@ -33,7 +34,7 @@ All 3 biometric and motion sensors connect to the EFR32MG26 via dedicated analog
 > **Validation power policy**: ECG remains at 250 Hz nominal, PPG at 100 Hz,
 > and IMU at 100 Hz. The application currently uses a 10 ms wake timer and
 > does not claim measured EM2 residency. See
-> [WHY_POWER_OPTIMIZATION_IS_DEFERRED.md](WHY_POWER_OPTIMIZATION_IS_DEFERRED.md).
+> [WHY_POWER_OPTIMIZATION_IS_DEFERRED.md](documentation/WHY_POWER_OPTIMIZATION_IS_DEFERRED.md).
 
 ---
 
@@ -112,25 +113,30 @@ commander flash build/base/Integration.hex --device EFR32MG26B510F3200IM48
 
 ## 4. Host Software & Live Telemetry
 
-* **Live Multi-Sensor Waveform Visualizer**:
-  ```powershell
-  python tarang_live_plot.py --port COM11
-  ```
-* **Serial CSV Logger**:
-  ```powershell
-  python log_vcom.py --port COM11
-  ```
-* **Release Locked COM Port**:
-  ```powershell
-  powershell -File find_com_blocker.ps1
-  ```
+The supported VCOM workflow uses the original guided logger:
+
+```powershell
+python log_vcom.py
+```
+
+It asks for the volunteer ID, resolves the VCOM port, opens it at 115200 baud,
+and asks for one board reset before recording. Stop with Ctrl+C. The raw capture
+is stored under `projects/tarang-dsp/integration_validation/captures/`, then ECG,
+PPG, IMU, AI, NLMS, and integrity plots are generated automatically under
+`projects/tarang-dsp/integration_validation/plots/`. Production BLE-to-dashboard
+ingestion remains owned by `projects/tarang-rpi/dashboard/backend/ble_gateway.py`.
+
+Before flashing, set the VCOM EUSART baud to `115200` through the Simplicity
+Studio component editor and regenerate the Platform project. A valid capture
+must contain `@V,1,250,100,100`; byte noise means the flashed firmware and
+logger baud rates do not match.
 
 ---
 
 ## 5. End-to-End Verification
 
 For the original model/DSP verification methodology, consult
-**[TESTING_GUIDE.md](TESTING_GUIDE.md)**. Its historical measurements must be
+**[TESTING_GUIDE.md](documentation/TESTING_GUIDE.md)**. Its historical measurements must be
 rerun against the current NLMS-enabled build:
 1. **Stage 0**: Pure-Python TFLite Model Sanity Check (`verify_model_stage0.py`)
 2. **Stage 1**: Offline DSP & Gate Replay (`verify_stage1_dsp_replay.py`)

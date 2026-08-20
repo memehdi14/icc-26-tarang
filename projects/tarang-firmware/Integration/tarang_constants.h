@@ -43,8 +43,11 @@ extern "C" {
 #define TARANG_ENABLE_BLE               1
 #define TARANG_ENABLE_NLMS              1
 #define TARANG_NLMS_APPLY_TO_DSP        1
-#define TARANG_ENABLE_AI_CIRCUIT_BREAKER 0  /* Re-enable only after overload validation. */
+#define TARANG_ENABLE_AI_CIRCUIT_BREAKER 1  /* Re-enable only after overload validation. */
 #define TARANG_ENABLE_RAW_ECG_STREAM    0
+#ifndef TARANG_ENABLE_VALIDATION_STREAM
+#define TARANG_ENABLE_VALIDATION_STREAM 1  /* Compact stream fits the stable 115200-baud VCOM. */
+#endif
 #define TARANG_ANY_SENSOR_ENABLED \
   (TARANG_ENABLE_ECG || TARANG_ENABLE_PPG || TARANG_ENABLE_IMU)
 

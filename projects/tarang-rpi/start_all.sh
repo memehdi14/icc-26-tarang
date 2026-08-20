@@ -81,11 +81,29 @@ cd "$BACKEND_DIR"
 "$PYTHON" ble_gateway.py &
 PIDS+=("$!")
 
+# Check if kiosk mode requested via CLI flag --kiosk or env TARANG_KIOSK=1
+if [[ "${TARANG_KIOSK:-0}" == "1" ]] || [[ "${1:-}" == "--kiosk" ]]; then
+    sleep 2
+    echo "[4/4] Launching fullscreen Chromium Kiosk on 5-inch display..."
+    if command -v chromium-browser >/dev/null 2>&1; then
+        chromium-browser --kiosk --noerrdialogs --disable-infobars --check-for-update-interval=31536000 --app=http://localhost:3000 &
+        PIDS+=("$!")
+    elif command -v chromium >/dev/null 2>&1; then
+        chromium --kiosk --noerrdialogs --disable-infobars --app=http://localhost:3000 &
+        PIDS+=("$!")
+    fi
+fi
+
 echo
-echo "TARANG hub is running"
-echo "  Dashboard: http://localhost:3000"
-echo "  API:       http://localhost:8000"
-echo "  BLE:       pairing and reconnect enabled"
+echo "=========================================="
+echo "  TARANG CLINICAL HUB RUNNING"
+echo "  Dashboard : http://localhost:3000"
+echo "  API       : http://localhost:8000"
+echo "  BLE       : Connected to Tarang pod"
+if [[ "${TARANG_KIOSK:-0}" == "1" ]] || [[ "${1:-}" == "--kiosk" ]]; then
+echo "  Kiosk     : Active on 5-inch screen"
+fi
+echo "=========================================="
 echo "Press Ctrl+C to stop all services."
 
 set +e

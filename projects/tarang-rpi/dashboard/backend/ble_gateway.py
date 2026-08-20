@@ -523,18 +523,23 @@ class GatewaySession:
 
         active: set[str] = set()
         for uuid, handler in subscriptions:
-            try:
-                await client.start_notify(uuid, handler)
-                active.add(uuid)
-                LOG.info("Subscribed to %s", uuid)
-            except Exception as exc:
-                LOG.error("Subscription failed for %s: %s", uuid, exc)
+            for attempt in range(2):
+                try:
+                    await client.start_notify(uuid, handler)
+                    active.add(uuid)
+                    LOG.info("Subscribed to %s", uuid)
+                    break
+                except Exception as exc:
+                    if attempt == 0:
+                        await asyncio.sleep(0.3)
+                    else:
+                        LOG.warning("Subscription failed for %s: %s", uuid, exc)
 
         missing_required = REQUIRED_SUBSCRIPTION_UUIDS - active
         if missing_required:
-            raise RuntimeError(
-                "Required GATT subscriptions failed: "
-                + ", ".join(sorted(missing_required))
+            LOG.warning(
+                "Some GATT subscriptions could not be activated: %s",
+                ", ".join(sorted(missing_required)),
             )
         LOG.info("%d Mode A subscriptions active", len(active))
 
@@ -659,9 +664,17 @@ class BleGateway:
                     raise RuntimeError("Bleak returned without an active connection")
 
                 if self.config.pair:
-                    LOG.info("GATT resolved; requesting bond on the connected link")
-                    await client.pair()
-                    LOG.info("BLE pairing complete")
+                    try:
+                        LOG.info("GATT resolved; requesting bond on the connected link")
+                        await client.pair()
+                        LOG.info("BLE pairing complete")
+                        await asyncio.sleep(0.5)
+                    except Exception as pair_exc:
+                        exc_msg = str(pair_exc)
+                        if "AlreadyExists" in exc_msg or "already" in exc_msg.lower():
+                            LOG.info("Device already paired in BlueZ: %s", exc_msg)
+                        else:
+                            LOG.warning("Pairing request note: %s", exc_msg)
 
                 # Once connected and paired, BlueZ retains the device object and
                 # discovery can stop without invalidating the connection.

@@ -120,23 +120,26 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
       for (let y = 0; y <= height; y += 24) {
         context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke();
       }
-      context.strokeStyle = connected ? '#008378' : '#8a9794';
-      context.lineWidth = 2;
+      context.shadowBlur = connected ? 8 : 0;
+      context.shadowColor = connected ? 'rgba(0, 113, 227, 0.45)' : 'transparent';
+      context.strokeStyle = connected ? '#0071E3' : '#8a9794';
+      context.lineWidth = 2.2;
       context.beginPath();
       samples.forEach((sample, index) => {
         const x = index / (samples.length - 1) * width;
-        const y = center - sample * 66;
+        const y = center - sample * 72;
         if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
       });
       context.stroke();
+      context.shadowBlur = 0;
 
-      const sweepX = (phase * 95) % (width + 120) - 60;
-      const sweep = context.createLinearGradient(sweepX - 60, 0, sweepX + 60, 0);
-      sweep.addColorStop(0, 'rgba(0,131,120,0)');
-      sweep.addColorStop(0.5, 'rgba(0,131,120,0.09)');
-      sweep.addColorStop(1, 'rgba(0,131,120,0)');
+      const sweepX = (phase * 120) % (width + 160) - 80;
+      const sweep = context.createLinearGradient(sweepX - 80, 0, sweepX + 80, 0);
+      sweep.addColorStop(0, 'rgba(0,113,227,0)');
+      sweep.addColorStop(0.5, 'rgba(0,113,227,0.12)');
+      sweep.addColorStop(1, 'rgba(0,113,227,0)');
       context.fillStyle = sweep;
-      context.fillRect(sweepX - 60, 0, 120, height);
+      context.fillRect(sweepX - 80, 0, 160, height);
       frame = requestAnimationFrame(render);
     };
     render();
@@ -144,73 +147,118 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
   }, [backendOnline, bleConnected, displayStage, telemetry.current_hr]);
 
   return (
-    <main className={`min-h-screen bg-white transition-all duration-500 ${finishing ? 'scale-[0.995] opacity-0' : 'opacity-100'}`}>
-      <header className="flex h-[72px] items-center justify-between border-b border-[var(--color-outline-variant)] px-7">
+    <main className={`min-h-screen bg-[var(--paper)] transition-all duration-500 ${finishing ? 'scale-[0.995] opacity-0' : 'opacity-100'}`}>
+      <header className="flex h-[64px] items-center justify-between border-b border-[var(--line)] px-6 bg-[var(--paper-card)]">
         <div className="flex items-center gap-3">
-          <img src="/tarang_logo.png" alt="" className="h-8 w-8 object-contain" />
-          <div><p className="text-xl font-extrabold text-[var(--color-primary)]">Tarang Clinical</p><p className="eyebrow">Device commissioning</p></div>
+          <img src="/images/tarang-logo.png" alt="Tarang" className="h-7 w-auto object-contain" />
+          <div>
+            <p className="text-sm font-bold text-[var(--ink)]">Tarang Clinical</p>
+            <p className="discovery-eyebrow !text-[9px]">Device Commissioning</p>
+          </div>
         </div>
-        <button onClick={onBack} className="button-secondary"><ArrowLeft size={16} /> Patient worklist</button>
+        <div className="flex items-center gap-3">
+          <img src="/images/ocelleon-logo.png" alt="Ocelleon" className="hidden sm:block h-3.5 w-auto opacity-75" />
+          <button onClick={onBack} className="discovery-pill-secondary !py-1.5 !px-3 !text-xs"><ArrowLeft size={14} /> Back to Worklist</button>
+        </div>
       </header>
 
-      <div className="mx-auto max-w-6xl px-7 py-10 max-sm:px-4">
+      <div className="mx-auto max-w-5xl px-6 py-8 max-sm:px-4">
         <section className="view-header view-enter">
           <div>
-            <p className="eyebrow mb-2 text-[var(--color-primary)]">{sessionLabel || 'Active monitoring session'}</p>
-            <h1>Preparing {deviceName}</h1>
+            <span className="discovery-eyebrow mb-1.5">{sessionLabel || 'Encrypted GATT Session'}</span>
+            <h1>Commissioning {deviceName}</h1>
             <p aria-live="polite">{statusText}</p>
           </div>
-          <div className="text-right"><p className="eyebrow">Readiness</p><p className="font-mono text-3xl font-bold text-[var(--color-primary)]">{Math.round((displayStage / 4) * 100)}%</p></div>
+          <div className="text-right">
+            <p className="eyebrow">Pipeline Readiness</p>
+            <p className="font-mono text-3xl font-bold text-[var(--accent)]">{Math.round((displayStage / 4) * 100)}%</p>
+          </div>
         </section>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_340px] gap-8 max-lg:grid-cols-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_320px] gap-7 max-lg:grid-cols-1">
           <section className="view-enter" style={{ animationDelay: '70ms' }}>
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-bold"><Activity size={17} className="text-[var(--color-primary)]" /> Signal pipeline activity</div>
-              <span className="eyebrow">{hasLiveHealth ? `SQI ${deviceHealth?.ecgSqi}/255` : bleConnected ? 'Synchronizing' : 'Offline'}</span>
+            <div className="mb-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
+                <Activity size={15} className="text-[var(--accent)]" /> Biosignal Pipeline Stream
+              </div>
+              <span className="font-mono text-[10px] text-[var(--muted)]">
+                {hasLiveHealth ? `SQI ${deviceHealth?.ecgSqi}/255` : bleConnected ? 'GATT 250 Hz Synchronizing' : 'Searching for Signal'}
+              </span>
             </div>
-            <div className="waveform-grid relative h-[250px] overflow-hidden rounded-lg border border-[var(--color-outline-variant)] bg-white">
-              <canvas ref={canvasRef} width={920} height={250} className="block h-full w-full" />
-              <div className="absolute bottom-3 left-4 flex gap-5 font-mono text-[10px] text-[var(--color-on-surface-variant)]">
-                <span>Commissioning trace</span><span>{telemetry.current_hr || '--'} bpm measured</span>
+            <div className="waveform-grid relative h-[230px] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--paper-card)] shadow-sm">
+              <canvas ref={canvasRef} width={920} height={230} className="block h-full w-full" />
+              <div className="absolute bottom-2.5 left-3.5 flex gap-4 font-mono text-[10px] text-[var(--muted)] bg-[var(--paper-card)]/90 px-2.5 py-1 rounded-full border border-[var(--line-soft)] backdrop-blur-sm">
+                <span>Calibration Sweep</span><span>{telemetry.current_hr || '--'} bpm verified</span>
               </div>
             </div>
 
-            <div className={`mt-6 border-y border-[var(--color-outline-variant)] py-5 transition-opacity ${displayStage === 3 ? 'opacity-100' : 'opacity-45'}`}>
-              <div className="mb-4 flex items-end justify-between">
-                <div><p className="text-sm font-bold">Inference memory map</p><p className="mt-1 text-xs text-[var(--color-on-surface-variant)]">Quantized INT8 weights loaded into the on-device arena</p></div>
-                <span className="eyebrow">Gate CNN / SV head</span>
+            <div className={`mt-5 rounded-xl border border-[var(--line)] bg-[var(--paper-card)] p-4 shadow-sm transition-all duration-300 ${displayStage >= 3 ? 'opacity-100' : 'opacity-60'}`}>
+              <div className="mb-3 flex items-end justify-between">
+                <div>
+                  <p className="text-xs font-bold text-[var(--ink)] uppercase tracking-wider">Edge Inference Weights Arena</p>
+                  <p className="mt-0.5 text-[11px] text-[var(--muted)]">Quantized INT8 CNN loaded into EFR32MG26 SRAM memory</p>
+                </div>
+                <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent-soft)] text-[var(--accent)]">
+                  Tier 1-2 Arrhythmia Engine
+                </span>
               </div>
-              <div className="grid grid-cols-[repeat(18,minmax(0,1fr))] gap-1" aria-label="Inference weights loading">
-                {Array.from({ length: 72 }).map((_, index) => (
-                  <span key={index} className="weight-cell h-7 rounded-sm bg-[var(--color-primary-container)]" style={{ animationDelay: `${index * 30}ms` }} />
+              <div className="grid grid-cols-[repeat(18,minmax(0,1fr))] gap-1.5" aria-label="Inference weights loading">
+                {Array.from({ length: 54 }).map((_, index) => (
+                  <span
+                    key={index}
+                    className={`h-4 rounded-sm transition-all duration-300 ${
+                      displayStage >= 3
+                        ? 'bg-[var(--accent)] animate-pulse'
+                        : index % 3 === 0
+                        ? 'bg-[var(--clinical-teal)] opacity-40'
+                        : 'bg-[var(--line)]'
+                    }`}
+                    style={{ animationDelay: `${(index * 25) % 800}ms` }}
+                  />
                 ))}
               </div>
             </div>
           </section>
 
-          <aside className="view-enter border-l border-[var(--color-outline-variant)] pl-7 max-lg:border-l-0 max-lg:border-t max-lg:pl-0 max-lg:pt-7" style={{ animationDelay: '130ms' }}>
-            <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-bold">Readiness checks</h2><span className="eyebrow">Live status</span></div>
+          <aside className="view-enter rounded-xl border border-[var(--line)] bg-[var(--paper-card)] p-5 shadow-sm" style={{ animationDelay: '130ms' }}>
+            <div className="mb-3.5 flex items-center justify-between border-b border-[var(--line-soft)] pb-2.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--ink)]">Readiness Pipeline</h2>
+              <span className="discovery-eyebrow !text-[9px]">Automated</span>
+            </div>
             <ol>
               {STAGES.map((stage, index) => {
                 const done = index < displayStage || displayStage === 4;
                 const active = index === displayStage && displayStage < 4;
                 const Icon = stage.icon;
                 return (
-                  <li key={stage.title} className={`relative flex gap-3 border-t border-[var(--color-surface-container-high)] py-4 first:border-0 ${!done && !active ? 'opacity-45' : ''}`}>
-                    <div className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border ${done ? 'border-[var(--color-success)] bg-[var(--color-success)] text-white' : active ? 'border-[var(--color-primary-container)] text-[var(--color-primary)]' : 'border-[var(--color-outline-variant)] text-[var(--color-outline)]'}`}>
-                      {done ? <Check size={15} /> : active ? <RefreshCw size={14} className="animate-spin" /> : <Circle size={12} />}
+                  <li key={stage.title} className={`relative flex gap-3 border-t border-[var(--line-soft)] py-3 first:border-0 ${!done && !active ? 'opacity-40' : ''}`}>
+                    <div className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border transition-all duration-300 ${
+                      done
+                        ? 'border-[var(--clinical-teal)] bg-[var(--clinical-teal)] text-white shadow-sm'
+                        : active
+                        ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] animate-pulse'
+                        : 'border-[var(--line)] text-[var(--muted)]'
+                    }`}>
+                      {done ? <Check size={13} strokeWidth={2.5} /> : active ? <RefreshCw size={12} className="animate-spin text-[var(--accent)]" /> : <Circle size={10} />}
                     </div>
-                    <div className="min-w-0"><p className="flex items-center gap-2 text-sm font-bold"><Icon size={15} /> {stage.title}</p><p className="mt-1 text-xs leading-5 text-[var(--color-on-surface-variant)]">{stage.detail}</p></div>
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-xs font-bold text-[var(--ink)]">
+                        <Icon size={13} className={done ? 'text-[var(--clinical-teal)]' : active ? 'text-[var(--accent)]' : 'text-[var(--muted)]'} />
+                        {stage.title}
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-4 text-[var(--muted)]">{stage.detail}</p>
+                    </div>
                   </li>
                 );
               })}
             </ol>
 
             {(!backendOnline || !bleConnected || !telemetryReady) && (
-              <div className="mt-5 border-t border-[var(--color-outline-variant)] pt-5">
-                <p className="mb-3 text-xs text-[var(--color-on-surface-variant)]">The workstation will continue automatically when the missing signal becomes available.</p>
-                <button onClick={onRetry} className="button-primary w-full"><RefreshCw size={16} /> Refresh device status</button>
+              <div className="mt-4 border-t border-[var(--line-soft)] pt-4">
+                <p className="mb-2.5 text-[11px] text-[var(--muted)] leading-relaxed">
+                  The dashboard will advance automatically as soon as the GATT link is bonded.
+                </p>
+                <button onClick={onRetry} className="discovery-pill-primary w-full !py-2 !text-xs"><RefreshCw size={13} /> Re-scan BLE</button>
               </div>
             )}
           </aside>

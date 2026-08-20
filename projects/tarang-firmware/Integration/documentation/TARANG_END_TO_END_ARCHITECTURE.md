@@ -2,7 +2,7 @@
 
 Status: Functional integration build; hardware and clinical validation pending
 
-Date: 2026-08-19
+Date: 2026-08-20
 
 Target: EFR32MG26B510F3200IM48 plus Raspberry Pi/BlueZ hub
 
@@ -22,10 +22,10 @@ It is a research and hackathon validation system. It is not a certified medical 
 | PPG metrics | Implemented with validity and motion gates | Device-specific SpO2 calibration |
 | IMU-NLMS | Implemented ahead of ECG DSP/AI | Prove QRS preservation and motion benefit |
 | ECG DSP | Implemented | Replay plus live R-peak accuracy |
-| INT8 AI cascade | Connected and deferred outside DMA draining | Revalidate after NLMS distribution shift |
+| INT8 AI cascade | Connected; Gate and SV independently MVP-profiled on xG26 | DWT timing in full firmware and revalidation after NLMS distribution shift |
 | Clinical engine | Connected to every classified beat | Protocol-level rhythm validation |
-| BLE | Bonded/encrypted contract and reliable event indications implemented | Final Raspberry Pi hardware session |
-| Pi gateway | Scan, connect, pair, subscribe, decode, and publish implemented | Final BlueZ run with this firmware |
+| BLE | Bonded/encrypted contract and reliable event indications implemented; short Pi session passed | Reconnect, stale-key recovery, event integrity, and long soak |
+| Pi gateway | Scan, connect, pair, 14 subscriptions, decode, and publish demonstrated | Backpressure, restart recovery, and long BlueZ soak |
 | Backend/database | Implemented; no fake patient or clinical seed data | Deployment, auth, backup, retention work |
 | Frontend | Patient onboarding, initialization, workstation, diagnostics, and settings compile | Browser and operator acceptance test |
 
@@ -252,6 +252,30 @@ For suspicious beats:
 Detected beats enter a bounded four-entry deferred queue. DMA draining remains short; the super-loop runs model inference after current sensor work. A queue overflow is counted and must remain zero during validation.
 
 The 30-beat suspicious-rate circuit breaker is monitor-only in this build (`TARANG_ENABLE_AI_CIRCUIT_BREAKER=0`). Automatically disabling AI at more than 20% suspicious beats could suppress genuine high abnormal burden. It may be re-enabled only after overload and clinical behavior are validated.
+
+### 8.3 Measured Isolated MVP Performance
+
+Simplicity Machine Learning profiled the canonical Gate and SV flatbuffers on a
+physical BRD2608A (`EFR32MG26B510F3200IM68`) at 78 MHz with HW Accelerated
+(MVP) kernels. The application target is the same xG26 CPU/MVP architecture in
+the IM48 package.
+
+| Metric | Gate | SV |
+| --- | ---: | ---: |
+| Inference time | **12.634 ms** | **10.010 ms** |
+| Throughput | 79.15/s | 99.90/s |
+| CPU cycles | 463,653 | 385,573 |
+| MVP cycles | 558,363 | 434,004 |
+| MVP stalls | 226,186 | 165,618 |
+| CPU utilization | 45.4% | 47.0% |
+| MVP layers | 11 | 12 |
+| MACs | 707,776 | 539,360 |
+
+The isolated worst-case serial cascade is `22.644 ms`. The dominant CPU
+fallback is `MEAN` (`3.570 ms` Gate, `2.686 ms` SV); convolution and dense
+compute is correctly accelerated on MVP. These measurements validate model
+execution speed, not complete firmware latency. The full sensor/NLMS/BLE build
+still requires DWT cycle timing with p50/p95/p99 reporting.
 
 ## 9. Clinical Engine
 
@@ -484,7 +508,7 @@ Power work is deferred, not rejected. After golden traces exist, optimize one ch
 7. EM2 percentage is reported as unknown/zero until measured residency exists.
 8. Battery and peripheral RSSI are not supplied by the current firmware contract.
 9. The ECG timebase uses 250 Hz math over a roughly 250.137 Hz hardware trigger.
-10. Final Pi pairing, subscriptions, live sensor metrics, event transfer, and dashboard behavior require one hardware-in-loop run after flashing this exact build.
+10. A short Pi hardware-in-loop run successfully paired, verified GATT, enabled all 14 subscriptions, and posted vitals, analytics, diagnostics, and events. Long soak, forced reconnect, event-snippet integrity, and operator workflow tests remain pending.
 11. SQLite, wildcard CORS, and no user authentication are hackathon choices, not production/HIPAA controls.
 
 ## 18. Verified in This Integration Pass
@@ -494,5 +518,8 @@ Power work is deferred, not rejected. After golden traces exist, optimize one ch
 - All 14 backend and BLE protocol tests pass.
 - Next.js production build, lint, and TypeScript validation pass.
 - Physical PPG/IMU acquisition and phone BLE connection were reported working by the operator before this final build.
+- Raspberry Pi BlueZ/Bleak connected and verified GATT with all 14 Mode A subscriptions active.
+- FastAPI returned success for live `/api/vitals`, `/api/analytics`, `/api/events`, and `/api/diagnostics/update` ingestion.
+- Isolated xG26 MVP profiles measured Gate at `12.634 ms` and SV at `10.010 ms`.
 
-The remaining truth test is hardware: flash this exact firmware, run `ble_test.py` on the Pi, then run the full stack and record the firmware plus gateway logs for the validation record.
+The remaining truth tests are integrated timing, energy capture, long-duration reliability, reference-instrument signal validation, and controlled human-subject validation. This is ready for a supervised hackathon demonstration, not clinical or unattended production deployment.

@@ -42,6 +42,7 @@
 #include "tarang_imu.h"
 #include "tarang_ble.h"
 #include "tarang_time.h"
+#include "tarang_validation_stream.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -106,6 +107,21 @@ void app_init(void)
 
   printf("\r\n");
   printf("==========================================\r\n");
+
+#if TARANG_ENABLE_VALIDATION_STREAM
+#if TARANG_VALIDATION_STREAM_ACTIVE
+  printf("[VALIDATION] Compact full-rate VCOM stream enabled at %u baud.\r\n",
+         (unsigned)SL_IOSTREAM_EUSART_VCOM_BAUDRATE);
+  printf("@V,%u,%u,%u,%u\r\n",
+         TARANG_VALIDATION_STREAM_VERSION,
+         TARANG_ECG_SAMPLE_RATE_HZ,
+         TARANG_PPG_SAMPLE_RATE_HZ,
+         TARANG_IMU_SAMPLE_RATE_HZ);
+#else
+  printf("[VALIDATION] Stream disabled: set VCOM baud to %u in Simplicity Studio.\r\n",
+         (unsigned)TARANG_VALIDATION_STREAM_REQUIRED_BAUD);
+#endif
+#endif
   printf("  TARANG INTEGRATION v%s\r\n", TARANG_FW_VERSION_STRING);
   printf("  Target: EFR32MG26B510F3200IM48 (Series 2)\r\n");
   printf("  Active: %s%s%s%s\r\n",
@@ -337,6 +353,21 @@ void app_process_action(void)
     if (found && red == 0 && ir == 0 && cnt > 50) {
       printf("  [PPG] !! Sensor found but readings are ZERO — check LED current config\r\n");
     }
+
+#if TARANG_VALIDATION_STREAM_ACTIVE
+    tarang_ppg_metrics_t metrics = {0};
+    (void)tarang_ppg_get_metrics(&metrics);
+    printf("@M,%lu,%lu,%u,%u,%u,%u,%u,%u,%u\r\n",
+           (unsigned long)now_ms,
+           (unsigned long)metrics.window_end_sample,
+           metrics.spo2_pct,
+           metrics.pulse_rate_bpm,
+           metrics.signal_quality,
+           metrics.perfusion_index_x100,
+           metrics.finger_present ? 1u : 0u,
+           metrics.motion_rejected ? 1u : 0u,
+           metrics.valid ? 1u : 0u);
+#endif
   }
 #endif
 
@@ -391,6 +422,27 @@ void app_process_action(void)
            nlms->suppression_pct_x10 / 10u,
            nlms->suppression_pct_x10 % 10u,
            (unsigned long)nlms->safety_reset_count);
+
+#if TARANG_VALIDATION_STREAM_ACTIVE
+    printf("@D,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%u,%u,%u,%lu,%lu,%lu\r\n",
+           (unsigned long)now_ms,
+           (unsigned long)tarang_ecg_get_sample_count(),
+           (unsigned long)tarang_ecg_get_overrun_count(),
+           (unsigned long)tarang_ppg_get_sample_count(),
+           (unsigned long)tarang_imu_get_sample_count(),
+           (unsigned long)pipeline->tier0_evals,
+           (unsigned long)pipeline->tier1_fires,
+           (unsigned long)pipeline->tier2_fires,
+           (unsigned long)pipeline->class_n_count,
+           (unsigned long)pipeline->class_s_count,
+           (unsigned long)pipeline->class_v_count,
+           (unsigned)nlms->bypass_reason,
+           nlms->motion_mg,
+           nlms->suppression_pct_x10,
+           (unsigned long)nlms->safety_reset_count,
+           (unsigned long)pipeline->diag.dropped_frames,
+           (unsigned long)tarang_dsp_get_pending_overflow_count(&pipeline->dsp));
+#endif
   }
 
   printf("========================================\r\n");

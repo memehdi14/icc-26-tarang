@@ -21,6 +21,8 @@
 #include <string.h>
 
 #include "tarang_constants.h"
+#include "tarang_time.h"
+#include "tarang_validation_stream.h"
 
 #include "sl_i2cspm.h"
 #include "sl_i2cspm_instances.h"
@@ -117,6 +119,44 @@ static float ppg_ir_ac_window[PPG_METRIC_WINDOW_SAMPLES];
 static uint32_t last_metric_sample_count = 0u;
 
 static volatile I2C_TransferReturn_TypeDef last_ppg_i2c_ret = i2cTransferDone;
+
+#if TARANG_VALIDATION_STREAM_ACTIVE
+#define TARANG_VALIDATION_PPG_BLOCK_SAMPLES 10u
+#define TARANG_VALIDATION_PPG_SAMPLE_BYTES  6u
+
+static uint8_t s_validation_ppg_payload[
+    9u + TARANG_VALIDATION_PPG_BLOCK_SAMPLES
+       * TARANG_VALIDATION_PPG_SAMPLE_BYTES];
+static uint8_t s_validation_ppg_count = 0u;
+static size_t s_validation_ppg_length = 0u;
+
+static void ppg_emit_validation_sample(uint32_t sample_index,
+                                       uint32_t timestamp_ms,
+                                       uint32_t red,
+                                       uint32_t ir)
+{
+    if (s_validation_ppg_count == 0u) {
+        tarang_validation_put_u32(&s_validation_ppg_payload[0], sample_index);
+        tarang_validation_put_u32(&s_validation_ppg_payload[4], timestamp_ms);
+        s_validation_ppg_payload[8] = 0u;
+        s_validation_ppg_length = 9u;
+    }
+
+    uint8_t *sample = &s_validation_ppg_payload[s_validation_ppg_length];
+    tarang_validation_put_u24(&sample[0], red);
+    tarang_validation_put_u24(&sample[3], ir);
+    s_validation_ppg_length += TARANG_VALIDATION_PPG_SAMPLE_BYTES;
+    s_validation_ppg_count++;
+    s_validation_ppg_payload[8] = s_validation_ppg_count;
+
+    if (s_validation_ppg_count >= TARANG_VALIDATION_PPG_BLOCK_SAMPLES) {
+        tarang_validation_emit('P', s_validation_ppg_payload,
+                               s_validation_ppg_length);
+        s_validation_ppg_count = 0u;
+        s_validation_ppg_length = 0u;
+    }
+}
+#endif
 
 static bool max30102_read_reg(uint8_t reg, uint8_t *value);
 static bool max30102_write_reg(uint8_t reg, uint8_t value);
@@ -611,6 +651,11 @@ void tarang_ppg_process(void)
         ppg_sample_count++;
         drained++;
         status_has_data = false;
+
+#if TARANG_VALIDATION_STREAM_ACTIVE
+        ppg_emit_validation_sample(ppg_sample_count, tarang_now_ms(),
+                                   red_sample, ir_sample);
+#endif
     }
 
     ppg_update_metrics();

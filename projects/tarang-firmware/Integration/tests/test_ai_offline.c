@@ -37,7 +37,7 @@
  *   - Re-check ISSUE2_IMPLEMENTATION_PLAN.md bug fixes 1-7
  *
  * References:
- *   - TESTING_GUIDE.md Stage 2
+ *   - documentation/TESTING_GUIDE.md Stage 2
  *   - ISSUE2_IMPLEMENTATION_PLAN.md (corrected tarang_ai.cc)
  *   - verify_model_stage0.py (Stage 0 reference values)
  ******************************************************************************/
@@ -236,7 +236,7 @@ int main(void)
     printf("STAGE 2 VERIFICATION: ✅ PASS\n");
     printf("═══════════════════════════════════════════════════════════════\n");
     printf("\n➡️  Next: Stage 3 (firmware build + boot log check)\n");
-    printf("    See TESTING_GUIDE.md Stage 3 for instructions\n\n");
+    printf("    See documentation/TESTING_GUIDE.md Stage 3 for instructions\n\n");
     
     return 0;
 }

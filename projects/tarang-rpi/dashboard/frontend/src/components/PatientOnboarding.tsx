@@ -118,39 +118,46 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-white">
-        <header className="flex h-[72px] items-center border-b border-[var(--color-outline-variant)] px-7">
-          <img src="/tarang_logo.png" alt="" className="mr-3 h-8 w-8 object-contain" />
-          <span className="text-xl font-extrabold text-[var(--color-primary)]">Tarang Clinical</span>
+      <main className="min-h-screen bg-[var(--paper)]">
+        <header className="flex h-[64px] items-center border-b border-[var(--line)] px-7 bg-[var(--paper-card)]">
+          <img src="/images/tarang-logo.png" alt="Tarang" className="mr-3 h-7 w-auto object-contain" />
+          <div className="flex items-center gap-3">
+            <span className="text-base font-bold text-[var(--ink)]">Tarang Clinical</span>
+            <span className="hidden sm:inline-block h-3.5 w-px bg-[var(--line)]" />
+            <img src="/images/ocelleon-logo.png" alt="Ocelleon" className="hidden sm:block h-3.5 w-auto opacity-70" />
+          </div>
         </header>
-        <section className="mx-auto grid min-h-[calc(100vh-72px)] max-w-5xl grid-cols-[1fr_320px] items-center gap-16 px-8 max-md:grid-cols-1 max-md:gap-8">
+        <section className="mx-auto grid min-h-[calc(100vh-64px)] max-w-5xl grid-cols-[1fr_320px] items-center gap-16 px-8 max-md:grid-cols-1 max-md:gap-8">
           <div className="view-enter">
-            <p className="eyebrow mb-3 text-[var(--color-primary)]">Clinical workstation</p>
-            <h1 className="max-w-xl text-4xl font-extrabold leading-tight text-[var(--color-on-surface)] max-md:text-3xl">
-              Preparing the patient worklist
+            <span className="discovery-eyebrow mb-2">ICU Clinical Workstation</span>
+            <h1 className="max-w-xl text-3xl font-bold leading-tight text-[var(--ink)] max-md:text-2xl">
+              Preparing Patient Telemetry
             </h1>
-            <p className="mt-4 max-w-lg text-sm text-[var(--color-on-surface-variant)]">
-              Verifying the clinical database, patient records, and monitoring services.
+            <p className="mt-3 max-w-lg text-xs text-[var(--ink-soft)] leading-relaxed">
+              Verifying SQLite clinical database, bonded EFR32MG26 GATT records, and edge arrhythmia classification runtime.
             </p>
-            <div className="waveform-grid relative mt-9 h-28 overflow-hidden rounded-lg border border-[var(--color-outline-variant)]">
-              <div className="absolute inset-y-0 left-0 w-24 animate-pulse bg-[var(--color-primary-fixed)]/30" />
+            <div className="waveform-grid relative mt-7 h-24 overflow-hidden rounded-lg border border-[var(--line)] bg-[var(--paper-card)]">
+              <div className="absolute inset-y-0 left-0 w-24 animate-pulse bg-[var(--accent-soft)]" />
               <svg viewBox="0 0 720 112" className="h-full w-full" aria-hidden="true">
-                <path d="M0 58H92l12-8 9 18 12-62 10 99 11-47h96l10-8 8 16 13-58 10 94 12-44h101l10-9 9 18 12-62 10 99 11-47h98l11-8 8 16 13-57 10 92 12-43h86" fill="none" stroke="#008378" strokeWidth="2" />
+                <path d="M0 58H92l12-8 9 18 12-62 10 99 11-47h96l10-8 8 16 13-58 10 94 12-44h101l10-9 9 18 12-62 10 99 11-47h98l11-8 8 16 13-57 10 92 12-43h86" fill="none" stroke="#0071E3" strokeWidth="2" />
               </svg>
             </div>
           </div>
-          <div className="border-l border-[var(--color-outline-variant)] pl-8 max-md:border-l-0 max-md:border-t max-md:pt-8">
+          <div className="border-l border-[var(--line)] pl-8 max-md:border-l-0 max-md:border-t max-md:pt-8">
             {[
-              [Database, 'Clinical database', 'Connecting'],
-              [ShieldCheck, 'Security context', 'Verified'],
-              [UsersRound, 'Patient index', 'Loading'],
+              [Database, 'Clinical Database', 'Connected'],
+              [ShieldCheck, 'Security Context', 'AES-128 Ready'],
+              [UsersRound, 'Patient Worklist', 'Loaded'],
             ].map(([Icon, label, value], index) => {
               const StageIcon = Icon as typeof Database;
               return (
-                <div key={label as string} className="flex items-center gap-3 border-b border-[var(--color-surface-container-high)] py-4 last:border-0">
-                  <StageIcon size={18} className="text-[var(--color-primary)]" />
-                  <div className="flex-1"><p className="text-sm font-semibold">{label as string}</p><p className="eyebrow mt-0.5">{value as string}</p></div>
-                  <span className="status-dot pulse-dot text-[var(--color-primary-container)]" style={{ animationDelay: `${index * 180}ms` }} />
+                <div key={label as string} className="flex items-center gap-3 border-b border-[var(--line-soft)] py-3.5 last:border-0">
+                  <StageIcon size={16} className="text-[var(--accent)]" />
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-[var(--ink)]">{label as string}</p>
+                    <p className="font-mono text-[10px] text-[var(--muted)]">{value as string}</p>
+                  </div>
+                  <span className="h-2 w-2 rounded-full bg-[var(--clinical-teal)]" style={{ animationDelay: `${index * 180}ms` }} />
                 </div>
               );
             })}
@@ -161,50 +168,58 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
   }
 
   return (
-    <main className="min-h-screen bg-white">
-      <header className="sticky top-0 z-30 border-b border-[var(--color-outline-variant)] bg-white/95">
-        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between px-7">
+    <main className="min-h-screen bg-[var(--paper)]">
+      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--paper-card)]/95 backdrop-blur-md">
+        <div className="mx-auto flex h-[64px] max-w-[1440px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
-            <img src="/tarang_logo.png" alt="" className="h-8 w-8 object-contain" />
+            <img src="/images/tarang-logo.png" alt="Tarang" className="h-7 w-auto object-contain" />
             <div>
-              <div className="text-xl font-extrabold text-[var(--color-primary)]">Tarang Clinical</div>
-              <div className="eyebrow">Patient operations</div>
+              <div className="text-sm font-bold text-[var(--ink)]">Tarang Clinical</div>
+              <div className="discovery-eyebrow !text-[9px] !gap-1">ICU Telemetry Worklist</div>
             </div>
           </div>
-          <button onClick={() => setShowCreate(true)} className="button-primary">
-            <Plus size={17} /> <span className="max-sm:hidden">Add patient</span>
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="hidden items-center gap-3 border-r border-[var(--line)] pr-4 sm:flex">
+              <img src="/images/ocelleon-logo.png" alt="Team Ocelleon" className="h-3.5 w-auto opacity-75" />
+              <img src="/images/silabs-logo.jpg" alt="Silicon Labs" className="h-3.5 w-auto rounded opacity-60" />
+            </div>
+            <button onClick={() => setShowCreate(true)} className="discovery-pill-primary">
+              <Plus size={15} /> <span>New Patient</span>
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1440px] px-7 py-8 max-sm:px-4">
+      <div className="mx-auto max-w-[1440px] px-6 py-6 max-sm:px-4">
         <div className="view-header view-enter">
           <div>
-            <p className="eyebrow mb-2 text-[var(--color-primary)]">Critical care worklist</p>
-            <h1>Select a monitoring context</h1>
-            <p>Choose a patient and assign an available Tarang device before starting telemetry.</p>
+            <span className="discovery-eyebrow mb-1">Telemetry Management</span>
+            <h1>Patient Worklist</h1>
+            <p>Select an admitted patient to begin live BLE cardiac telemetry and arrhythmia capture.</p>
           </div>
-          <div className="flex divide-x divide-[var(--color-outline-variant)] border border-[var(--color-outline-variant)] bg-[var(--color-surface)]">
-            <div className="px-5 py-3"><p className="eyebrow">Patients</p><p className="font-mono text-xl font-bold">{patients.length}</p></div>
-            <div className="px-5 py-3"><p className="eyebrow">Active</p><p className="font-mono text-xl font-bold text-[var(--color-success)]">{activeSessionCount}</p></div>
-            <div className="px-5 py-3"><p className="eyebrow">Devices ready</p><p className="font-mono text-xl font-bold">{availableDevices.length}</p></div>
+          <div className="flex divide-x divide-[var(--line)] border border-[var(--line)] rounded-lg bg-[var(--paper-card)] shadow-sm">
+            <div className="px-4 py-2.5"><p className="eyebrow">Patients</p><p className="font-mono text-lg font-bold text-[var(--ink)]">{patients.length}</p></div>
+            <div className="px-4 py-2.5"><p className="eyebrow">Active</p><p className="font-mono text-lg font-bold text-[var(--clinical-teal)]">{activeSessionCount}</p></div>
+            <div className="px-4 py-2.5"><p className="eyebrow">Pods Ready</p><p className="font-mono text-lg font-bold text-[var(--ink)]">{availableDevices.length}</p></div>
           </div>
         </div>
 
         {(error || actionError) && (
-          <div className="mb-5 flex items-center justify-between gap-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
-            <span className="flex items-center gap-2"><AlertCircle size={17} />{actionError || error}</span>
-            {error && <button onClick={onRetry} className="icon-button" title="Retry loading"><RefreshCw size={17} /></button>}
+          <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-red-200 bg-[#fff1f2] px-4 py-2.5 text-xs text-[var(--cardiac-rose)]" role="alert">
+            <span className="flex items-center gap-2 font-medium"><AlertCircle size={15} />{actionError || error}</span>
+            {error && <button onClick={onRetry} className="icon-button" title="Retry"><RefreshCw size={15} /></button>}
           </div>
         )}
 
-        <section className="clinical-panel view-enter overflow-hidden bg-white" style={{ animationDelay: '70ms' }}>
-          <div className="flex items-center justify-between gap-4 border-b border-[var(--color-outline-variant)] px-5 py-4 max-sm:flex-col max-sm:items-stretch">
-            <div className="flex items-center gap-2 text-sm font-bold"><UsersRound size={18} className="text-[var(--color-primary)]" /> Current admissions</div>
+        <section className="clinical-panel view-enter overflow-hidden" style={{ animationDelay: '70ms' }}>
+          <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] px-5 py-3.5 max-sm:flex-col max-sm:items-stretch">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
+              <UsersRound size={16} className="text-[var(--accent)]" /> Admitted Patients
+            </div>
             <label className="relative w-80 max-sm:w-full">
-              <Search size={16} className="pointer-events-none absolute left-3 top-3 text-[var(--color-outline)]" />
+              <Search size={15} className="pointer-events-none absolute left-3 top-2.5 text-[var(--muted)]" />
               <span className="sr-only">Search patients</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, MRN, bed, or physician" className="form-field !mt-0 !pl-9" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, MRN, bed, physician..." className="form-field !mt-0 !pl-8.5 !py-1.5 !text-xs" />
             </label>
           </div>
 

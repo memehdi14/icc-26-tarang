@@ -99,6 +99,34 @@ bool tarang_ble_is_notifications_enabled(void);
 void tarang_ble_process(tarang_pipeline_t *pipeline);
 
 /***************************************************************************//**
+ * @brief Heart Rate Source Classification Enum for Sensor Fusion.
+ ******************************************************************************/
+typedef enum {
+  TARANG_HR_SOURCE_NONE = 0,
+  TARANG_HR_SOURCE_ECG = 1,
+  TARANG_HR_SOURCE_PPG = 2,
+  TARANG_HR_SOURCE_AGREED = 3
+} tarang_hr_source_t;
+
+/***************************************************************************//**
+ * @brief Cross-validate ECG heart rate and PPG pulse rate with intelligent fallback.
+ *
+ * Compares rates from both sensors:
+ * - If both agree (<= 15 BPM delta), outputs validated rate.
+ * - If divergence is detected (> 15 BPM delta), evaluates signal quality (SQI),
+ *   optical motion rejection, and lead contact to fall back to the real physiological rate.
+ *
+ * @param[in]  pipeline     Pointer to the active pipeline (ECG engine).
+ * @param[in]  ppg_metrics  Pointer to the latest PPG metrics (MAX30102).
+ * @param[out] source_out   Optional pointer to store selected source.
+ * @return Fused heart rate in BPM (0 if neither sensor is reliable).
+ ******************************************************************************/
+uint16_t tarang_fuse_heart_rate(
+    const tarang_pipeline_t *pipeline,
+    const void *ppg_metrics,
+    tarang_hr_source_t *source_out);
+
+/***************************************************************************//**
  * @brief Send Mode A Service A Vitals notification (Heart Rate + SpO2 + Timestamp).
  ******************************************************************************/
 bool tarang_ble_send_vitals(uint16_t hr_bpm, uint8_t spo2_pct, uint32_t ts_ms);

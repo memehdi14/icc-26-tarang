@@ -585,6 +585,103 @@ void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_p
 }
 
 /******************************************************************************
+ *          HEART RATE CROSS-VALIDATION & FALLBACK FUSION
+ *
+ * Evaluates both ECG and PPG pulse/heart rates.
+ * - If both are active and agree within tolerance (<= 15 BPM), ECG is primary.
+ * - If both diverge (> 15 BPM), evaluates signal quality (SQI), motion flags,
+ *   and lead status to fall back to whichever sensor is physiologically real.
+ * - If only one sensor is valid (e.g. finger absent or ECG lead off),
+ *   smoothly falls back to the valid sensor.
+ ******************************************************************************/
+#define TARANG_HR_MAX_VARIANCE_BPM  15u
+#define TARANG_HR_MIN_PHYSIOLOGICAL 40u
+#define TARANG_HR_MAX_PHYSIOLOGICAL 220u
+
+uint16_t tarang_fuse_heart_rate(
+    const tarang_pipeline_t *pipeline,
+    const void *ppg_metrics_ptr,
+    tarang_hr_source_t *source_out)
+{
+  const tarang_ppg_metrics_t *ppg_metrics =
+      (const tarang_ppg_metrics_t *)ppg_metrics_ptr;
+
+  uint16_t ecg_hr = 0u;
+  uint8_t ecg_sqi = 0u;
+  bool ecg_valid = false;
+
+  if (pipeline != NULL && pipeline->engine.current_hr > 0u) {
+    ecg_hr = pipeline->engine.current_hr;
+    ecg_sqi = pipeline->latest_beat_telemetry.signal_quality;
+    ecg_valid = (ecg_hr >= TARANG_HR_MIN_PHYSIOLOGICAL
+                 && ecg_hr <= TARANG_HR_MAX_PHYSIOLOGICAL
+                 && ecg_sqi >= 30u);
+  }
+
+  uint16_t ppg_hr = 0u;
+  uint8_t ppg_sqi = 0u;
+  bool ppg_valid = false;
+
+  if (ppg_metrics != NULL && ppg_metrics->valid && ppg_metrics->finger_present) {
+    ppg_hr = ppg_metrics->pulse_rate_bpm;
+    ppg_sqi = ppg_metrics->signal_quality;
+    ppg_valid = (ppg_hr >= TARANG_HR_MIN_PHYSIOLOGICAL
+                 && ppg_hr <= TARANG_HR_MAX_PHYSIOLOGICAL
+                 && !ppg_metrics->motion_rejected
+                 && ppg_sqi >= 35u);
+  }
+
+  tarang_hr_source_t chosen_source = TARANG_HR_SOURCE_NONE;
+  uint16_t final_hr = 0u;
+
+  if (ecg_valid && ppg_valid) {
+    int32_t diff = (int32_t)ecg_hr - (int32_t)ppg_hr;
+    if (diff < 0) diff = -diff;
+
+    if (diff <= (int32_t)TARANG_HR_MAX_VARIANCE_BPM) {
+      /* Both agree within physiological margin */
+      final_hr = ecg_hr;
+      chosen_source = TARANG_HR_SOURCE_AGREED;
+    } else {
+      /* Divergence: compare normalized quality metrics */
+      uint8_t ecg_quality_pct = (uint8_t)((ecg_sqi * 100u) / 255u);
+      uint8_t ppg_quality_pct = ppg_sqi; /* Already 0-100 */
+
+      if (ppg_metrics->motion_rejected || ecg_sqi >= 180u) {
+        final_hr = ecg_hr;
+        chosen_source = TARANG_HR_SOURCE_ECG;
+      } else if (ecg_sqi < 100u || ppg_quality_pct > (ecg_quality_pct + 15u)) {
+        /* ECG lead noise / artifact detected while optical pulse is clean */
+        final_hr = ppg_hr;
+        chosen_source = TARANG_HR_SOURCE_PPG;
+      } else {
+        /* Default to electrical R-peak rate if quality is comparable */
+        final_hr = ecg_hr;
+        chosen_source = TARANG_HR_SOURCE_ECG;
+      }
+
+      printf("[VITALS][FUSION] Divergence (%u BPM diff): ECG=%u (SQI=%u%%) vs PPG=%u (SQI=%u%%) -> Selected %s (%u BPM)\r\n",
+             (unsigned)diff,
+             (unsigned)ecg_hr, (unsigned)ecg_quality_pct,
+             (unsigned)ppg_hr, (unsigned)ppg_quality_pct,
+             chosen_source == TARANG_HR_SOURCE_PPG ? "PPG" : "ECG",
+             (unsigned)final_hr);
+    }
+  } else if (ecg_valid) {
+    final_hr = ecg_hr;
+    chosen_source = TARANG_HR_SOURCE_ECG;
+  } else if (ppg_valid) {
+    final_hr = ppg_hr;
+    chosen_source = TARANG_HR_SOURCE_PPG;
+  }
+
+  if (source_out != NULL) {
+    *source_out = chosen_source;
+  }
+  return final_hr;
+}
+
+/******************************************************************************
  *                     MAIN PERIODIC PROCESS LOOP
  ******************************************************************************/
 void tarang_ble_process(tarang_pipeline_t *pipeline)
@@ -605,12 +702,11 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
 #if TARANG_ENABLE_PPG
     (void)tarang_ppg_get_metrics(&ppg_metrics);
 #endif
-    if (pipeline != NULL && pipeline->engine.current_hr > 0u) {
-      hr = pipeline->engine.current_hr;
-    } else if (ppg_metrics.valid) {
-      hr = ppg_metrics.pulse_rate_bpm;
+    tarang_hr_source_t hr_source = TARANG_HR_SOURCE_NONE;
+    hr = tarang_fuse_heart_rate(pipeline, &ppg_metrics, &hr_source);
+    if (ppg_metrics.valid && ppg_metrics.finger_present) {
+      spo2 = ppg_metrics.spo2_pct;
     }
-    if (ppg_metrics.valid) spo2 = ppg_metrics.spo2_pct;
     tarang_ble_send_vitals(hr, spo2, now_ms);
   }
 

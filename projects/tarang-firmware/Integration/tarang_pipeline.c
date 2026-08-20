@@ -19,6 +19,7 @@
 #include "tarang_time.h"
 #include "tarang_ai.h"
 #include "tarang_imu.h"
+#include "tarang_validation_stream.h"
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -42,6 +43,53 @@ static uint32_t clamp_clean_adc(float centered)
   if (adc > 4095.0f) adc = 4095.0f;
   return (uint32_t)(adc + 0.5f);
 }
+
+#if TARANG_VALIDATION_STREAM_ACTIVE
+#define TARANG_VALIDATION_ECG_BLOCK_SAMPLES 10u
+#define TARANG_VALIDATION_ECG_SAMPLE_BYTES  13u
+
+static uint8_t s_validation_ecg_payload[
+    9u + TARANG_VALIDATION_ECG_BLOCK_SAMPLES
+       * TARANG_VALIDATION_ECG_SAMPLE_BYTES];
+static uint8_t s_validation_ecg_count = 0u;
+static size_t s_validation_ecg_length = 0u;
+
+static void emit_validation_ecg_sample(const tarang_dsp_debug_sample_t *debug,
+                                       uint32_t timestamp_ms,
+                                       uint32_t clean_adc)
+{
+  if (s_validation_ecg_count == 0u) {
+    tarang_validation_put_u32(&s_validation_ecg_payload[0], debug->sample_idx);
+    tarang_validation_put_u32(&s_validation_ecg_payload[4], timestamp_ms);
+    s_validation_ecg_payload[8] = 0u;
+    s_validation_ecg_length = 9u;
+  }
+
+  uint8_t *sample = &s_validation_ecg_payload[s_validation_ecg_length];
+  tarang_validation_put_u16(&sample[0], (uint16_t)(debug->raw_adc & 0x0FFFu));
+  tarang_validation_put_u16(&sample[2], (uint16_t)clean_adc);
+  tarang_validation_put_u16(&sample[4],
+      (uint16_t)tarang_validation_i16(debug->bandpassed, 1.0f));
+  tarang_validation_put_u16(&sample[6],
+      (uint16_t)tarang_validation_i16(debug->zscored, 1000.0f));
+  tarang_validation_put_u16(&sample[8],
+      tarang_validation_u16(debug->mwi, 1000.0f));
+  tarang_validation_put_u16(&sample[10],
+      tarang_validation_u16(debug->threshold_th1, 1000.0f));
+  sample[12] = debug->warmed_up ? 1u : 0u;
+
+  s_validation_ecg_length += TARANG_VALIDATION_ECG_SAMPLE_BYTES;
+  s_validation_ecg_count++;
+  s_validation_ecg_payload[8] = s_validation_ecg_count;
+
+  if (s_validation_ecg_count >= TARANG_VALIDATION_ECG_BLOCK_SAMPLES) {
+    tarang_validation_emit('E', s_validation_ecg_payload,
+                           s_validation_ecg_length);
+    s_validation_ecg_count = 0u;
+    s_validation_ecg_length = 0u;
+  }
+}
+#endif
 
 static void store_clean_ecg_sample(tarang_pipeline_t *pipeline)
 {
@@ -496,6 +544,25 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
   telemetry->prr50_pct = pipeline->engine.prr50_pct;
   pipeline->beat_telemetry_pending = true;
 
+#if TARANG_VALIDATION_STREAM_ACTIVE
+  printf("@A,%lu,%lu,%u,%u,%u,%d,%d,%d,%u,%u,%u,%u,%u,%u,%u\r\n",
+         (unsigned long)telemetry->timestamp_ms,
+         (unsigned long)telemetry->r_peak_sample_idx,
+         telemetry->rr_interval_ms,
+         telemetry->local_hr_bpm_x10,
+         telemetry->signal_quality,
+         telemetry->gate_probability_x1000,
+         telemetry->sv_p_v_x1000,
+         telemetry->sv_p_s_x1000,
+         telemetry->beat_class,
+         telemetry->confidence,
+         telemetry->rhythm_flags,
+         telemetry->current_hr,
+         telemetry->sdnn_ms,
+         telemetry->rmssd_ms,
+         telemetry->prr50_pct);
+#endif
+
   store_annotation(pipeline,
                    pipeline->current_rpeak_sample_idx,
                    beat_class,
@@ -556,6 +623,11 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
                                                &dsp_beat);
 
   store_clean_ecg_sample(pipeline);
+
+#if TARANG_VALIDATION_STREAM_ACTIVE
+  const tarang_dsp_debug_sample_t *debug = &pipeline->dsp.debug_sample;
+  emit_validation_ecg_sample(debug, timestamp_ms, clean_adc);
+#endif
 
   if (!beat_ready || !dsp_beat.valid) return;
 

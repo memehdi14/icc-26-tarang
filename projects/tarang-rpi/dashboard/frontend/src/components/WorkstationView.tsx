@@ -63,42 +63,45 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
   const rhythm = rhythmPresentation(latestEvent);
   const RhythmIcon = rhythm.icon;
   const rhythmTone = rhythm.tone === 'critical'
-    ? 'border-[var(--color-error)] bg-[var(--color-error-container)] text-[var(--color-error)]'
+    ? 'border-l-4 border-l-[var(--cardiac-rose)] border-[var(--line)] bg-[#fff1f2] text-[var(--cardiac-rose)]'
     : rhythm.tone === 'warning'
-      ? 'border-[#d49a3f] bg-[#fff7ea] text-[var(--color-warning)]'
-      : 'border-[var(--color-primary-fixed-dim)] bg-[#f2fbf8] text-[var(--color-primary)]';
+      ? 'border-l-4 border-l-[var(--amber-alert)] border-[var(--line)] bg-[#fffbeb] text-[var(--amber-alert)]'
+      : 'border-l-4 border-l-[var(--clinical-teal)] border-[var(--line)] bg-[#f0fdf4] text-[var(--clinical-teal)]';
 
   const vitalCards = [
     {
-      label: 'Heart rate',
+      label: 'Heart Rate',
+      tag: 'ECG + PPG FUSED',
       value: vitals.heartRateBpm ?? '--',
       unit: 'bpm',
-      reference: '60-100',
-      source: 'ECG with PPG fallback',
+      reference: '60 - 100',
+      source: 'Auto-validated R-peak / PPG',
       icon: HeartPulse,
-      color: 'var(--color-secondary)',
+      accent: 'var(--cardiac-rose)',
       trend: vitals.heartRateBpm && vitals.heartRateBpm > 100 ? TrendingUp : TrendingDown,
       compact: false,
     },
     {
-      label: 'SpO2',
+      label: 'Oxygen Saturation',
+      tag: 'SpO2 OPTICAL',
       value: vitals.spo2Pct ?? '--',
       unit: '%',
-      reference: '95-100',
-      source: 'MAX30102 optical',
+      reference: '95 - 100',
+      source: 'MAX30102 AC/DC ratio',
       icon: Waves,
-      color: 'var(--color-tertiary)',
+      accent: 'var(--deep-ocean)',
       trend: vitals.spo2Pct && vitals.spo2Pct < 95 ? TrendingDown : TrendingUp,
       compact: false,
     },
     {
-      label: 'Ectopy burden',
+      label: 'Ectopy Burden',
+      tag: '5-MIN AI WINDOW',
       value: `${analytics.pvcBurdenPct.toFixed(1)} / ${analytics.pacBurdenPct.toFixed(1)}`,
       unit: '%',
       reference: '< 5.0',
-      source: 'PVC / PAC, 5-minute window',
+      source: 'PVC / PAC Arrhythmia index',
       icon: Activity,
-      color: 'var(--color-primary-container)',
+      accent: 'var(--accent)',
       trend: analytics.pvcBurdenPct + analytics.pacBurdenPct > 5 ? TrendingUp : TrendingDown,
       compact: true,
     },
@@ -108,55 +111,74 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
     <div className="view-frame view-enter">
       <header className="view-header">
         <div>
-          <div className="mb-2 flex flex-wrap items-center gap-3">
-            <p className="eyebrow text-[var(--color-primary)]">Bed {patient.bed} / MRN {patient.id}</p>
+          <div className="mb-1.5 flex flex-wrap items-center gap-2.5">
+            <span className="discovery-eyebrow">Bed {patient.bed} • MRN {patient.id}</span>
             {patient.allergies.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-error-container)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-error)]">
-                <AlertTriangle size={13} /> {patient.allergies.join(', ')} allergy
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#fee2e2] px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--cardiac-rose)] border border-[#fca5a5]">
+                <AlertTriangle size={11} /> {patient.allergies.join(', ')}
               </span>
             )}
           </div>
           <h1>{patient.name}</h1>
-          <p>{patient.age} years / {patient.gender} / Admitted {patient.admitDate}</p>
+          <p>{patient.age} yrs • {patient.gender} • Admitted {patient.admitDate} • Attending: {patient.attendingPhysician}</p>
         </div>
         <div className="text-right">
-          <p className="eyebrow">Last telemetry</p>
-          <p className="mt-1 font-mono text-sm font-bold">{formatTime(vitals.ts)}</p>
+          <p className="eyebrow">Last Synchronized</p>
+          <p className="mt-0.5 font-mono text-xs font-bold text-[var(--ink)]">{formatTime(vitals.ts)}</p>
         </div>
       </header>
 
-      <section className={`mb-5 flex items-center justify-between gap-5 rounded-md border px-4 py-3 ${rhythmTone}`} aria-live="polite">
+      <section className={`mb-3.5 sm:mb-5 flex items-center justify-between gap-3 sm:gap-5 rounded-lg border px-4 py-2.5 shadow-sm ${rhythmTone}`} aria-live="polite">
         <div className="flex items-center gap-3">
-          <RhythmIcon size={20} />
-          <div><h2 className="text-sm font-bold">{rhythm.label}</h2><p className="mt-0.5 text-xs opacity-80">{rhythm.detail}</p></div>
+          <RhythmIcon size={18} className="shrink-0" />
+          <div>
+            <h2 className="text-xs sm:text-sm font-bold tracking-tight">{rhythm.label}</h2>
+            <p className="text-[11px] opacity-80">{rhythm.detail}</p>
+          </div>
         </div>
-        <span className="eyebrow hidden shrink-0 md:block">{latestEvent ? `Event ${latestEvent.id ?? 'live'}` : 'Continuous assessment'}</span>
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider hidden md:block opacity-75">
+          {latestEvent ? `Event #${latestEvent.id ?? 'live'}` : 'Tier 0-3 Active'}
+        </span>
       </section>
 
-      <section className="grid grid-cols-3 gap-4 max-xl:grid-cols-1" aria-label="Current vital signs">
+      <section className="grid grid-cols-3 gap-3 sm:gap-4 max-sm:grid-cols-1" aria-label="Current vital signs">
         {vitalCards.map((metric) => {
           const Icon = metric.icon;
           const Trend = metric.trend;
           return (
-            <article key={metric.label} className="card-clinical min-h-[178px] p-5" style={{ borderTopColor: metric.color, borderTopWidth: 3 }}>
-              <div className="flex items-center justify-between" style={{ color: metric.color }}>
-                <p className="flex items-center gap-2 text-sm font-bold"><Icon size={18} /> {metric.label}</p>
-                <Trend size={18} />
+            <article key={metric.label} className="card-clinical min-h-[110px] sm:min-h-[145px] p-3.5 sm:p-4 flex flex-col justify-between relative overflow-hidden group">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: metric.accent }} />
+                  <span className="discovery-eyebrow !text-[10px] !text-[var(--ink)]">{metric.label}</span>
+                </div>
+                <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-[var(--paper-2)] text-[var(--muted)] border border-[var(--line-soft)]">
+                  {metric.tag}
+                </span>
               </div>
-              <div className="mt-5 flex items-end gap-2">
-                <span className={`whitespace-nowrap font-mono font-bold leading-none ${metric.compact ? 'text-4xl' : 'text-5xl'}`} style={{ color: metric.color }}>{metric.value}</span>
-                <span className="mb-1 font-mono text-xs text-[var(--color-on-surface-variant)]">{metric.unit}</span>
+              
+              <div className="my-2 sm:my-2.5 flex items-baseline justify-between">
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`font-mono font-bold tracking-tight text-[var(--ink)] leading-none ${metric.compact ? 'text-2xl sm:text-3xl lg:text-4xl' : 'text-3xl sm:text-4xl lg:text-5xl'}`}>
+                    {metric.value}
+                  </span>
+                  <span className="font-mono text-[11px] font-semibold text-[var(--muted)]">{metric.unit}</span>
+                </div>
+                <div className="p-1 rounded-full bg-[var(--paper-2)] text-[var(--muted)] group-hover:text-[var(--ink)] transition-colors">
+                  <Trend size={14} />
+                </div>
               </div>
-              <div className="mt-5 flex items-center justify-between border-t border-[var(--color-surface-container-high)] pt-3 text-[11px]">
-                <span className="font-medium text-[var(--color-on-surface-variant)]">{metric.source}</span>
-                <span className="font-mono">Ref {metric.reference}</span>
+
+              <div className="flex items-center justify-between border-t border-[var(--line-soft)] pt-2 text-[10px]">
+                <span className="truncate text-[var(--muted)] max-w-[65%]">{metric.source}</span>
+                <span className="font-mono font-medium text-[var(--ink-soft)]">Ref {metric.reference}</span>
               </div>
             </article>
           );
         })}
       </section>
 
-      <section className="mt-5">
+      <section className="mt-3.5 sm:mt-5">
         <WaveformCanvas currentEvent={latestEvent} activeSnippet={activeSnippet} onClearSnapshot={onClearSnapshot} />
       </section>
 

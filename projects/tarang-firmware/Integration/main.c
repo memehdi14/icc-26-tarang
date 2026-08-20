@@ -29,6 +29,8 @@
  ******************************************************************************/
 #include "sl_component_catalog.h"
 #include "sl_main_init.h"
+#include "sl_iostream.h"
+#include "sl_iostream_handles.h"
 #include <stdio.h>
 #if defined(SL_CATALOG_POWER_MANAGER_PRESENT)
 #include "sl_power_manager.h"
@@ -45,6 +47,13 @@ int main(void)
   // Note that if the kernel is present, the start task will be started and software
   // component initialization will take place there.
   sl_main_init();
+
+  /* The generated recommended-console selector does not install the selected
+   * stream as stdio's default. Route printf explicitly after VCOM is ready. */
+  sl_iostream_t *vcom = sl_iostream_get_handle("vcom");
+  if (vcom != NULL) {
+    (void)sl_iostream_set_default(vcom);
+  }
 
   // Early boot marker: confirms sl_main_init() completed and UART is ready.
   // If this prints but app_init() is silent, the crash is inside app_init().
