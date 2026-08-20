@@ -410,3 +410,140 @@ def export_event_pdf(event_id: int, db: Session = Depends(get_db)):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ── External Trigger & Simulation Endpoint ──────────────────────────────────
+
+class SimulateEventRequest(BaseModel):
+    pattern_type: str = Field(default="PVC", description="Arrhythmia type: 'PVC', 'PAC', 'AFib', 'VT', 'Bigeminy', 'Normal'")
+    confidence: float = Field(default=0.98, ge=0.0, le=1.0, description="AI model confidence score (0.0 - 1.0)")
+    heart_rate: int = Field(default=138, ge=30, le=240, description="Patient heart rate in BPM")
+    session_id: Optional[str] = Field(default=None, description="Monitoring session ID (defaults to active session)")
+    device_id: Optional[str] = Field(default="tarang-efr32-demo", description="Originating device ID")
+
+
+def _generate_synthetic_ecg(pattern_type: str, heart_rate: int, duration_sec: float = 4.0, sample_rate_hz: int = 250) -> list[int]:
+    import math
+    total_samples = int(duration_sec * sample_rate_hz)
+    waveform: list[int] = []
+    beat_interval = max(int((60.0 / max(heart_rate, 30)) * sample_rate_hz), 30)
+
+    for i in range(total_samples):
+        t = i / sample_rate_hz
+        phase = (i % beat_interval) / float(beat_interval)
+        val = 0.04 * math.sin(2 * math.pi * 0.3 * t)
+
+        beat_idx = i // beat_interval
+        is_anomaly_beat = (beat_idx == 1 or beat_idx == 2)
+
+        if pattern_type.upper() in ("PVC", "V-RUN") and is_anomaly_beat:
+            p_rel = phase - 0.42
+            if abs(p_rel) < 0.14:
+                val += 2.1 * math.exp(-((p_rel * 22) ** 2)) - 1.4 * math.exp(-(((p_rel - 0.06) * 18) ** 2))
+            elif 0.08 < p_rel < 0.28:
+                val -= 0.7 * math.exp(-(((p_rel - 0.18) * 14) ** 2))
+        elif pattern_type.upper() == "VT":
+            val += 1.6 * math.sin(2 * math.pi * (heart_rate / 60.0) * t) * (1.0 + 0.25 * math.sin(2 * math.pi * 0.5 * t))
+        elif pattern_type.upper() == "AFIB":
+            val += 0.15 * math.sin(2 * math.pi * 6.5 * t) + 0.09 * math.cos(2 * math.pi * 14.2 * t)
+            p_rel = phase - 0.4
+            if abs(p_rel) < 0.035:
+                val += 1.4 * (1 - (p_rel / 0.035) ** 2)
+            elif 0.035 <= p_rel < 0.065:
+                val -= 0.45 * (1 - ((p_rel - 0.05) / 0.015) ** 2)
+        else:
+            if 0.15 < phase < 0.28:
+                val += 0.24 * math.sin(math.pi * (phase - 0.15) / 0.13)
+            elif 0.35 <= phase < 0.38:
+                val -= 0.18 * math.sin(math.pi * (phase - 0.35) / 0.03)
+            elif 0.38 <= phase < 0.44:
+                val += 1.55 * (1.0 - abs((phase - 0.41) / 0.03))
+            elif 0.44 <= phase < 0.48:
+                val -= 0.38 * (1.0 - abs((phase - 0.46) / 0.02))
+            elif 0.55 < phase < 0.75:
+                val += 0.42 * math.sin(math.pi * (phase - 0.55) / 0.20)
+
+        waveform.append(int(round(val * 480.0)))
+
+    return waveform
+
+
+@router.post("/api/events/simulate", status_code=status.HTTP_201_CREATED, summary="Trigger External ECG Anomaly Flow")
+@router.post("/events/simulate", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+async def simulate_ecg_event(payload: SimulateEventRequest, db: Session = Depends(get_db)):
+    """
+    Trigger an external ECG flow or test arrhythmia alert.
+    
+    Generates a 4.0-second physiological Lead-II waveform (1,000 samples @ 250 Hz),
+    persists the clinical event with AI beat annotations, and broadcasts the event
+    to the workstation dashboard in real time.
+    """
+    now = datetime.now(timezone.utc)
+    session_id = payload.session_id or f"sim_{int(now.timestamp())}"
+    waveform = _generate_synthetic_ecg(payload.pattern_type, payload.heart_rate, duration_sec=4.0, sample_rate_hz=250)
+
+    event = ClinicalEvent(
+        ts=now,
+        device_id=payload.device_id,
+        session_id=session_id,
+        rhythm_status=0x01 if payload.pattern_type.upper() == "AFIB" else 0x80 if payload.pattern_type.upper() in ("VT", "PVC") else 0x00,
+        pattern_type=payload.pattern_type.upper(),
+        confidence=payload.confidence,
+        lead_status=0x01,
+        motion_flags=0x00,
+        sample_count=len(waveform),
+        chunk_count=10,
+        annotation_count=4,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    snippet = EcgSnippet(
+        event_id=event.id,
+        device_id=payload.device_id,
+        session_id=session_id,
+        sample_rate_hz=250,
+        lead_name="Lead II",
+        waveform_json=waveform,
+    )
+    db.add(snippet)
+
+    # Add 4 synthetic beat annotations
+    beat_sample_interval = 250
+    for beat_idx in range(4):
+        sample_loc = 125 + beat_idx * beat_sample_interval
+        is_ectopic = beat_idx in (1, 2)
+        b_class = payload.pattern_type.upper() if is_ectopic else "N"
+        db.add(BeatAnnotation(
+            event_id=event.id,
+            sample_index=sample_loc,
+            beat_class=b_class,
+            r_peak_amplitude=1.45 if not is_ectopic else 2.1,
+            rr_interval_ms=int((60.0 / payload.heart_rate) * 1000),
+            confidence=payload.confidence if is_ectopic else 0.99,
+        ))
+
+    db.commit()
+    db.refresh(snippet)
+
+    # Broadcast to connected dashboard via WebSocket
+    broadcast_data = {
+        "type": "clinical_event",
+        "event": event.to_dict(),
+        "snippet": snippet.to_dict(include_waveform=True),
+    }
+    await manager.broadcast(broadcast_data)
+
+    return {
+        "status": "ok",
+        "message": f"Successfully triggered {payload.pattern_type.upper()} ECG flow with 1,000 samples @ 250 Hz",
+        "eventId": event.id,
+        "snippetId": snippet.id,
+        "sampleCount": len(waveform),
+        "durationSec": 4.0,
+        "patternType": payload.pattern_type.upper(),
+        "confidence": payload.confidence,
+        "viewInDashboard": f"http://10.167.232.123:3000 (Event #{event.id})"
+    }
+
