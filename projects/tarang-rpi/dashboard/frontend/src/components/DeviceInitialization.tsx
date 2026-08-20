@@ -626,7 +626,11 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
             alt="Tarang"
             className="h-7 w-7 shrink-0 object-contain"
             style={{ width: '28px', height: '28px' }}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/tarang_logo.png'; }}
+            onError={(e) => {
+              const target = e.currentTarget as HTMLImageElement;
+              target.onerror = null;
+              target.src = '/images/tarang-logo.png';
+            }}
           />
           <div>
             <p className="text-xs font-bold tracking-wider uppercase text-[var(--ink)] leading-none">Tarang Clinical</p>
@@ -636,7 +640,8 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
             <img
               src="/images/ocelleon-logo.png"
               alt="Ocelleon"
-              className="h-4.5 w-auto object-contain opacity-80"
+              className="object-contain opacity-80"
+              style={{ height: '16px', width: 'auto' }}
               onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
             />
           </div>

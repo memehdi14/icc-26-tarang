@@ -241,7 +241,6 @@ static void ppg_update_metrics(void)
     float r_ratio = (red_dc > 1.0f && ir_rms > 0.001f)
                     ? (red_rms / red_dc) / (ir_rms / ir_dc)
                     : 0.0f;
-    latest_metrics.r_curve_x1000 = (uint32_t)(r_ratio * 1000.0f);
 
     float spo2 = 0.0f;
     if (r_ratio > 0.4f && r_ratio < 2.0f) {
@@ -275,17 +274,16 @@ static void ppg_update_metrics(void)
            latest_metrics.pulse_rate_bpm,
            latest_metrics.perfusion_index_x100,
            latest_metrics.signal_quality,
-           (unsigned long)latest_metrics.r_curve_x1000);
+           (unsigned long)(r_ratio * 1000.0f));
 #endif
 }
 
 /*******************************************************************************
  * Interrupt handler callback (PC06 falling edge)
  ******************************************************************************/
-static void max30102_int_callback(uint8_t intNo, void *ctx)
+static void max30102_int_callback(uint8_t intNo)
 {
     (void)intNo;
-    (void)ctx;
     interrupt_count++;
     ppg_data_ready = true;
 }

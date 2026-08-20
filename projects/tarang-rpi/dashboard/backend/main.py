@@ -124,7 +124,7 @@ Welcome to the **Tarang Clinical API**. This interface enables external testing 
 
 ### 🚀 Key External Workflows:
 1. **Trigger External ECG Anomaly Flow**:
-   - `POST /api/events/simulate` — Ingests a mathematically authentic 4.0s (1,000 samples @ 250 Hz) Lead-II ECG anomaly (PVC, VT, AFib, PAC) and immediately pops it up on the workstation screen!
+   - `POST /api/events/simulate` — Ingests a mathematically authentic 4.0s (1,000 samples @ 250 Hz) Lead-I ECG anomaly (PVC, VT, AFib, PAC) and immediately pops it up on the workstation screen!
 2. **Trigger Emergency Physician Page**:
    - `POST /api/clinical-actions/page-physician` — Dispatches an urgent clinical alert for a specific patient MRN.
 3. **Query Live Waveforms & Vitals**:
@@ -404,7 +404,10 @@ async def custom_swagger_ui_html():
   <!-- Tarang Branded Header -->
   <header class="tarang-docs-header">
     <a href="http://10.167.232.123:3000" class="tarang-docs-brand">
-      <img src="/logo_mark.svg" alt="Tarang" onerror="this.src='/tarang_logo.png'">
+      <svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="border-radius: 6px; flex-shrink: 0;">
+        <rect width="40" height="40" rx="8" fill="#008378"/>
+        <path d="M8 20H14L17 12L23 28L26 20H32" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
       <span class="tarang-docs-title">
         Tarang Clinical
         <span class="tarang-docs-tag">API Documentation</span>

@@ -322,3 +322,41 @@ uint32_t tarang_ecg_get_overrun_count(void)
 {
   return ecg_overrun_count;
 }
+
+uint32_t tarang_ecg_get_halves_completed(void)
+{
+  return halves_completed;
+}
+
+bool tarang_ecg_half0_ready(void)
+{
+  return half0Ready;
+}
+
+bool tarang_ecg_half1_ready(void)
+{
+  return half1Ready;
+}
+
+tarang_sensor_health_t tarang_ecg_get_health(void)
+{
+  if (sample_count > 0) {
+    return TARANG_SENSOR_OK;
+  }
+  return TARANG_SENSOR_UNAVAILABLE;
+}
+
+bool tarang_ecg_is_valid(void)
+{
+  return (sample_count > 0);
+}
+
+bool tarang_ecg_is_lead_off(void)
+{
+#if (defined(TARANG_ECG_LO_PINS_WIRED) && (TARANG_ECG_LO_PINS_WIRED == 1))
+  return (GPIO_PinInGet(TARANG_ECG_LO_PLUS_PORT, TARANG_ECG_LO_PLUS_PIN) != 0 ||
+          GPIO_PinInGet(TARANG_ECG_LO_MINUS_PORT, TARANG_ECG_LO_MINUS_PIN) != 0);
+#else
+  return false;
+#endif
+}

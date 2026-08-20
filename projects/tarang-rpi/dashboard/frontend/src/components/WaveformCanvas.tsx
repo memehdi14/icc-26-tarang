@@ -172,7 +172,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
         </div>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] text-[var(--muted)]">
-            Lead II • 25 mm/s • 250 Hz
+            Lead I • 25 mm/s • 250 Hz
           </span>
           {hasEvent && onClearSnapshot && (
             <button className="discovery-pill-secondary !py-0.5 !px-2.5 !min-h-[26px] !text-[10px]" onClick={onClearSnapshot}>

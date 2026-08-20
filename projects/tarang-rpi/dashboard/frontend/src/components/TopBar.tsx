@@ -39,7 +39,9 @@ export const TopBar: React.FC<TopBarProps> = ({
         className="h-7 w-7 shrink-0 object-contain"
         style={{ width: '28px', height: '28px' }}
         onError={(e) => {
-          (e.currentTarget as HTMLImageElement).src = '/tarang_logo.png';
+          const target = e.currentTarget as HTMLImageElement;
+          target.onerror = null;
+          target.src = '/images/tarang-logo.png';
         }}
       />
       <div className="flex items-center gap-2 whitespace-nowrap">

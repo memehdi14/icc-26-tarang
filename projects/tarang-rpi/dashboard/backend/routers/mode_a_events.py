@@ -504,7 +504,7 @@ async def simulate_ecg_event(payload: SimulateEventRequest, db: Session = Depend
         device_id=payload.device_id,
         session_id=session_id,
         sample_rate_hz=250,
-        lead_name="Lead II",
+        lead_name="Lead I",
         waveform_json=waveform,
     )
     db.add(snippet)

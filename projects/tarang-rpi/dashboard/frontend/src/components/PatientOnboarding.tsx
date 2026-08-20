@@ -120,11 +120,11 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
     return (
       <main className="min-h-screen bg-[var(--paper)]">
         <header className="flex h-[64px] items-center border-b border-[var(--line)] px-7 bg-[var(--paper-card)]">
-          <img src="/images/tarang-logo.png" alt="Tarang" className="mr-3 h-7 w-auto object-contain" />
+          <img src="/images/tarang-logo.png" alt="Tarang" className="mr-3 h-7 w-auto object-contain" style={{ height: '28px', width: 'auto' }} />
           <div className="flex items-center gap-3">
             <span className="text-base font-bold text-[var(--ink)]">Tarang Clinical</span>
             <span className="hidden sm:inline-block h-3.5 w-px bg-[var(--line)]" />
-            <img src="/images/ocelleon-logo.png" alt="Ocelleon" className="hidden sm:block h-3.5 w-auto opacity-70" />
+            <img src="/images/ocelleon-logo.png" alt="Ocelleon" className="hidden sm:block object-contain opacity-70" style={{ height: '14px', width: 'auto' }} />
           </div>
         </header>
         <section className="mx-auto grid min-h-[calc(100vh-64px)] max-w-5xl grid-cols-[1fr_320px] items-center gap-16 px-8 max-md:grid-cols-1 max-md:gap-8">
@@ -177,7 +177,11 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
               alt="Tarang"
               className="h-7 w-7 shrink-0 object-contain"
               style={{ width: '28px', height: '28px' }}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/tarang_logo.png'; }}
+              onError={(e) => {
+                const target = e.currentTarget as HTMLImageElement;
+                target.onerror = null;
+                target.src = '/images/tarang-logo.png';
+              }}
             />
             <div>
               <div className="text-sm font-bold text-[var(--ink)] leading-none">Tarang Clinical</div>
@@ -187,7 +191,8 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
               <img
                 src="/images/ocelleon-logo.png"
                 alt="Ocelleon"
-                className="h-4.5 w-auto object-contain opacity-80"
+                className="object-contain opacity-80"
+                style={{ height: '16px', width: 'auto' }}
                 onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
               />
             </div>
@@ -235,7 +240,8 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search name, MRN, bed, physician..."
-                className="form-field !mt-0 !pl-9.5 !pr-3 !py-1.5 !text-xs !bg-white"
+                className="form-field !mt-0 !pr-3 !py-1.5 !text-xs !bg-white"
+                style={{ paddingLeft: '34px' }}
               />
             </label>
           </div>

@@ -124,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {!collapsed && (
           <div className="mt-2.5 flex items-center justify-between border-t border-[var(--line-soft)] pt-2.5 px-1 opacity-80">
-            <img src="/images/ocelleon-logo.png" alt="Ocelleon" className="h-4 w-auto object-contain" />
+            <img src="/images/ocelleon-logo.png" alt="Ocelleon" className="object-contain" style={{ height: '16px', width: 'auto' }} />
             <span className="font-mono text-[9px] text-[var(--muted)]">v2.4.0 • EFR32</span>
           </div>
         )}
