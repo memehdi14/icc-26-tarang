@@ -66,13 +66,13 @@ fi
 echo "[2/3] Starting frontend on port 3000..."
 cd "$FRONTEND_DIR"
 if [[ "${TARANG_FRONTEND_MODE:-production}" == "development" ]]; then
-    npm run dev -- -H 0.0.0.0 -p 3000 &
+    npm run dev &
 else
     if [[ ! -d ".next" ]]; then
         echo "[ERROR] Frontend production build is missing. Run ./setup_rpi.sh."
         exit 1
     fi
-    npm run start -- -H 0.0.0.0 -p 3000 &
+    npm run start &
 fi
 PIDS+=("$!")
 
