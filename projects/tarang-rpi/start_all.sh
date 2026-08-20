@@ -69,8 +69,8 @@ if [[ "${TARANG_FRONTEND_MODE:-production}" == "development" ]]; then
     npm run dev &
 else
     if [[ ! -d ".next" ]]; then
-        echo "[ERROR] Frontend production build is missing. Run ./setup_rpi.sh."
-        exit 1
+        echo "[INFO] Frontend production build missing; running npm run build..."
+        npm run build
     fi
     npm run start &
 fi
