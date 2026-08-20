@@ -28,8 +28,9 @@
   --font-sans: 'Jost', 'Geist', 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
   
-  --header-height: 68px;
+  --header-height: 58px;
   --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
   --patient-rail-width: 300px;
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -41,6 +42,144 @@
   --motion-fast: 150ms;
   --motion-base: 260ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-sidebar {
+  position: fixed;
+  z-index: 40;
+  top: var(--header-height);
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width);
+  border-right: 1px solid var(--line);
+  background: var(--paper-2);
+  transition: width var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out);
+}
+
+.app-sidebar--collapsed {
+  width: var(--sidebar-collapsed-width);
+}
+
+.app-sidebar--collapsed .sidebar-clinician {
+  padding: 12px;
+  justify-content: center;
+}
+
+.app-sidebar--collapsed .sidebar-clinician div:not(.sidebar-avatar) {
+  display: none;
+}
+
+.app-sidebar--collapsed .sidebar-nav button {
+  justify-content: center;
+  padding: 0;
+}
+
+.app-sidebar--collapsed .sidebar-nav button span {
+  display: none;
+}
+
+.app-sidebar--collapsed .sidebar-status {
+  display: none;
+}
+
+.app-sidebar--collapsed .sidebar-footer button span,
+.app-sidebar--collapsed .sidebar-footer div {
+  display: none;
+}
+
+.app-sidebar--collapsed .sidebar-footer button {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.app-main {
+  min-height: 100vh;
+  margin-left: var(--sidebar-width);
+  padding: calc(var(--header-height) + 18px) 24px 36px;
+  transition: margin-left var(--motion-base) var(--ease-out), margin-right var(--motion-base) var(--ease-out);
+}
+
+.app-main--sidebar-collapsed {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+.app-main--with-rail {
+  margin-right: var(--patient-rail-width);
+}
+
+.app-main--rail-collapsed {
+  margin-right: 0 !important;
+}
+
+.patient-rail {
+  position: fixed;
+  z-index: 30;
+  top: var(--header-height);
+  right: 0;
+  bottom: 0;
+  width: var(--patient-rail-width);
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--paper-card);
+  transition: transform var(--motion-base) var(--ease-out), opacity var(--motion-base) var(--ease-out);
+}
+
+.patient-rail--collapsed {
+  transform: translateX(100%);
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* Responsive Overrides */
+@media (max-width: 1180px) {
+  .app-main {
+    margin-left: var(--sidebar-collapsed-width);
+    margin-right: 0 !important;
+  }
+  .app-sidebar:not(.app-sidebar--mobile-open) {
+    width: var(--sidebar-collapsed-width);
+  }
+  .app-sidebar:not(.app-sidebar--mobile-open) .sidebar-clinician {
+    padding: 12px;
+    justify-content: center;
+  }
+  .app-sidebar:not(.app-sidebar--mobile-open) .sidebar-clinician div:not(.sidebar-avatar) {
+    display: none;
+  }
+  .app-sidebar:not(.app-sidebar--mobile-open) .sidebar-nav button {
+    justify-content: center;
+    padding: 0;
+  }
+  .app-sidebar:not(.app-sidebar--mobile-open) .sidebar-nav button span {
+    display: none;
+  }
+  .app-sidebar:not(.app-sidebar--mobile-open) .sidebar-status {
+    display: none;
+  }
+  .app-sidebar:not(.app-sidebar--mobile-open) .sidebar-footer button span,
+  .app-sidebar:not(.app-sidebar--mobile-open) .sidebar-footer div {
+    display: none;
+  }
+  .app-sidebar:not(.app-sidebar--mobile-open) .sidebar-footer button {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-sidebar {
+    transform: translateX(-100%);
+  }
+  .app-sidebar--mobile-open {
+    transform: translateX(0);
+    width: var(--sidebar-width) !important;
+  }
+  .app-main {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding: calc(var(--header-height) + 12px) 14px 24px;
+  }
 }
 
 * {

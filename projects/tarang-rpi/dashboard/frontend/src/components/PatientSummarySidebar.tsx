@@ -13,6 +13,8 @@ interface PatientSummarySidebarProps {
   actionMessage?: string | null;
   onExportEcg: () => void;
   onPagePhysician: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 function decodeRhythm(flags: number): string {
@@ -38,17 +40,31 @@ export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({
   actionMessage,
   onExportEcg,
   onPagePhysician,
+  collapsed = false,
+  onToggleCollapse,
 }) => {
   const confidence = telemetry.confidence ? `${((telemetry.confidence / 255) * 100).toFixed(1)}%` : 'Active';
   const initials = patient.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 
   return (
-    <aside className="patient-rail" aria-label="Patient clinical summary">
+    <aside className={`patient-rail ${collapsed ? 'patient-rail--collapsed' : ''}`} aria-label="Patient clinical summary">
       {/* Patient demographics */}
       <section className="border-b border-[var(--line)] p-4">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-[11px] font-semibold text-[var(--muted)] uppercase tracking-wider">Patient summary</span>
-          <span className="rounded bg-[var(--paper-2)] border border-[var(--line)] px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--ink)]">Bed {patient.bed}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="rounded bg-[var(--paper-2)] border border-[var(--line)] px-2 py-0.5 font-mono text-[10px] font-bold text-[var(--ink)]">Bed {patient.bed}</span>
+            {onToggleCollapse && (
+              <button
+                onClick={onToggleCollapse}
+                className="icon-button !w-6 !h-6 !min-h-0 text-[var(--muted)] hover:text-[var(--ink)]"
+                title="Collapse patient summary"
+                aria-label="Collapse patient summary"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-[var(--paper-2)] text-sm font-bold text-[var(--ink)]">{initials}</div>

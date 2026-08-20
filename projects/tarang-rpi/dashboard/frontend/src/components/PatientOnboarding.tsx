@@ -175,16 +175,24 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
             <img
               src="/logo_mark.svg"
               alt="Tarang"
-              className="h-7 w-7 shrink-0 object-contain"
+              className="h-8.5 w-8.5 shrink-0 object-contain"
               onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/tarang_logo.png'; }}
             />
             <div>
-              <div className="text-sm font-bold text-[var(--ink)]">Tarang Clinical</div>
-              <div className="text-[10px] text-[var(--muted)]">Patient worklist</div>
+              <div className="text-sm font-bold text-[var(--ink)] leading-none">Tarang Clinical</div>
+              <div className="text-[10px] font-medium text-[var(--muted)] mt-0.5">Patient worklist</div>
+            </div>
+            <div className="hidden sm:flex items-center pl-2.5 border-l border-[var(--line)]">
+              <img
+                src="/images/ocelleon-logo.png"
+                alt="Ocelleon"
+                className="h-4.5 w-auto object-contain opacity-80"
+                onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }}
+              />
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setShowCreate(true)} className="discovery-pill-primary !py-1.5 !px-3 !text-xs">
+            <button onClick={() => setShowCreate(true)} className="discovery-pill-primary !py-1.5 !px-3.5 !text-xs">
               <Plus size={14} /> <span>New patient</span>
             </button>
           </div>
@@ -194,7 +202,9 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
       <div className="mx-auto max-w-[1440px] px-6 py-6 max-sm:px-4">
         <div className="view-header view-enter !pb-4">
           <div>
-            <span className="text-xs font-semibold text-[var(--muted)]">Telemetry management</span>
+            <span className="text-xs font-semibold text-[var(--ink)] flex items-center gap-1">
+              <span className="text-[var(--accent)] text-[10px]">✦</span> Telemetry management
+            </span>
             <h1 className="text-2xl font-bold text-[var(--ink)]">Patient worklist</h1>
             <p className="text-xs text-[var(--ink-soft)] mt-0.5">Select an admitted patient to begin live BLE telemetry.</p>
           </div>
@@ -218,9 +228,14 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
               <UsersRound size={15} className="text-[var(--clinical-teal)]" /> Admitted patients
             </div>
             <label className="relative w-80 max-sm:w-full">
-              <Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-[var(--muted)]" />
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
               <span className="sr-only">Search patients</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, MRN, bed, physician..." className="form-field !mt-0 !pl-8.5 !py-1.5 !text-xs !bg-white" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search name, MRN, bed, physician..."
+                className="form-field !mt-0 !pl-9.5 !pr-3 !py-1.5 !text-xs !bg-white"
+              />
             </label>
           </div>
 
@@ -247,7 +262,10 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="grid h-9 w-9 shrink-0 place-items-center rounded bg-[var(--paper-2)] text-xs font-bold text-[var(--ink)]">{initials}</div>
-                          <div><p className="font-semibold text-[var(--ink)]">{patient.name}</p><p className="text-[10px] text-[var(--muted)] font-mono">MRN {patient.id}</p></div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-[var(--ink)] text-sm">{patient.name}</p>
+                            <p className="text-[11px] text-[var(--muted)] font-mono tracking-tight mt-0.5">MRN {patient.id}</p>
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3.5"><p className="flex items-center gap-1.5 font-medium"><Bed size={13} /> Bed {patient.bed}</p><p className="text-[10px] text-[var(--muted)]">Admitted {patient.admitDate}</p></td>
@@ -290,34 +308,37 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
             </table>
           </div>
 
-          <div className="hidden divide-y divide-[var(--color-surface-container-high)] max-md:block">
+          <div className="hidden divide-y divide-[var(--line-soft)] max-md:block">
             {filteredPatients.map((patient) => {
               const activeSession = sessions.find((session) => session.status === 'active' && session.patient_id === patient.dbId);
               const assignedDevice = devices.find((device) => device.assigned_patient_id === patient.dbId);
               const selectedDevice = selectedDevices[patient.id] || activeSession?.device_id || assignedDevice?.device_id || availableDevices[0]?.device_id || '';
               const initials = patient.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
               return (
-                <article key={patient.id} className="min-w-0 overflow-hidden p-5">
+                <article key={patient.id} className="min-w-0 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-[var(--color-surface-container-high)] text-sm font-bold text-[var(--color-primary)]">{initials}</div>
-                      <div className="min-w-0"><h2 className="truncate font-bold">{patient.name}</h2><p className="eyebrow mt-1">MRN {patient.id}</p></div>
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-[var(--paper-2)] text-xs font-bold text-[var(--ink)]">{initials}</div>
+                      <div className="min-w-0">
+                        <h2 className="truncate font-bold text-sm text-[var(--ink)]">{patient.name}</h2>
+                        <p className="text-[11px] text-[var(--muted)] font-mono mt-0.5">MRN {patient.id}</p>
+                      </div>
                     </div>
-                    <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold"><Bed size={14} /> {patient.bed}</span>
+                    <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-[var(--ink)]"><Bed size={13} /> Bed {patient.bed}</span>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 border-y border-[var(--color-surface-container-high)] py-3 text-xs">
-                    <div><p className="eyebrow">Clinical context</p><p className="mt-1 font-semibold">{patient.age} yr / {patient.gender}</p></div>
-                    <div><p className="eyebrow">Monitoring</p><p className={`mt-1 font-semibold ${activeSession ? 'text-[var(--color-success)]' : ''}`}>{activeSession ? 'Active telemetry' : 'Not monitored'}</p></div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 border-y border-[var(--line-soft)] py-2.5 text-xs">
+                    <div><p className="text-[10px] text-[var(--muted)] uppercase">Clinical context</p><p className="mt-0.5 font-medium">{patient.age} yr / {patient.gender}</p></div>
+                    <div><p className="text-[10px] text-[var(--muted)] uppercase">Status</p><p className={`mt-0.5 font-medium ${activeSession ? 'text-[var(--clinical-teal)]' : 'text-[var(--muted)]'}`}>{activeSession ? 'Active telemetry' : 'Unassigned'}</p></div>
                   </div>
-                  <label className="mt-4 block text-xs font-bold">Tarang device
-                    <select aria-label={`Tarang device for ${patient.name}`} value={selectedDevice} disabled={!!activeSession} onChange={(event) => setSelectedDevices((current) => ({ ...current, [patient.id]: event.target.value }))} className="form-field font-mono text-xs disabled:bg-[var(--color-surface-container-low)]">
+                  <label className="mt-3 block text-xs font-semibold text-[var(--ink)]">Assigned device
+                    <select aria-label={`Tarang device for ${patient.name}`} value={selectedDevice} disabled={!!activeSession} onChange={(event) => setSelectedDevices((current) => ({ ...current, [patient.id]: event.target.value }))} className="form-field font-mono text-xs disabled:bg-[var(--paper-2)] mt-1">
                       {!selectedDevice && <option value="">No device available</option>}
-                      {devices.filter((device) => device.status !== 'in_use' || device.device_id === activeSession?.device_id).map((device) => <option key={device.device_id} value={device.device_id}>{device.name} / {device.device_id}</option>)}
+                      {devices.map((device) => <option key={device.device_id} value={device.device_id}>{device.name || device.device_id}</option>)}
                     </select>
                   </label>
-                  <button onClick={() => startPatient(patient)} disabled={busyMrn === patient.id || (!selectedDevice && !activeSession)} className="button-primary mt-3 w-full">
-                    {busyMrn === patient.id ? <RefreshCw size={16} className="animate-spin" /> : activeSession ? <Activity size={16} /> : <Bluetooth size={16} />}
-                    {activeSession ? 'Resume monitoring' : 'Start monitoring'} <ArrowRight size={15} />
+                  <button onClick={() => startPatient(patient)} disabled={busyMrn === patient.id || (!selectedDevice && !activeSession)} className="discovery-pill-primary mt-3 w-full !py-2 justify-center !text-xs">
+                    {busyMrn === patient.id ? <RefreshCw size={14} className="animate-spin" /> : activeSession ? <Activity size={14} /> : <Bluetooth size={14} />}
+                    <span>{activeSession ? 'Resume monitoring' : 'Start monitoring'}</span> <ArrowRight size={14} />
                   </button>
                 </article>
               );

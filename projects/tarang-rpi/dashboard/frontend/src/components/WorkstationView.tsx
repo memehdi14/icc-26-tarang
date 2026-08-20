@@ -74,12 +74,14 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
       <header className="view-header !pb-3">
         <div>
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-[var(--ink)]">Bed {patient.bed}</span>
+            <span className="text-xs font-semibold text-[var(--ink)] flex items-center gap-1">
+              <span className="text-[var(--accent)] text-[10px]">✦</span> Bed {patient.bed}
+            </span>
             <span className="text-xs text-[var(--muted)]">•</span>
             <span className="text-xs font-mono text-[var(--muted)]">MRN {patient.id}</span>
             {patient.allergies.length > 0 && (
-              <span className="inline-flex items-center gap-1 rounded bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
-                <AlertTriangle size={11} /> Allergies: {patient.allergies.join(', ')}
+              <span className="rounded-full bg-red-100 border border-red-200 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
+                ⚠ Allergies: {patient.allergies.join(', ')}
               </span>
             )}
           </div>
@@ -88,9 +90,9 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
             {patient.age} years • {patient.gender} • Admitted {patient.admitDate} • Attending: {patient.attendingPhysician}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--muted)]">Last synchronized</p>
-          <p className="mt-0.5 font-mono text-xs font-semibold text-[var(--ink)]">{formatTime(vitals.ts)}</p>
+        <div className="text-right max-sm:text-left">
+          <p className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Last synchronized</p>
+          <p className="font-mono text-xs font-bold text-[var(--ink)] mt-0.5">{formatTime(vitals.ts)}</p>
         </div>
       </header>
 

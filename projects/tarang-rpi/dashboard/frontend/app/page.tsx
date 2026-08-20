@@ -153,6 +153,8 @@ export default function Page() {
   const [exportBusy, setExportBusy] = useState(false);
   const [pageBusy, setPageBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [patientRailCollapsed, setPatientRailCollapsed] = useState(false);
 
   const loadBootstrap = useCallback(async () => {
     setBootstrapLoading(true);
@@ -468,6 +470,10 @@ export default function Page() {
         onEmergency={pagePhysician}
         onOpenWorkstation={() => setActiveTab('workstation')}
         onOpenSettings={() => setActiveTab('settings')}
+        sidebarCollapsed={sidebarCollapsed}
+        patientRailCollapsed={patientRailCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+        onTogglePatientRail={() => setPatientRailCollapsed((v) => !v)}
       />
       <Sidebar
         activeTab={activeTab}
@@ -476,15 +482,17 @@ export default function Page() {
         patientName={patient.name}
         attendingDoctor={settings.attendingDoctor}
         onChangePatient={() => setPhase('worklist')}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
       />
 
       {!backendOnline && (
-        <div className="fixed left-1/2 top-[82px] z-50 -translate-x-1/2 rounded border border-amber-300 bg-amber-50 px-3 py-1.5 font-mono text-[10px] font-bold text-amber-900">
-          Backend reconnecting
+        <div className="fixed left-1/2 top-[72px] z-50 -translate-x-1/2 rounded border border-amber-300 bg-amber-50 px-3 py-1 font-mono text-[10px] font-bold text-amber-900 shadow-sm">
+          Backend reconnecting...
         </div>
       )}
 
-      <main className={`app-main ${activeTab === 'workstation' ? 'app-main--with-rail' : ''}`}>
+      <main className={`app-main ${sidebarCollapsed ? 'app-main--sidebar-collapsed' : ''} ${activeTab === 'workstation' ? (patientRailCollapsed ? 'app-main--rail-collapsed' : 'app-main--with-rail') : ''}`}>
         {activeTab === 'workstation' && (
           <WorkstationView
             vitals={vitals}
@@ -512,6 +520,8 @@ export default function Page() {
           actionMessage={actionMessage}
           onExportEcg={exportEcg}
           onPagePhysician={pagePhysician}
+          collapsed={patientRailCollapsed}
+          onToggleCollapse={() => setPatientRailCollapsed((v) => !v)}
         />
       )}
     </div>
