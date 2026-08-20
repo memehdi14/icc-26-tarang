@@ -624,7 +624,8 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
           <img
             src="/logo_mark.svg"
             alt="Tarang"
-            className="h-8.5 w-8.5 shrink-0 object-contain"
+            className="h-7 w-7 shrink-0 object-contain"
+            style={{ width: '28px', height: '28px' }}
             onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/tarang_logo.png'; }}
           />
           <div>

@@ -605,10 +605,67 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
   padding: 12px 14px;
 }
 
+/* Collapsed Sidebar Styles */
+.app-sidebar--collapsed {
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: 64px !important;
+  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-sidebar--collapsed .sidebar-clinician {
+  padding: 16px 8px;
+  justify-content: center;
+}
+
+.app-sidebar--collapsed .sidebar-nav {
+  padding: 12px 6px;
+  align-items: center;
+}
+
+.app-sidebar--collapsed .sidebar-nav button {
+  padding: 0;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+}
+
+.app-sidebar--collapsed .sidebar-nav button span,
+.app-sidebar--collapsed .sidebar-footer button span {
+  display: none !important;
+}
+
+.app-sidebar--collapsed .sidebar-footer {
+  padding: 12px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.app-sidebar--collapsed .sidebar-footer button {
+  justify-content: center;
+  padding: 8px 0;
+  width: 44px;
+}
+
 .app-main {
   min-height: 100vh;
   margin-left: var(--sidebar-width);
   padding: calc(var(--header-height) + 24px) 28px 48px;
+  transition: margin-left 0.2s cubic-bezier(0.16, 1, 0.3, 1), margin-right 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-main--sidebar-collapsed {
+  margin-left: 64px !important;
+}
+
+.app-main--rail-collapsed {
+  margin-right: 0 !important;
+}
+
+.patient-rail--collapsed {
+  display: none !important;
 }
 
 .app-main--with-rail { margin-right: var(--patient-rail-width); }

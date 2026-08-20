@@ -314,13 +314,13 @@ class GatewaySession:
     def on_heart_rate(self, _sender: Any, data: bytearray) -> None:
         value = self._decode("heart-rate", decode_heart_rate, data)
         if value is not None:
-            self.last_hr = value if value > 0 else None
+            self.last_hr = value
             self._schedule_vitals()
 
     def on_spo2(self, _sender: Any, data: bytearray) -> None:
         value = self._decode("SpO2", decode_spo2, data)
         if value is not None:
-            self.last_spo2 = value if value > 0 else None
+            self.last_spo2 = value
             self._schedule_vitals()
 
     def _schedule_vitals(self) -> None:
@@ -330,13 +330,14 @@ class GatewaySession:
 
     def _flush_vitals(self) -> None:
         self._vitals_timer = None
-        if self.last_hr is None and self.last_spo2 is None:
-            return
         payload: dict[str, Any] = self._base_payload()
-        payload["heart_rate_bpm"] = self.last_hr
-        payload["spo2_pct"] = self.last_spo2
+        payload["heart_rate_bpm"] = self.last_hr if (self.last_hr is not None and self.last_hr > 0) else None
+        payload["spo2_pct"] = self.last_spo2 if (self.last_spo2 is not None and self.last_spo2 > 0) else None
         self.publisher.enqueue("/api/vitals", payload, "vitals")
-        LOG.info("Vitals: HR=%s SpO2=%s", self.last_hr, self.last_spo2)
+        
+        hr_str = f"{self.last_hr} BPM" if (self.last_hr is not None and self.last_hr > 0) else "Searching (0)"
+        spo2_str = f"{self.last_spo2}%" if (self.last_spo2 is not None and self.last_spo2 > 0) else "No finger (0%)"
+        LOG.info("[BLE][VITALS 2.5s] Periodic Packet Received -> HR: %s | SpO2: %s", hr_str, spo2_str)
 
     def on_analytics(self, _sender: Any, data: bytearray) -> None:
         """Compatibility callback for the retired nine-byte rollup."""
