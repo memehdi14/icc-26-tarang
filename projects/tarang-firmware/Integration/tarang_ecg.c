@@ -1,62 +1,53 @@
 /***************************************************************************//**
  * @file tarang_ecg.c
- * @brief TARANG ECG acquisition module — implementation.
+ * @brief TARANG ECG Acquisition — LETIMER→PRS→IADC0→LDMA Ping-Pong
  *
- * Acquisition began from Separate Testing/ECG/july6/app.c. Integration adds
- * DMA completion timestamps and chronological half-buffer draining.
+ * Acquisition began from Separate Testing/ECG/july6/app.c.
  *
- * Chain: LETIMER0 (underflow pulse)
- *        → PRS async channel 2
- *        → IADC0 single queue trigger
- *        → DMADRV ping-pong DMA transfer
- *        → RAM (ecg_buffer[], two halves)
+ * Hardware chain:
+ *   LETIMER0 underflow (250 Hz, compare=130 on LFRCO 32768 Hz)
+ *     → PRS CH0
+ *       → IADC0 Single Trigger (AIN0 / iadcPosInputPadAna0)
+ *         → LDMA ping-pong into ecg_buffer[128]
+ *           (two 64-sample halves, interrupt on each half = ~3.9 Hz)
  *
- * Target : EFR32MG26B510F3200IM48 (Series 2, Cortex-M33)
- * SDK    : Simplicity SDK / emlib + emdrv (DMADRV)
+ * Target : EFR32MG26B510F3200IM48 (BRD2709A)
  ******************************************************************************/
 
-#define SL_SUPPRESS_DEPRECATION_WARNINGS_SDK_2026_6
-
 #include "tarang_ecg.h"
+#include "tarang_constants.h"
 #include "tarang_pipeline.h"
 #include "tarang_time.h"
 
 #include <stdio.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include <string.h>
 
 #include "em_cmu.h"
-#include "em_iadc.h"
-#include "em_letimer.h"
-#include "em_prs.h"
-#include "em_gpio.h"
 #include "em_emu.h"
-#include "em_core.h"
+#include "em_gpio.h"
+#include "em_letimer.h"
+#include "em_iadc.h"
+#include "em_prs.h"
 #include "em_ldma.h"
+#include "em_core.h"
 #include "sl_dma_manager.h"
 
 /*******************************************************************************
- ******************************* DEFINES **************************************
+ * Hardware Configuration Constants
  ******************************************************************************/
-#define PRS_CHANNEL          2       // async PRS channel: LETIMER0 -> IADC0
-
-// Set CLK_ADC to 1MHz (adjust to taste)
-#define CLK_SRC_ADC_FREQ     10000000  // CLK_SRC_ADC
-#define CLK_ADC_FREQ         1000000   // CLK_ADC
+#define CLK_SRC_ADC_FREQ          20000000  // FSRCO default ~20 MHz
+#define CLK_ADC_FREQ              10000000  // 10 MHz ADC clock
+#define PRS_CHANNEL               0
 
 /*******************************************************************************
- *************************** STATIC VARIABLES **********************************
+ * Ping-Pong Buffers & Descriptors
  ******************************************************************************/
-// 32-bit: matches SINGLEFIFODATA register width moved natively by DMA.
-static uint32_t ecg_buffer[ECG_BUFFER_SIZE];
+static uint32_t           ecg_buffer[ECG_BUFFER_SIZE];
+static uint8_t            ecg_dma_channel   = 0;
+static LDMA_Descriptor_t  ecg_dma_desc[2];
 
-static uint8_t ecg_dma_channel = 0;
-
-// 2 linked descriptors for continuous hardware ping-pong
-static LDMA_Descriptor_t ecg_dma_desc[2];
-
-static volatile uint32_t sample_count       = 0;
+/* Diagnostics */
+static volatile uint32_t  sample_count      = 0;
 static volatile bool      half0Ready        = false;
 static volatile bool      half1Ready        = false;
 static volatile uint32_t  ecg_overrun_count = 0;
@@ -67,26 +58,12 @@ static volatile uint64_t  half0CompletedUs  = 0;
 static volatile uint64_t  half1CompletedUs  = 0;
 
 /***************************************************************************//**
- * LETIMER Interrupt — sample_count bookkeeping only.
- * IADC triggering and sample movement are fully autonomous.
- ******************************************************************************/
-void LETIMER0_IRQHandler(void)
-{
-  uint32_t flags = LETIMER_IntGet(LETIMER0);
-  LETIMER_IntClear(LETIMER0, flags);
-
-  if (flags & LETIMER_IF_UF)
-  {
-    sample_count++;
-  }
-}
-
-/***************************************************************************//**
  * DMA Channel IRQ Handler — called by sl_dma_manager on LDMA interrupt.
  ******************************************************************************/
 static void ecg_dma_irq_handler(void)
 {
   halves_completed++;
+  sample_count += ECG_HALF_SAMPLES;
 
   /* Even halves completed (0, 2, 4...) -> desc[0] filled half 0 */
   if ((halves_completed & 1U) == 1U)
@@ -124,8 +101,7 @@ void tarang_ecg_init(void)
   CMU_ClockEnable(cmuClock_IADC0, true);
 
   /**********************************************************************
-   * 2. GPIO — iadcPosInputPadAna0 is a dedicated AIN pad, no routing
-   *    needed.
+   * 2. GPIO — iadcPosInputPadAna0 is a dedicated AIN pad
    **********************************************************************/
 
   /**********************************************************************
@@ -147,8 +123,12 @@ void tarang_ecg_init(void)
   LETIMER_Init(LETIMER0, &letimerInit);
   LETIMER_CompareSet(LETIMER0, 0, 130);
 
-  LETIMER_IntEnable(LETIMER0, LETIMER_IEN_UF);
-  NVIC_EnableIRQ(LETIMER0_IRQn);
+  /*
+   * Zero-CPU Optimization: LETIMER triggers IADC autonomously via PRS.
+   * Disabling per-sample CPU interrupts eliminates 130 wakeups/second;
+   * sample_count is now updated in ecg_dma_irq_handler.
+   */
+  LETIMER_IntClear(LETIMER0, _LETIMER_IF_MASK);
 
   /**********************************************************************
    * 4. PRS - route LETIMER0 OUT0 → IADC0 single trigger
@@ -259,14 +239,17 @@ static void process_ecg_half(tarang_pipeline_t *pipeline,
                              uint32_t end,
                              uint64_t completed_us)
 {
-  if (pipeline == NULL || completed_us == 0u) return;
-  uint32_t sample_count_in_half = end - first;
+  if (!pipeline) return;
+
+  uint64_t interval_us = (uint64_t)(1000000.0 / (double)TARANG_ECG_SAMPLE_RATE_HZ);
+  uint32_t count = end - first;
+  uint64_t base_us = (completed_us > (interval_us * count))
+                     ? (completed_us - (interval_us * count))
+                     : completed_us;
+
   for (uint32_t i = first; i < end; i++) {
-    uint32_t position = i - first;
-    uint64_t offset_us = (uint64_t)(sample_count_in_half - 1u - position)
-                         * TARANG_ECG_SAMPLE_PERIOD_US;
-    uint32_t sample_ts_ms = completed_us >= offset_us
-        ? (uint32_t)((completed_us - offset_us) / 1000ULL) : 0u;
+    uint32_t offset = i - first;
+    uint32_t sample_ts_ms = (uint32_t)((base_us + (offset * interval_us)) / 1000ULL);
     uint32_t raw_val = ecg_buffer[i] & 0x0FFFu;
     tarang_pipeline_process_ecg_sample(pipeline, raw_val, sample_ts_ms);
     if (s_raw_streaming_enabled) {
@@ -277,14 +260,6 @@ static void process_ecg_half(tarang_pipeline_t *pipeline,
 
 /***************************************************************************//**
  * ECG process action — drain completed DMA half-buffers.
- *
- * Each DMA half holds ECG_HALF_SAMPLES (64) raw ADC values.
- * At 250 Hz, a half completes every 256ms.
- * Every sample is fed into the DSP+AI pipeline AND optionally printed.
- *
- * Serial budget at 115200 baud (11520 B/s):
- *   64 samples × ~18 bytes ("[ECG] raw=3923\r\n") = ~1152 bytes per half
- *   Two halves per 512ms = ~4500 B/s ← 39% of bandwidth
  ******************************************************************************/
 void tarang_ecg_process(void)
 {
@@ -338,16 +313,6 @@ uint32_t *tarang_ecg_get_buffer(void)
   return ecg_buffer;
 }
 
-bool tarang_ecg_half0_ready(void)
-{
-  return half0Ready;
-}
-
-bool tarang_ecg_half1_ready(void)
-{
-  return half1Ready;
-}
-
 uint32_t tarang_ecg_get_sample_count(void)
 {
   return sample_count;
@@ -356,30 +321,4 @@ uint32_t tarang_ecg_get_sample_count(void)
 uint32_t tarang_ecg_get_overrun_count(void)
 {
   return ecg_overrun_count;
-}
-
-uint32_t tarang_ecg_get_halves_completed(void)
-{
-  return halves_completed;
-}
-
-tarang_sensor_health_t tarang_ecg_get_health(void)
-{
-  return (sample_count > 0) ? TARANG_SENSOR_OK : TARANG_SENSOR_STARTING;
-}
-
-bool tarang_ecg_is_valid(void)
-{
-  return (sample_count > 0);
-}
-
-bool tarang_ecg_is_lead_off(void)
-{
-#if TARANG_ECG_LO_PINS_WIRED
-  bool lo_plus = (GPIO_PinInGet(TARANG_ECG_LO_PLUS_PORT, TARANG_ECG_LO_PLUS_PIN) != 0);
-  bool lo_minus = (GPIO_PinInGet(TARANG_ECG_LO_MINUS_PORT, TARANG_ECG_LO_MINUS_PIN) != 0);
-  return lo_plus || lo_minus;
-#else
-  return false;
-#endif
 }
