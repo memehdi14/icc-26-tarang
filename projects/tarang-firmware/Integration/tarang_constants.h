@@ -46,7 +46,7 @@ extern "C" {
 #define TARANG_ENABLE_AI_CIRCUIT_BREAKER 1  /* Re-enable only after overload validation. */
 #define TARANG_ENABLE_RAW_ECG_STREAM    0
 #ifndef TARANG_ENABLE_VALIDATION_STREAM
-#define TARANG_ENABLE_VALIDATION_STREAM 1  /* Compact stream fits the stable 115200-baud VCOM. */
+#define TARANG_ENABLE_VALIDATION_STREAM 0  /* Disabled to silence Base64 validation stream on VCOM */
 #endif
 #define TARANG_ANY_SENSOR_ENABLED \
   (TARANG_ENABLE_ECG || TARANG_ENABLE_PPG || TARANG_ENABLE_IMU)

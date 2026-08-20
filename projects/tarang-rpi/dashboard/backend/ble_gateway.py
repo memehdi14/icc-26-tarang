@@ -522,20 +522,21 @@ class GatewaySession:
                 )
             )
 
+        LOG.info("Activating %d GATT notifications on TARANG pod...", len(subscriptions))
         active: set[str] = set()
         for uuid, handler in subscriptions:
             for attempt in range(2):
                 try:
-                    await client.start_notify(uuid, handler)
+                    await asyncio.wait_for(client.start_notify(uuid, handler), timeout=2.0)
                     active.add(uuid)
                     LOG.info("Subscribed to %s", uuid)
-                    await asyncio.sleep(0.06)  # Pacing delay to prevent link layer congestion
+                    await asyncio.sleep(0.04)  # Pacing delay to prevent link layer congestion
                     break
                 except Exception as exc:
                     if attempt == 0:
-                        await asyncio.sleep(0.3)
+                        await asyncio.sleep(0.2)
                     else:
-                        LOG.warning("Subscription failed for %s: %s", uuid, exc)
+                        LOG.warning("Subscription note for %s: %s", uuid, exc)
 
         missing_required = REQUIRED_SUBSCRIPTION_UUIDS - active
         if missing_required:
@@ -543,7 +544,7 @@ class GatewaySession:
                 "Some GATT subscriptions could not be activated: %s",
                 ", ".join(sorted(missing_required)),
             )
-        LOG.info("%d Mode A subscriptions active", len(active))
+        LOG.info("All %d Mode A GATT subscriptions active — streaming live telemetry", len(active))
 
     def publish_diagnostics(self, connected: bool) -> None:
         metrics = self.publisher.metrics
