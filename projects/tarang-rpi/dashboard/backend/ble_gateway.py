@@ -670,80 +670,60 @@ class BleGateway:
                 device.address,
             )
 
-            client = BleakClient(
-                device,
-                disconnected_callback=on_disconnect,
-                timeout=self.config.connect_timeout_s,
-                pair=False,
-            )
             try:
-                await client.connect()
-                if not client.is_connected:
-                    raise RuntimeError("Bleak returned without an active connection")
+                async with BleakClient(
+                    device,
+                    disconnected_callback=on_disconnect,
+                    timeout=self.config.connect_timeout_s,
+                ) as client:
+                    if self.config.pair:
+                        try:
+                            LOG.info("Requesting bond on the connected link")
+                            await client.pair()
+                            LOG.info("BLE pairing complete (Bonded & Encrypted)")
+                        except Exception as pair_exc:
+                            exc_msg = str(pair_exc)
+                            if "AlreadyExists" in exc_msg or "already" in exc_msg.lower():
+                                LOG.info("Device already paired in BlueZ: %s", exc_msg)
+                            else:
+                                LOG.warning("Pairing request note: %s", exc_msg)
+                        await asyncio.sleep(0.5)
 
-                if self.config.pair:
-                    try:
-                        LOG.info("GATT resolved; requesting bond on the connected link")
-                        await client.pair()
-                        LOG.info("BLE pairing complete (Bonded & Encrypted)")
-                    except Exception as pair_exc:
-                        exc_msg = str(pair_exc)
-                        if "AlreadyExists" in exc_msg or "already" in exc_msg.lower():
-                            LOG.info("Device already paired in BlueZ: %s", exc_msg)
-                        elif "Authentication" in exc_msg or "Failed" in exc_msg or "not permitted" in exc_msg.lower():
-                            LOG.warning("Stale bond detected (%s). Purging BlueZ cache...", exc_msg)
-                            try:
-                                subprocess.run(
-                                    ["bluetoothctl", "remove", str(device.address)],
-                                    stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL,
-                                    timeout=1.5,
-                                )
-                            except Exception:
-                                pass
-                        else:
-                            LOG.warning("Pairing request note: %s", exc_msg)
-
-                    # Allow Link Layer encryption handshake to settle before discovery/subscription
-                    await asyncio.sleep(0.5)
-
-                service_uuids = {service.uuid.lower() for service in client.services}
-                missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
-                if missing_services:
-                    raise RuntimeError(
-                        "Tarang GATT services missing: "
-                        + ", ".join(sorted(missing_services))
-                    )
-
-                await self.publisher.synchronize_device(
-                    session.device_id,
-                    device.name or "Tarang Wearable",
-                    session.address,
-                )
-                if self.config.session_id is None:
-                    session.session_id = (
-                        await self.publisher.resolve_active_session(
-                            session.device_id
+                    service_uuids = {service.uuid.lower() for service in client.services}
+                    missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
+                    if missing_services:
+                        raise RuntimeError(
+                            "Tarang GATT services missing: "
+                            + ", ".join(sorted(missing_services))
                         )
-                    )
 
-                LOG.info(
-                    "Connected and GATT verified (MTU=%s, session=%s)",
-                    client.mtu_size,
-                    session.session_id or "unassigned",
-                )
-                reconnect_delay = self.config.reconnect_delay_s
-                await session.subscribe(client)
-                session.publish_diagnostics(True)
-                session.start_diagnostics()
-                await disconnected.wait()
+                    await self.publisher.synchronize_device(
+                        session.device_id,
+                        device.name or "Tarang Wearable",
+                        session.address,
+                    )
+                    if self.config.session_id is None:
+                        session.session_id = (
+                            await self.publisher.resolve_active_session(
+                                session.device_id
+                            )
+                        )
+
+                    LOG.info(
+                        "Connected and GATT verified (MTU=%s, session=%s)",
+                        client.mtu_size,
+                        session.session_id or "unassigned",
+                    )
+                    reconnect_delay = self.config.reconnect_delay_s
+                    await session.subscribe(client)
+                    session.publish_diagnostics(True)
+                    session.start_diagnostics()
+                    await disconnected.wait()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 LOG.error("BLE session failed: %s", exc, exc_info=True)
             finally:
-                if client.is_connected:
-                    await client.disconnect()
                 await session.close()
                 session.publish_diagnostics(False)
 
