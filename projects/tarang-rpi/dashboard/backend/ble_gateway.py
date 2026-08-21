@@ -626,10 +626,11 @@ class BleGateway:
         await scanner.start()
         try:
             device = await asyncio.wait_for(found, timeout=self.config.scan_timeout_s)
-            return scanner, device
+            await scanner.stop()
+            return device
         except asyncio.TimeoutError:
             await scanner.stop()
-            return None, None
+            return None
         except BaseException:
             await scanner.stop()
             raise
@@ -637,7 +638,7 @@ class BleGateway:
     async def run_forever(self) -> None:
         reconnect_delay = self.config.reconnect_delay_s
         while True:
-            scanner, device = await self.start_discovery()
+            device = await self.start_discovery()
             if device is None:
                 LOG.warning("Tarang device not found; retrying in %.1fs", reconnect_delay)
                 await asyncio.sleep(reconnect_delay)
@@ -655,10 +656,21 @@ class BleGateway:
                 self.config, self.publisher, device, self.config.session_id
             )
             LOG.info(
-                "Connecting to %s (%s) before pairing; discovery remains active",
+                "Connecting to %s (%s)...",
                 device.name or "TARANG",
                 device.address,
             )
+
+            # Purge any stale BlueZ state/cache before connecting
+            try:
+                subprocess.run(
+                    ["bluetoothctl", "remove", str(device.address)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=1.5,
+                )
+            except Exception:
+                pass
 
             client = BleakClient(
                 device,
@@ -696,12 +708,6 @@ class BleGateway:
 
                     # Allow Link Layer encryption handshake to settle before discovery/subscription
                     await asyncio.sleep(0.5)
-
-                # Once connected and paired, BlueZ retains the device object and
-                # discovery can stop without invalidating the connection.
-                if scanner is not None:
-                    await scanner.stop()
-                    scanner = None
 
                 service_uuids = {service.uuid.lower() for service in client.services}
                 missing_services = REQUIRED_SERVICE_UUIDS - service_uuids

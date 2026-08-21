@@ -156,6 +156,17 @@ async def run_session(device, target_name: str) -> None:
         print(f"\n🚨 [{t_str}] [!] BLE Connection lost. Reconnecting...")
         disconnected.set()
 
+    # Cleanly remove any cached device state in BlueZ before connecting
+    try:
+        subprocess.run(
+            ["bluetoothctl", "remove", str(device.address)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=1.5
+        )
+    except Exception:
+        pass
+
     async with BleakClient(device, disconnected_callback=on_disconnect, timeout=15.0) as client:
         print(" [✓] Link Connected! Checking BLE Security / Pairing...")
         pair_env = os.getenv("TARANG_BLE_PAIR", "false").lower() in ("1", "true", "yes")
