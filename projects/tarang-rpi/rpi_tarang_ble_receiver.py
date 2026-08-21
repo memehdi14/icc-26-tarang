@@ -116,6 +116,17 @@ async def find_tarang_device(target: Optional[str] = None):
     found: asyncio.Future = loop.create_future()
     target_clean = target.upper() if target else None
 
+    if target and ":" in target:
+        try:
+            subprocess.run(
+                ["bluetoothctl", "remove", target],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=1.5
+            )
+        except Exception:
+            pass
+
     def on_adv(device, adv_data):
         if found.done():
             return
@@ -132,7 +143,8 @@ async def find_tarang_device(target: Optional[str] = None):
     await scanner.start()
     try:
         device, adv = await asyncio.wait_for(found, timeout=8.0)
-        return scanner, device
+        await scanner.stop()
+        return None, device
     except asyncio.TimeoutError:
         await scanner.stop()
         return None, None
@@ -155,17 +167,6 @@ async def run_session(device, target_name: str) -> None:
         t_str = time.strftime("%H:%M:%S")
         print(f"\n🚨 [{t_str}] [!] BLE Connection lost. Reconnecting...")
         disconnected.set()
-
-    # Cleanly remove any cached device state in BlueZ before connecting
-    try:
-        subprocess.run(
-            ["bluetoothctl", "remove", str(device.address)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=1.5
-        )
-    except Exception:
-        pass
 
     async with BleakClient(device, disconnected_callback=on_disconnect, timeout=15.0) as client:
         print(" [✓] Link Connected! Checking BLE Security / Pairing...")

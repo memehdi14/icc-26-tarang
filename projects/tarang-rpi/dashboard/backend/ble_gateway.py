@@ -609,6 +609,15 @@ class BleGateway:
 
         if address:
             LOG.info("Scanning for configured device %s", address)
+            try:
+                subprocess.run(
+                    ["bluetoothctl", "remove", address],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=1.5,
+                )
+            except Exception:
+                pass
         else:
             LOG.info("Scanning for a device named %s*", prefix)
 
@@ -660,17 +669,6 @@ class BleGateway:
                 device.name or "TARANG",
                 device.address,
             )
-
-            # Purge any stale BlueZ state/cache before connecting
-            try:
-                subprocess.run(
-                    ["bluetoothctl", "remove", str(device.address)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=1.5,
-                )
-            except Exception:
-                pass
 
             client = BleakClient(
                 device,
@@ -744,8 +742,6 @@ class BleGateway:
             except Exception as exc:
                 LOG.error("BLE session failed: %s", exc, exc_info=True)
             finally:
-                if scanner is not None:
-                    await scanner.stop()
                 if client.is_connected:
                     await client.disconnect()
                 await session.close()
