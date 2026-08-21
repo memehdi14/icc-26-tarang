@@ -55,13 +55,9 @@
 #define SL_BT_INVALID_BONDING_HANDLE 0xFFu
 #endif
 
-/* Bonding is enabled only when the generated project includes Security Manager. */
+/* Bonding is enabled with Security Manager and automatic stale-bond recovery */
 #ifndef TARANG_BLE_ENABLE_BONDING
-/* [DEMO FIX] 0 = non-bondable zero-security bring-up. Stale LTKs held by
- * the gateway desync with pod-side nvm3 bonds after re-flashing and cause
- * the PIN-OR-KEY-MISSING (0x13/0x206) reconnect loop. No GATT attribute
- * requires security anymore. */
-#define TARANG_BLE_ENABLE_BONDING 0
+#define TARANG_BLE_ENABLE_BONDING 1
 #endif
 
 /* ── Fallback handles for robust compilation if gatt_db.h differs ─────────── */
