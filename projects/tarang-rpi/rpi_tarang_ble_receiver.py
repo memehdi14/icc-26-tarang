@@ -152,30 +152,34 @@ async def run_session(device, target_name: str) -> None:
 
     def on_disconnect(_client):
         t_str = time.strftime("%H:%M:%S")
-        print(f"\n🚨 [{t_str}] [!] BLE Connection lost. Purging stale BlueZ cache & triggering clean reconnect...")
-        try:
-            subprocess.run(
-                ["bluetoothctl", "remove", str(device.address)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=1.5
-            )
-        except Exception:
-            pass
+        print(f"\n🚨 [{t_str}] [!] BLE Connection lost. Reconnecting...")
         disconnected.set()
 
     async with BleakClient(device, disconnected_callback=on_disconnect, timeout=15.0) as client:
-        print(" [✓] Link Connected! Negotiating BLE Security / Pairing...")
+        print(" [✓] Link Connected! Checking BLE Security / Pairing...")
         try:
             await client.pair()
             print(" [✓] BLE Security / Pairing Confirmed (Bonded & Encrypted).")
-            await asyncio.sleep(0.3)
         except Exception as e:
             err_msg = str(e)
             if "AlreadyExists" in err_msg or "already" in err_msg.lower():
                 print(" [✓] Bonded using verified BlueZ security keys.")
+            elif "Authentication" in err_msg or "Failed" in err_msg or "not permitted" in err_msg.lower():
+                print(f" [!] Stale bond detected ({err_msg}). Purging for fresh handshake...")
+                try:
+                    subprocess.run(
+                        ["bluetoothctl", "remove", str(device.address)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=1.5
+                    )
+                except Exception:
+                    pass
             else:
                 print(f" [i] Pairing handshake note: {err_msg}")
+
+        # Wait for Link Layer encryption handshake (SecMode=1) to settle before subscribing
+        await asyncio.sleep(0.5)
 
         print(f" [✓] MTU size: {client.mtu_size}")
         print(" [3/3] Subscribing to Mode A Telemetry Streams...\n")

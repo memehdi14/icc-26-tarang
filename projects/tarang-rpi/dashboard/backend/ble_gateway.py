@@ -648,16 +648,7 @@ class BleGateway:
             loop = asyncio.get_running_loop()
 
             def on_disconnect(_client: BleakClient) -> None:
-                LOG.warning("BLE link disconnected by peer/controller. Purging stale BlueZ cache for clean reconnect...")
-                try:
-                    subprocess.run(
-                        ["bluetoothctl", "remove", str(device.address)],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        timeout=1.5,
-                    )
-                except Exception:
-                    pass
+                LOG.warning("BLE link disconnected by peer/controller. Reconnecting...")
                 loop.call_soon_threadsafe(disconnected.set)
 
             session = GatewaySession(
@@ -685,13 +676,12 @@ class BleGateway:
                         LOG.info("GATT resolved; requesting bond on the connected link")
                         await client.pair()
                         LOG.info("BLE pairing complete (Bonded & Encrypted)")
-                        await asyncio.sleep(0.5)
                     except Exception as pair_exc:
                         exc_msg = str(pair_exc)
                         if "AlreadyExists" in exc_msg or "already" in exc_msg.lower():
                             LOG.info("Device already paired in BlueZ: %s", exc_msg)
-                        else:
-                            LOG.warning("Pairing request note: %s", exc_msg)
+                        elif "Authentication" in exc_msg or "Failed" in exc_msg or "not permitted" in exc_msg.lower():
+                            LOG.warning("Stale bond detected (%s). Purging BlueZ cache...", exc_msg)
                             try:
                                 subprocess.run(
                                     ["bluetoothctl", "remove", str(device.address)],
@@ -701,6 +691,11 @@ class BleGateway:
                                 )
                             except Exception:
                                 pass
+                        else:
+                            LOG.warning("Pairing request note: %s", exc_msg)
+
+                    # Allow Link Layer encryption handshake to settle before discovery/subscription
+                    await asyncio.sleep(0.5)
 
                 # Once connected and paired, BlueZ retains the device object and
                 # discovery can stop without invalidating the connection.
