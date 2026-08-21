@@ -531,7 +531,7 @@ class GatewaySession:
                     await asyncio.wait_for(client.start_notify(uuid, handler), timeout=2.0)
                     active.add(uuid)
                     LOG.info("Subscribed to %s", uuid)
-                    await asyncio.sleep(0.04)  # Pacing delay to prevent link layer congestion
+                    await asyncio.sleep(0.10)  # Pacing delay (100ms / ~2 CIs) to prevent stack buffer exhaustion
                     break
                 except Exception as exc:
                     if attempt == 0:
@@ -578,6 +578,9 @@ class GatewaySession:
             self.publish_diagnostics(True)
 
     async def close(self) -> None:
+        if self._event.rhythm_status is not None and not self._event.posted:
+            LOG.info("Link closing with in-flight event — flushing available metadata and waveform...")
+            self._flush_event()
         if self._vitals_timer is not None:
             self._vitals_timer.cancel()
         if self._analytics_timer is not None:
@@ -645,6 +648,16 @@ class BleGateway:
             loop = asyncio.get_running_loop()
 
             def on_disconnect(_client: BleakClient) -> None:
+                LOG.warning("BLE link disconnected by peer/controller. Purging stale BlueZ cache for clean reconnect...")
+                try:
+                    subprocess.run(
+                        ["bluetoothctl", "remove", str(device.address)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=1.5,
+                    )
+                except Exception:
+                    pass
                 loop.call_soon_threadsafe(disconnected.set)
 
             session = GatewaySession(

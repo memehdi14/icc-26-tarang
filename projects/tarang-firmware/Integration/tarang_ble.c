@@ -294,6 +294,7 @@ static const char *tarang_ble_reason_to_str(uint16_t reason)
     case 0x100C: return "CCCD IMPROPERLY CONFIGURED (0x100C)";
     case 0x100D: return "PROCEDURE IN PROGRESS (0x100D)";
     case 0x1011: return "INSUFFICIENT ENCRYPTION (0x1011)";
+    case 0x1013: return "ATT CLIENT / TRANSACTION DROPPED (0x1013) - ATT transaction unacknowledged or dropped under TX buffer exhaustion";
     default:     return "UNKNOWN STATUS CODE";
   }
 }
@@ -1165,6 +1166,17 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
       printf("[BLE][CONNECT]   Warmup:       Suppressing data for %ums while central subscribes...\r\n",
              (unsigned)TARANG_BLE_WARMUP_MS);
       printf("=========================================================\r\n");
+
+      /* Request robust Link Layer timing (20-40ms CI, 5000ms supervision timeout) */
+      sc = sl_bt_connection_set_parameters(
+          tarang_ble_conn_handle,
+          16,   /* 20.0 ms min interval */
+          32,   /* 40.0 ms max interval */
+          0,    /* 0 latency */
+          500,  /* 5000 ms supervision timeout */
+          0,
+          0xFFFF);
+      tarang_ble_status_ok("set robust connection parameters", sc);
       break;
     }
 
