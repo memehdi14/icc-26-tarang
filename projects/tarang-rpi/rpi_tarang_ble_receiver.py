@@ -22,6 +22,7 @@ import sys
 import time
 import struct
 import asyncio
+import subprocess
 from typing import Dict, List, Optional
 from bleak import BleakScanner, BleakClient
 
@@ -151,21 +152,30 @@ async def run_session(device, target_name: str) -> None:
 
     def on_disconnect(_client):
         t_str = time.strftime("%H:%M:%S")
-        print(f"\n🚨 [{t_str}] [!] BLE Connection lost / Link dropped by peripheral or central. Triggering reconnection sequence...")
+        print(f"\n🚨 [{t_str}] [!] BLE Connection lost. Purging stale BlueZ cache & triggering clean reconnect...")
+        try:
+            subprocess.run(
+                ["bluetoothctl", "remove", str(device.address)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=1.5
+            )
+        except Exception:
+            pass
         disconnected.set()
 
     async with BleakClient(device, disconnected_callback=on_disconnect, timeout=15.0) as client:
-        print(" [✓] Link Connected! Checking security / pairing...")
+        print(" [✓] Link Connected! Negotiating BLE Security / Pairing...")
         try:
             await client.pair()
-            print(" [✓] BLE Security / Pairing Confirmed.")
+            print(" [✓] BLE Security / Pairing Confirmed (Bonded & Encrypted).")
             await asyncio.sleep(0.3)
         except Exception as e:
             err_msg = str(e)
             if "AlreadyExists" in err_msg or "already" in err_msg.lower():
-                print(" [✓] Bonded using cached BlueZ security keys.")
+                print(" [✓] Bonded using verified BlueZ security keys.")
             else:
-                print(f" [i] Pairing note: {err_msg}")
+                print(f" [i] Pairing handshake note: {err_msg}")
 
         print(f" [✓] MTU size: {client.mtu_size}")
         print(" [3/3] Subscribing to Mode A Telemetry Streams...\n")

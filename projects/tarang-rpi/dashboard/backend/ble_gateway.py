@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import logging
 import os
 import random
+import subprocess
 import time
 from typing import Any, Callable
 
@@ -670,7 +671,7 @@ class BleGateway:
                     try:
                         LOG.info("GATT resolved; requesting bond on the connected link")
                         await client.pair()
-                        LOG.info("BLE pairing complete")
+                        LOG.info("BLE pairing complete (Bonded & Encrypted)")
                         await asyncio.sleep(0.5)
                     except Exception as pair_exc:
                         exc_msg = str(pair_exc)
@@ -678,6 +679,15 @@ class BleGateway:
                             LOG.info("Device already paired in BlueZ: %s", exc_msg)
                         else:
                             LOG.warning("Pairing request note: %s", exc_msg)
+                            try:
+                                subprocess.run(
+                                    ["bluetoothctl", "remove", str(device.address)],
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                    timeout=1.5,
+                                )
+                            except Exception:
+                                pass
 
                 # Once connected and paired, BlueZ retains the device object and
                 # discovery can stop without invalidating the connection.

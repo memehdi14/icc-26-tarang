@@ -55,11 +55,9 @@
 #define SL_BT_INVALID_BONDING_HANDLE 0xFFu
 #endif
 
-/* [CRITICAL FIX] 0 = Direct Open / Zero-Security Mode.
- * BlueZ SMP pairing layer desynchronizes with NVM3 on flash and causes
- * immediate controller connection aborts before GATT opens. */
+/* Bonding is enabled with Just-Works SMP encryption and self-healing recovery */
 #ifndef TARANG_BLE_ENABLE_BONDING
-#define TARANG_BLE_ENABLE_BONDING 0
+#define TARANG_BLE_ENABLE_BONDING 1
 #endif
 
 /* ── Fallback handles for robust compilation if gatt_db.h differs ─────────── */
@@ -1075,12 +1073,11 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
       if (!tarang_ble_status_ok("create advertising set", sc)) break;
 
 #if defined(SL_CATALOG_BLUETOOTH_FEATURE_SM_PRESENT)
-      uint8_t security_flags = TARANG_BLE_ENABLE_BONDING
-                               ? SL_BT_SM_CONFIGURATION_BONDING_REQUEST_REQUIRED
-                               : 0u;
+      /* Use flags = 0 for standard Just-Works SMP pairing with NoInputNoOutput */
+      uint8_t security_flags = 0u;
       sc = sl_bt_sm_configure(security_flags,
                               sl_bt_sm_io_capability_noinputnooutput);
-      tarang_ble_status_ok("configure security manager", sc);
+      tarang_ble_status_ok("configure security manager (Just-Works)", sc);
 
       if (TARANG_BLE_ENABLE_BONDING) {
         sc = sl_bt_sm_store_bonding_configuration(8, 2);
@@ -1088,13 +1085,6 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
       }
 
       sc = sl_bt_sm_set_bondable_mode(TARANG_BLE_ENABLE_BONDING ? 1 : 0);
-      if (!TARANG_BLE_ENABLE_BONDING) {
-        /* Purge every stored bond from earlier secured builds */
-        for (uint8_t b = 0u; b < 8u; ++b) {
-          (void)sl_bt_sm_delete_bonding(b);
-        }
-        printf("[BLE][SM] Non-bondable mode; purged all stored bonds.\r\n");
-      }
       tarang_ble_status_ok(TARANG_BLE_ENABLE_BONDING
                            ? "enable bonding"
                            : "disable bonding for direct-connect bring-up",
@@ -1226,19 +1216,12 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
              (unsigned)failed->reason,
              tarang_ble_reason_to_str(failed->reason));
 
-      if ((failed->reason == SL_STATUS_BT_CTRL_AUTHENTICATION_FAILURE
-           || failed->reason == SL_STATUS_BT_CTRL_PIN_OR_KEY_MISSING)
-          && tarang_ble_bonding_handle != SL_BT_INVALID_BONDING_HANDLE) {
-        uint8_t stale_bonding_handle = tarang_ble_bonding_handle;
-        tarang_ble_bonding_handle = SL_BT_INVALID_BONDING_HANDLE;
-        printf("[BLE][SM] Removing stale bond handle=0x%02X; central must reconnect and pair cleanly.\r\n",
-               stale_bonding_handle);
-        sc = sl_bt_sm_delete_bonding(stale_bonding_handle);
-        tarang_ble_status_ok("delete stale peer bond", sc);
-      } else if (failed->reason == SL_STATUS_BT_CTRL_AUTHENTICATION_FAILURE
-                 || failed->reason == SL_STATUS_BT_CTRL_PIN_OR_KEY_MISSING) {
-        printf("[BLE][SM] No local bond exists; peer must clear its cached bond.\r\n");
+      /* Delete all stored bonds so next reconnect can pair cleanly */
+      for (uint8_t b = 0u; b < 8u; ++b) {
+        (void)sl_bt_sm_delete_bonding(b);
       }
+      tarang_ble_bonding_handle = SL_BT_INVALID_BONDING_HANDLE;
+      printf("[BLE][SM] Purged all pod bonds to allow fresh central pairing.\r\n");
       break;
     }
 
@@ -1303,6 +1286,15 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
              (unsigned long)ble_total_chunks_sent);
       printf("[BLE][DISCONNECT]   Disconnect #:    %lu\r\n", (unsigned long)ble_disconnect_count);
       printf("=========================================================\r\n");
+
+#if defined(SL_CATALOG_BLUETOOTH_FEATURE_SM_PRESENT)
+      if (reason == 0x0206 || reason == 0x0205 || reason == 0x001F) {
+        for (uint8_t b = 0u; b < 8u; ++b) {
+          (void)sl_bt_sm_delete_bonding(b);
+        }
+        printf("[BLE][SM] Purged pod bonds following auth failure (reason 0x%04X).\r\n", (unsigned)reason);
+      }
+#endif
 
       tarang_ble_conn_handle = SL_BT_INVALID_CONNECTION_HANDLE;
       tarang_ble_bonding_handle = SL_BT_INVALID_BONDING_HANDLE;
