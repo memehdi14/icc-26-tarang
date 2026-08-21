@@ -55,16 +55,16 @@ Section 5 below adds new findings from an offline analysis of a live test captur
   1. Human-readable debug prints (`[ECG] raw=...`, `[IMU] cnt=...`) enabled when `TARANG_DEBUG_TELEMETRY = 0`.
   2. High-density CSV schema lines (`@S`, `@I`, `@P`, `@B`) enabled when `TARANG_DEBUG_TELEMETRY = 1`.
   Running [`plot_tarang.py`](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-dsp/integration_validation/plot_tarang.py) against a log file recorded in human-readable debug mode causes a `No @S records found` error.
-- **Status**: FIXED in [`tarang_live_plot.py`](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-firmware/Integration/tarang_live_plot.py) by adding regex parsers for `raw_line` format. [`plot_tarang.py`](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-dsp/integration_validation/plot_tarang.py) requires `@S` records.
+- **Status**: FIXED. The current versioned validation protocol emits `@E`, `@P`, `@I`, `@A`, `@M`, and `@D`. `log_vcom.py` preserves the records and `plot_tarang.py` now parses both this protocol and legacy `@S/@B` captures.
 
 ---
 
 ### [ISSUE-TEL-02] Python Port Auto-Detection Fallback
-- **Location**: [`log_vcom.py:L28-L40`](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-firmware/Integration/log_vcom.py#L28-L40), [`tarang_live_plot.py:L104-L117`](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-firmware/Integration/tarang_live_plot.py#L104-L117)
+- **Location**: [`log_vcom.py`](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-firmware/Integration/log_vcom.py)
 - **Component**: Python Loggers
 - **Severity**: LOW
-- **Description**: When no Silicon Labs or J-Link board is auto-detected on Windows, the scripts default to `COM11`. If another device is on `COM11` or `COM11` does not exist, an unhandled `SerialException` occurs.
-- **Recommended Action**: Catch `SerialException`, list all available active COM ports, and prompt the user to select the correct port interactively.
+- **Description**: The retired tools defaulted blindly to `COM11`.
+- **Status**: FIXED. The supported recorder auto-detects Silicon Labs/J-Link ports, lists available ports and prompts when no match is found, and accepts an explicit `--port` override.
 
 ---
 
@@ -130,10 +130,11 @@ These were found by replaying a 112 s ECG+IMU capture through the documented arc
 ---
 
 ### [ISSUE-TEL-03] Host-Received Timestamps Unsuitable as RR Ground Truth
-- **Location**: [`log_vcom.py`](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-firmware/Integration/log_vcom.py), CSV column `unix_timestamp`
+- **Location**: Historical VCOM captures, CSV column `unix_timestamp`
 - **Component**: Python Logger / Offline Validation Tooling
 - **Severity**: LOW
 - **Description**: `unix_timestamp` in the CSV log is the host PC's serial-receive time, not the device's internal 250 Hz sample clock. In this capture, inter-sample host timestamps showed gaps up to 182 ms (435 gaps > 20 ms across ~27,861 samples) due to normal UART/OS scheduling jitter on the host side. This is expected and does not indicate a problem on-device (LETIMER0 is hardware-timed regardless of host logging), but it means any offline RR/CoV validation computed from `unix_timestamp` — including the analysis behind ISSUE-DSP-04 — is an approximation, not ground truth.
+- **Status**: FIXED for new captures. Every current sensor record carries a device sample index and device timestamp; host arrival time is retained only as transport evidence.
 - **Recommended Fix**:
   1. When validating DSP/AI behavior offline, prefer the device's own sample counter / onboard RR fields (e.g., `rr_prev_ms` from `extract_beat()`) if logged, rather than recomputing RR from host arrival time.
   2. If not already logged, add `rr_prev_ms`, `rr_mean_5_ms`, and `local_hr_bpm` to the periodic `[PIPELINE]` debug print so onboard RR values can be directly compared against offline reconstructions without relying on host timing.
@@ -147,8 +148,8 @@ These were found by replaying a 112 s ECG+IMU capture through the documented arc
 | **ISSUE-FW-01** | Hardware/FW | Shared I2C bus contention on `sl_i2cspm_mikroe` between MAX30102 & MPU6050 | HIGH | Mitigated (bus clear & retries) |
 | **ISSUE-FW-02** | Firmware | `tarang_pipeline_run_deferred()` function body missing | MEDIUM | Open (Dead code / pending) |
 | **ISSUE-FW-03** | Firmware/DSP | 8-second initial warm-up startup delay before R-peaks emitted | LOW | By Design |
-| **ISSUE-TEL-01** | Telemetry | Format divergence (`[ECG]` debug vs `@S` schema) | MEDIUM | Fixed in `tarang_live_plot.py` |
-| **ISSUE-TEL-02** | Tooling | `COM11` default fallback when board not auto-detected | LOW | Open |
+| **ISSUE-TEL-01** | Telemetry | Format divergence (`[ECG]` debug vs `@S` schema) | MEDIUM | Superseded by versioned validation stream |
+| **ISSUE-TEL-02** | Tooling | `COM11` default fallback when board not auto-detected | LOW | Fixed |
 | **ISSUE-ML-01** | Machine Learning | $S$-class (PAC) F1 precision ceiling ($0.20\text{--}0.35$) | MEDIUM | Mitigated (RR-based AFib engine) |
 | **ISSUE-ML-02** | Machine Learning | Lead II training vs Lead I hardware domain shift | HIGH | Planned (v16 Lead I retraining) |
 | **ISSUE-DSP-04** | DSP | R-peak detector over-triggers on T-wave/secondary excursion (81% "suspicious" vs. <0.1% target) | HIGH | Open (new, this analysis) |

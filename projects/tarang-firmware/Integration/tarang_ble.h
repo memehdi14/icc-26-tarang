@@ -154,6 +154,11 @@ bool tarang_ble_trigger_clinical_event(
  ******************************************************************************/
 void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_packet_t *pkt);
 
+/***************************************************************************//**
+ * @brief Print comprehensive BLE link and telemetry status to VCOM.
+ ******************************************************************************/
+void tarang_ble_print_status(void);
+
 #if defined(SL_COMPONENT_CATALOG_PRESENT)
 #include "sl_component_catalog.h"
 #endif

@@ -48,6 +48,7 @@
 #include <stdint.h>
 
 #include "em_cmu.h"
+#include "em_emu.h"
 #include "em_gpio.h"
 #include "gpiointerrupt.h"
 #include "sl_i2cspm.h"
@@ -97,6 +98,62 @@ void app_init(void)
    * EM2 to properly clock and schedule radio advertising and connection events
    * with the RTCC/BURTC low-frequency crystal oscillators.
    */
+
+  /*
+   * Log and clear the reset cause FIRST, before anything else can touch
+   * the EMU cause register. This is the diagnostic for the battery
+   * disconnect-loop investigation: if a BOD flag shows up here on every
+   * boot during a battery-powered session, that confirms brownout during
+   * the BLE event burst rather than some other reset path.
+   *
+   * The raw hex value alone is enough to diagnose against the reference
+   * manual's RSTCAUSE bit table even if none of the named macros below
+   * happen to match this SDK version. Each named flag is printed only if
+   * its macro exists, so a missing macro can never break the build --
+   * each check is a standalone guarded block, not one printf depending on
+   * several macros at once.
+   *
+   * Reads/clears the register directly (EMU->RSTCAUSE / EMU->CMD) instead
+   * of going through emlib wrapper functions -- the wrapper function names
+   * (EMU_ResetCauseGet/Clear, or RMU_ on older families) vary across SDK
+   * versions and device families, but the EMU peripheral struct itself is
+   * defined by the CMSIS device header that's already pulled in by the
+   * other emlib includes below, so this is the more portable form.
+   */
+  {
+    uint32_t reset_cause = EMU->RSTCAUSE;
+#ifdef EMU_CMD_RSTCAUSECLR
+    EMU->CMD = EMU_CMD_RSTCAUSECLR;
+#endif
+    printf("[BOOT] RSTCAUSE=0x%08lX\r\n", (unsigned long)reset_cause);
+#ifdef EMU_RSTCAUSE_POR
+    if (reset_cause & EMU_RSTCAUSE_POR)      printf("[BOOT]   POR\r\n");
+#endif
+#ifdef EMU_RSTCAUSE_PIN
+    if (reset_cause & EMU_RSTCAUSE_PIN)      printf("[BOOT]   PIN\r\n");
+#endif
+#ifdef EMU_RSTCAUSE_EM4
+    if (reset_cause & EMU_RSTCAUSE_EM4)      printf("[BOOT]   EM4WU\r\n");
+#endif
+#ifdef EMU_RSTCAUSE_WDOG0
+    if (reset_cause & EMU_RSTCAUSE_WDOG0)    printf("[BOOT]   WATCHDOG\r\n");
+#endif
+#ifdef EMU_RSTCAUSE_SYSREQ
+    if (reset_cause & EMU_RSTCAUSE_SYSREQ)   printf("[BOOT]   SYSREQ\r\n");
+#endif
+#ifdef EMU_RSTCAUSE_AVDDBOD
+    if (reset_cause & EMU_RSTCAUSE_AVDDBOD)  printf("[BOOT]   AVDDBOD (brownout)\r\n");
+#endif
+#ifdef EMU_RSTCAUSE_DVDDBOD
+    if (reset_cause & EMU_RSTCAUSE_DVDDBOD)  printf("[BOOT]   DVDDBOD (brownout)\r\n");
+#endif
+#ifdef EMU_RSTCAUSE_DECBOD
+    if (reset_cause & EMU_RSTCAUSE_DECBOD)   printf("[BOOT]   DECBOD (brownout)\r\n");
+#endif
+#ifdef EMU_RSTCAUSE_VREGIN
+    if (reset_cause & EMU_RSTCAUSE_VREGIN)   printf("[BOOT]   VREGIN BOD (brownout)\r\n");
+#endif
+  }
 
 #if TARANG_RUN_BOOT_TESTS
   /* === PHASE 1 & 2 VERIFICATION TEST AT BOOT === */
@@ -444,6 +501,10 @@ void app_process_action(void)
            (unsigned long)tarang_dsp_get_pending_overflow_count(&pipeline->dsp));
 #endif
   }
+
+#if TARANG_ENABLE_BLE
+  tarang_ble_print_status();
+#endif
 
   printf("========================================\r\n");
 }

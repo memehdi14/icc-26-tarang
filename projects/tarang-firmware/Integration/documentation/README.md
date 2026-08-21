@@ -14,6 +14,8 @@ because Simplicity Studio references it directly.
   cancellation path and remaining validation work.
 - [Power optimization decision](WHY_POWER_OPTIMIZATION_IS_DEFERRED.md): why
   sample-rate and wakeup reductions remain deferred until signal validation.
+- [Hackathon demo readiness gate](HACKATHON_DEMO_READINESS.md): full list of
+  required BLE, sensor, UI, backend, and validation gates before final judging.
 
 ## BLE Incident Records
 

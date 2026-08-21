@@ -1,51 +1,54 @@
 #!/usr/bin/env python3
-"""Full-resolution TARANG post-hoc telemetry viewer.
-
-Loads every firmware @S/@I/@P/@B record without resampling or decimation.
-All rows share the device timestamp axis. Press n/p to move between flagged
-events and a to restore the complete session.
-"""
+"""Parse a TARANG VCOM capture and generate a complete validation report."""
 
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import html
+import itertools
 import json
+import re
+import webbrowser
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
-import webbrowser
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-BEAT_NAMES = np.array(["N", "S", "V", "Q"])
-BEAT_COLORS = np.array(["#707780", "#d97706", "#dc2626", "#111827"])
-RHYTHM_COLORS = {
-    0x01: ("AFib", "#7c3aed"),
-    0x02: ("Tachy", "#ef4444"),
-    0x04: ("Brady", "#2563eb"),
-    0x08: ("Bigeminy", "#f97316"),
-    0x10: ("Trigeminy", "#eab308"),
-    0x20: ("V-run", "#b91c1c"),
-    0x40: ("SVT-run", "#db2777"),
-    0x80: ("VT suspected", "#450a0a"),
-}
+BEAT_NAMES = {0: "N", 1: "S", 2: "V", 3: "Q"}
+BEAT_COLORS = {0: "#1f7a4d", 1: "#d97706", 2: "#c62828", 3: "#4b5563"}
 
 
 @dataclass
 class Session:
-    sample: list[list[float]] = field(default_factory=list)
-    imu: list[list[float]] = field(default_factory=list)
+    protocol: str = "unknown"
+    stream_version: int = 0
+    rates_hz: dict[str, int] = field(default_factory=dict)
+    ecg: list[list[float]] = field(default_factory=list)
     ppg: list[list[float]] = field(default_factory=list)
+    imu: list[list[float]] = field(default_factory=list)
     beat: list[list[float]] = field(default_factory=list)
+    metrics: list[list[float]] = field(default_factory=list)
+    diagnostics: list[list[float]] = field(default_factory=list)
+    telemetry_records: int = 0
+    parse_errors: int = 0
 
     def arrays(self) -> dict[str, np.ndarray]:
-        widths = {"sample": 9, "imu": 9, "ppg": 5, "beat": 15}
+        widths = {
+            "ecg": 9,
+            "ppg": 4,
+            "imu": 9,
+            "beat": 15,
+            "metrics": 9,
+            "diagnostics": 17,
+        }
         return {
             name: np.asarray(getattr(self, name), dtype=float).reshape(-1, width)
             for name, width in widths.items()
@@ -61,404 +64,638 @@ def _numbers(fields: list[str], expected: int) -> list[float] | None:
         return None
 
 
+def _compact_u16(data: bytes, offset: int) -> int:
+    return int.from_bytes(data[offset:offset + 2], "little", signed=False)
+
+
+def _compact_i16(data: bytes, offset: int) -> int:
+    return int.from_bytes(data[offset:offset + 2], "little", signed=True)
+
+
+def _parse_compact_packet(line: str, session: Session) -> bool:
+    if not line.startswith(("@E2,", "@P2,", "@I2,")):
+        return False
+
+    record_type, encoded = line.split(",", 1)
+    try:
+        payload = base64.b64decode(encoded, validate=True)
+    except (ValueError, base64.binascii.Error):
+        return False
+    if len(payload) < 9:
+        return False
+
+    first_index = int.from_bytes(payload[0:4], "little")
+    first_timestamp = int.from_bytes(payload[4:8], "little")
+    count = payload[8]
+    sample_size = {"@E2": 13, "@P2": 6, "@I2": 14}[record_type]
+    if count == 0 or len(payload) != 9 + count * sample_size:
+        return False
+
+    period_ms = 4 if record_type == "@E2" else 10
+    for sample_number in range(count):
+        offset = 9 + sample_number * sample_size
+        sample_index = first_index + sample_number
+        timestamp_ms = first_timestamp + sample_number * period_ms
+
+        if record_type == "@E2":
+            session.ecg.append([
+                timestamp_ms,
+                sample_index,
+                _compact_u16(payload, offset),
+                _compact_u16(payload, offset + 2),
+                _compact_i16(payload, offset + 4) * 1000,
+                _compact_i16(payload, offset + 6),
+                _compact_u16(payload, offset + 8),
+                _compact_u16(payload, offset + 10),
+                payload[offset + 12],
+            ])
+        elif record_type == "@P2":
+            session.ppg.append([
+                timestamp_ms,
+                sample_index,
+                int.from_bytes(payload[offset:offset + 3], "little"),
+                int.from_bytes(payload[offset + 3:offset + 6], "little"),
+            ])
+        else:
+            session.imu.append([
+                timestamp_ms,
+                sample_index,
+                _compact_i16(payload, offset),
+                _compact_i16(payload, offset + 2),
+                _compact_i16(payload, offset + 4),
+                _compact_i16(payload, offset + 6),
+                _compact_i16(payload, offset + 8),
+                _compact_i16(payload, offset + 10),
+                _compact_u16(payload, offset + 12),
+            ])
+
+    session.protocol = "validation-v2"
+    return True
+
+
 def parse_telemetry_line(line: str, session: Session) -> bool:
+    """Parse current validation records and the older @S/@B capture format."""
     line = line.strip()
     if not line.startswith("@") or line.startswith("@SCHEMA"):
         return False
 
+    if _parse_compact_packet(line, session):
+        return True
+
     fields = line.split(",")
     record_type = fields[0]
-    destinations = {
-        "@S": (session.sample, 9),
-        "@I": (session.imu, 9),
-        "@P": (session.ppg, 5),
-        "@B": (session.beat, 15),
-    }
-    if record_type not in destinations:
+    values = fields[1:]
+
+    if record_type == "@V":
+        parsed = _numbers(values, 4)
+        if parsed is None:
+            return False
+        session.protocol = "validation-v2" if int(parsed[0]) >= 2 else "validation-v1"
+        session.stream_version = int(parsed[0])
+        session.rates_hz = {
+            "ecg": int(parsed[1]),
+            "ppg": int(parsed[2]),
+            "imu": int(parsed[3]),
+        }
+    elif record_type == "@E":
+        parsed = _numbers(values, 9)
+        if parsed is None:
+            return False
+        session.protocol = session.protocol if session.protocol != "unknown" else "validation-v1"
+        # Device time, sample index, raw, clean, bandpass, z, MWI, threshold, valid.
+        session.ecg.append([
+            parsed[1], parsed[0], parsed[2], parsed[3], parsed[4],
+            parsed[5], parsed[6], parsed[7], parsed[8],
+        ])
+    elif record_type == "@P":
+        if len(values) == 4:
+            parsed = _numbers(values, 4)
+            if parsed is None:
+                return False
+            session.ppg.append([parsed[1], parsed[0], parsed[2], parsed[3]])
+        elif len(values) == 5:
+            parsed = _numbers(values, 5)
+            if parsed is None:
+                return False
+            session.protocol = session.protocol if session.protocol != "unknown" else "legacy"
+            session.ppg.append([parsed[0], parsed[1], parsed[3], parsed[4]])
+        else:
+            return False
+    elif record_type == "@I":
+        parsed = _numbers(values, 9)
+        if parsed is None:
+            return False
+        if session.protocol == "validation-v1":
+            session.imu.append([
+                parsed[1], parsed[0], parsed[2], parsed[3], parsed[4],
+                parsed[5], parsed[6], parsed[7], parsed[8],
+            ])
+        else:
+            session.protocol = "legacy"
+            session.imu.append([
+                parsed[0], parsed[1], parsed[3], parsed[4], parsed[5],
+                parsed[6], parsed[7], parsed[8], 0.0,
+            ])
+    elif record_type == "@A":
+        parsed = _numbers(values, 15)
+        if parsed is None:
+            return False
+        session.protocol = "validation-v1"
+        session.beat.append(parsed)
+    elif record_type == "@M":
+        parsed = _numbers(values, 9)
+        if parsed is None:
+            return False
+        session.metrics.append(parsed)
+    elif record_type == "@D":
+        parsed = _numbers(values, 17)
+        if parsed is None:
+            return False
+        session.diagnostics.append(parsed)
+    elif record_type == "@S":
+        parsed = _numbers(values, 9)
+        if parsed is None:
+            return False
+        session.protocol = "legacy"
+        # Legacy had no separate clean ADC channel.
+        session.ecg.append([
+            parsed[0], parsed[1], parsed[2], parsed[2], parsed[3],
+            parsed[4], parsed[5], parsed[6], parsed[8],
+        ])
+    elif record_type == "@B":
+        parsed = _numbers(values, 15)
+        if parsed is None:
+            return False
+        session.protocol = session.protocol if session.protocol != "unknown" else "legacy"
+        session.beat.append(parsed)
+    else:
         return False
 
-    destination, width = destinations[record_type]
-    values = _numbers(fields[1:], width)
-    if values is None:
-        return False
-    destination.append(values)
+    session.telemetry_records += 1
     return True
 
 
-def iter_log_lines(path: Path) -> Iterable[str]:
+def iter_log_lines(path: Path) -> Iterable[tuple[str, float]]:
+    """Yield raw VCOM lines from logger CSVs or plain serial text files."""
     with path.open("r", encoding="utf-8", errors="replace", newline="") as handle:
-        first = handle.readline()
-        handle.seek(0)
-        if "raw_line" in first:
-            reader = csv.DictReader(handle)
-            for row in reader:
-                yield row.get("raw_line", "")
-        else:
-            yield from handle
+        for first_data_line in handle:
+            stripped = first_data_line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if "raw_line" in stripped and "elapsed_sec" in stripped:
+                reader = csv.DictReader(itertools.chain([first_data_line], handle))
+                for row in reader:
+                    raw_line = row.get("raw_line", "")
+                    try:
+                        elapsed_ms = float(row.get("elapsed_sec", "0") or 0) * 1000.0
+                    except ValueError:
+                        elapsed_ms = 0.0
+                    yield raw_line, elapsed_ms
+                return
+
+            yield first_data_line.rstrip("\r\n"), 0.0
+            for line in handle:
+                yield line.rstrip("\r\n"), 0.0
+            return
 
 
 def load_session(path: Path) -> Session:
     session = Session()
-    malformed = 0
-    telemetry_lines = 0
-    for line in iter_log_lines(path):
-        if line.lstrip().startswith("@"):
-            telemetry_lines += 1
-            if not parse_telemetry_line(line, session) and "@SCHEMA" not in line:
-                malformed += 1
+    fallback_index = 0
+    for line, elapsed_ms in iter_log_lines(path):
+        stripped = line.strip()
+        if stripped.startswith("@"):
+            if not parse_telemetry_line(stripped, session) and not stripped.startswith("@SCHEMA"):
+                session.parse_errors += 1
+            continue
 
-    arrays = session.arrays()
-    if arrays["sample"].size == 0:
+        # Very old diagnostic logs can still provide a raw ECG trace.
+        match = re.search(r"\[ECG\].*?raw(?:_adc)?[=:]\s*(\d+)", stripped, re.IGNORECASE)
+        if match:
+            raw = float(match.group(1))
+            session.ecg.append([elapsed_ms, fallback_index, raw, raw, 0, 0, 0, 0, 1])
+            fallback_index += 1
+
+    if not session.ecg:
         raise ValueError(
-            "No @S records found. Flash a TARANG_DEBUG_TELEMETRY build and "
-            "capture it with log_vcom.py."
+            "No ECG samples were found. Flash a validation-stream build, reset the board "
+            "after log_vcom opens VCOM, and confirm @E lines are arriving."
         )
-    if malformed:
-        print(f"[WARN] Ignored {malformed} malformed telemetry records")
-    if telemetry_lines == 0:
-        raise ValueError("The file contains no TARANG telemetry records")
+    if session.protocol == "unknown":
+        session.protocol = "diagnostic-fallback"
     return session
 
 
-def _relative_seconds(values_ms: np.ndarray, origin_ms: float) -> np.ndarray:
-    return (values_ms - origin_ms) / 1000.0
+def _origin_ms(data: dict[str, np.ndarray]) -> float:
+    starts = [rows[0, 0] for rows in data.values() if rows.size]
+    return float(min(starts)) if starts else 0.0
 
 
-def _line_with_gaps(
-    time_s: np.ndarray,
-    values: np.ndarray,
-    valid: np.ndarray,
-    expected_period_s: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    if time_s.size == 0:
-        return time_s, values
-    gaps = np.flatnonzero(np.diff(time_s) > expected_period_s * 1.75) + 1
-    invalid = np.flatnonzero(~valid.astype(bool))
-    break_at = np.unique(np.concatenate((gaps, invalid)))
-    if break_at.size == 0:
-        return time_s, values
-    return np.insert(time_s, break_at, np.nan), np.insert(values, break_at, np.nan)
+def _time_s(rows: np.ndarray, origin_ms: float) -> np.ndarray:
+    return (rows[:, 0] - origin_ms) / 1000.0 if rows.size else np.empty(0)
 
 
-def _shade_intervals(ax, time_s: np.ndarray, mask: np.ndarray, color: str, alpha: float):
-    if time_s.size == 0 or not np.any(mask):
-        return
-    changes = np.diff(np.r_[False, mask.astype(bool), False].astype(np.int8))
-    starts = np.flatnonzero(changes == 1)
-    ends = np.flatnonzero(changes == -1) - 1
-    for start, end in zip(starts, ends):
-        right = time_s[end]
-        if end + 1 < time_s.size:
-            right = time_s[end + 1]
-        ax.axvspan(time_s[start], right, color=color, alpha=alpha, linewidth=0)
+def _gap_count(rows: np.ndarray, sample_index_column: int = 1) -> int:
+    if len(rows) < 2:
+        return 0
+    increments = np.diff(rows[:, sample_index_column])
+    return int(np.count_nonzero(increments != 1))
 
 
-def _motion_mask(imu: np.ndarray) -> np.ndarray:
-    if imu.size == 0:
-        return np.empty(0, dtype=bool)
-    magnitude = np.linalg.norm(imu[:, 3:6], axis=1)
-    baseline_count = min(magnitude.size, 1000)
-    baseline = np.median(magnitude[:baseline_count])
-    mad = np.median(np.abs(magnitude[:baseline_count] - baseline))
-    threshold = max(6.0 * 1.4826 * mad, 250.0)
-    return (np.abs(magnitude - baseline) > threshold) & (imu[:, 2] > 0)
+def _measured_rate(rows: np.ndarray) -> float | None:
+    if len(rows) < 2:
+        return None
+    duration_s = (rows[-1, 0] - rows[0, 0]) / 1000.0
+    sample_span = rows[-1, 1] - rows[0, 1]
+    return float(sample_span / duration_s) if duration_s > 0 else None
 
 
-def _rhythm_bands(ax, beat_time: np.ndarray, flags: np.ndarray):
-    if beat_time.size == 0:
-        return
-    for bit, (label, color) in RHYTHM_COLORS.items():
-        mask = (flags.astype(np.uint8) & bit) != 0
-        if np.any(mask):
-            _shade_intervals(ax, beat_time, mask, color, 0.12)
-            ax.plot([], [], color=color, linewidth=6, alpha=0.35, label=label)
-
-
-class EventNavigator:
-    def __init__(self, figure, axes, event_times: np.ndarray, full_limits: tuple[float, float]):
-        self.figure = figure
-        self.axes = axes
-        self.event_times = event_times
-        self.full_limits = full_limits
-        self.index = -1
-        figure.canvas.mpl_connect("key_press_event", self.on_key)
-
-    def on_key(self, event):
-        if event.key == "a":
-            self.axes[-1].set_xlim(*self.full_limits)
-        elif event.key in {"n", "p"} and self.event_times.size:
-            step = 1 if event.key == "n" else -1
-            self.index = (self.index + step) % self.event_times.size
-            center = self.event_times[self.index]
-            self.axes[-1].set_xlim(center - 5.0, center + 5.0)
-            print(
-                f"[EVENT] {self.index + 1}/{self.event_times.size} "
-                f"at {center:.3f} s"
-            )
-        else:
-            return
-        self.figure.canvas.draw_idle()
-
-
-def build_figure(session: Session, title: str):
+def build_summary(session: Session, source: Path) -> dict:
     data = session.arrays()
-    sample, imu, ppg, beat = (
-        data["sample"], data["imu"], data["ppg"], data["beat"]
-    )
-    timestamp_sets = [values[:, 0] for values in (sample, imu, ppg, beat) if values.size]
-    origin_ms = min(values[0] for values in timestamp_sets)
+    ecg = data["ecg"]
+    duration_s = float(max(0.0, (ecg[-1, 0] - ecg[0, 0]) / 1000.0))
+    beat_classes = {name: 0 for name in BEAT_NAMES.values()}
+    for value in data["beat"][:, 8].astype(int) if data["beat"].size else []:
+        name = BEAT_NAMES.get(int(value), "Q")
+        beat_classes[name] = beat_classes.get(name, 0) + 1
 
-    ts = _relative_seconds(sample[:, 0], origin_ms)
-    ti = _relative_seconds(imu[:, 0], origin_ms) if imu.size else np.empty(0)
-    tb = _relative_seconds(beat[:, 0], origin_ms) if beat.size else np.empty(0)
+    diagnostics = data["diagnostics"]
+    metrics = data["metrics"]
+    return {
+        "source": str(source.resolve()),
+        "protocol": session.protocol,
+        "stream_version": session.stream_version,
+        "declared_rates_hz": session.rates_hz,
+        "duration_seconds": round(duration_s, 3),
+        "records": {
+            "telemetry": session.telemetry_records,
+            "parse_errors": session.parse_errors,
+            "ecg": len(ecg),
+            "ppg": len(data["ppg"]),
+            "imu": len(data["imu"]),
+            "beats": len(data["beat"]),
+            "ppg_metric_windows": len(metrics),
+            "diagnostic_snapshots": len(diagnostics),
+        },
+        "measured_rates_hz": {
+            name: None if (rate := _measured_rate(data[name])) is None else round(rate, 3)
+            for name in ("ecg", "ppg", "imu")
+        },
+        "sample_index_gaps": {
+            name: _gap_count(data[name]) for name in ("ecg", "ppg", "imu")
+        },
+        "beat_classes": beat_classes,
+        "ppg_valid_windows": int(np.count_nonzero(metrics[:, 8])) if metrics.size else 0,
+        "maximums": {
+            "ecg_overruns": int(np.max(diagnostics[:, 2])) if diagnostics.size else 0,
+            "dropped_frames": int(np.max(diagnostics[:, 15])) if diagnostics.size else 0,
+            "dsp_pending_overflows": int(np.max(diagnostics[:, 16])) if diagnostics.size else 0,
+            "nlms_safety_resets": int(np.max(diagnostics[:, 14])) if diagnostics.size else 0,
+        },
+    }
 
-    plt.rcParams["path.simplify"] = False
-    plt.rcParams["agg.path.chunksize"] = 0
-    figure, axes = plt.subplots(
-        4, 1, sharex=True, figsize=(16, 10),
-        gridspec_kw={"height_ratios": [1.2, 1.5, 1.0, 1.0]},
-    )
-    figure.canvas.manager.set_window_title("TARANG validation")
-    figure.suptitle(title, fontsize=13)
 
-    raw_t, raw_y = _line_with_gaps(ts, sample[:, 2], sample[:, 8] > 0, 0.004)
-    axes[0].plot(raw_t, raw_y, color="#20262e", linewidth=0.65, label="Raw ECG")
-    if imu.size:
-        _shade_intervals(axes[0], ti, _motion_mask(imu), "#f59e0b", 0.18)
-        axes[0].plot([], [], color="#f59e0b", linewidth=6, alpha=0.25, label="Motion")
+def _empty_axis(axis: plt.Axes, message: str) -> None:
+    axis.text(0.5, 0.5, message, ha="center", va="center", color="#6b7280", transform=axis.transAxes)
+    axis.set_xticks([])
+    axis.set_yticks([])
+
+
+def build_figure(session: Session, title: str) -> plt.Figure:
+    data = session.arrays()
+    origin = _origin_ms(data)
+    ecg, ppg, imu = data["ecg"], data["ppg"], data["imu"]
+    beat, metrics, diagnostics = data["beat"], data["metrics"], data["diagnostics"]
+
+    figure, axes = plt.subplots(7, 1, figsize=(16, 18), sharex=True)
+    figure.patch.set_facecolor("#f5f7f8")
+    figure.suptitle(title, x=0.055, ha="left", fontsize=16, fontweight="bold", color="#172126")
+
+    te = _time_s(ecg, origin)
+    axes[0].plot(te, ecg[:, 2], color="#223038", linewidth=0.7, label="Raw ADC")
+    axes[0].plot(te, ecg[:, 3], color="#c04b36", linewidth=0.75, alpha=0.85, label="NLMS clean ADC")
     axes[0].set_ylabel("ADC counts")
-    axes[0].set_title("Raw ECG and native-rate IMU motion", loc="left", fontsize=10)
+    axes[0].set_title("ECG acquisition and NLMS output", loc="left")
     axes[0].legend(loc="upper right", ncols=2)
 
-    filtered_t, filtered = _line_with_gaps(
-        ts, sample[:, 3] / 1000.0, sample[:, 8] > 0, 0.004
-    )
-    normalized_t, normalized = _line_with_gaps(
-        ts, sample[:, 4] / 1000.0, sample[:, 8] > 0, 0.004
-    )
-    axes[1].plot(filtered_t, filtered, color="#2563eb", linewidth=0.7, label="Bandpass")
-    axes[1].plot(normalized_t, normalized, color="#059669", linewidth=0.7, label="Z-score")
-    detection_axis = axes[1].twinx()
-    detection_axis.plot(ts, sample[:, 5] / 1000.0, color="#a855f7", alpha=0.55,
-                        linewidth=0.65, label="MWI")
-    detection_axis.plot(ts, sample[:, 6] / 1000.0, color="#dc2626", alpha=0.7,
-                        linewidth=0.65, label="TH1")
-    if beat.size:
-        axes[1].scatter(tb, np.interp(tb, ts, sample[:, 4] / 1000.0), marker="|",
-                        s=55, color="#dc2626", label="R peak", zorder=4)
-    axes[1].set_ylabel("ECG")
-    detection_axis.set_ylabel("MWI")
-    axes[1].set_title("Firmware DSP output and detector state", loc="left", fontsize=10)
-    lines = axes[1].get_lines() + detection_axis.get_lines()
-    labels = [line.get_label() for line in lines]
-    axes[1].legend(lines, labels, loc="upper right", ncols=4)
+    axes[1].plot(te, ecg[:, 4] / 1000.0, color="#156f78", linewidth=0.8, label="Bandpass")
+    axes[1].plot(te, ecg[:, 5] / 1000.0, color="#7651a8", linewidth=0.7, alpha=0.8, label="Z-score")
+    dsp_axis = axes[1].twinx()
+    dsp_axis.plot(te, ecg[:, 6] / 1000.0, color="#dc8b21", linewidth=0.75, label="MWI")
+    dsp_axis.plot(te, ecg[:, 7] / 1000.0, color="#bf3030", linewidth=0.7, linestyle="--", label="Threshold")
+    axes[1].set_ylabel("DSP amplitude")
+    dsp_axis.set_ylabel("MWI")
+    axes[1].set_title("ECG DSP and adaptive threshold", loc="left")
+    lines = axes[1].get_lines() + dsp_axis.get_lines()
+    axes[1].legend(lines, [line.get_label() for line in lines], loc="upper right", ncols=4)
+
+    if ppg.size:
+        tp = _time_s(ppg, origin)
+        axes[2].plot(tp, ppg[:, 2] - np.median(ppg[:, 2]), color="#b32f4a", linewidth=0.75, label="RED AC")
+        axes[2].plot(tp, ppg[:, 3] - np.median(ppg[:, 3]), color="#173e67", linewidth=0.75, label="IR AC")
+        axes[2].set_ylabel("ADC - median")
+        axes[2].legend(loc="upper right", ncols=2)
+    else:
+        _empty_axis(axes[2], "No @P samples captured")
+    axes[2].set_title("PPG RED and IR waveforms", loc="left")
+
+    if imu.size:
+        ti = _time_s(imu, origin)
+        for column, label, color in ((2, "Ax", "#176b87"), (3, "Ay", "#c96c2b"), (4, "Az", "#2b7a4b")):
+            axes[3].plot(ti, imu[:, column] / 16384.0, linewidth=0.8, label=label, color=color)
+        motion_axis = axes[3].twinx()
+        motion_axis.plot(ti, imu[:, 8], color="#873b8f", linewidth=0.7, alpha=0.55, label="Motion")
+        axes[3].set_ylabel("Acceleration (g)")
+        motion_axis.set_ylabel("Motion (mg)")
+        lines = axes[3].get_lines() + motion_axis.get_lines()
+        axes[3].legend(lines, [line.get_label() for line in lines], loc="upper right", ncols=4)
+    else:
+        _empty_axis(axes[3], "No @I samples captured")
+    axes[3].set_title("IMU motion reference used by NLMS", loc="left")
 
     if beat.size:
-        gate = beat[:, 5] / 1000.0
-        p_v = beat[:, 6] / 1000.0
-        p_s = beat[:, 7] / 1000.0
-        axes[2].scatter(tb[gate >= 0], gate[gate >= 0], s=16, color="#7c3aed",
-                        label="Gate P(abnormal)")
-        axes[2].scatter(tb[p_v >= 0], p_v[p_v >= 0], s=16, color="#dc2626",
-                        label="SV P(V)")
-        axes[2].scatter(tb[p_s >= 0], p_s[p_s >= 0], s=16, color="#d97706",
-                        label="SV P(S)")
-        axes[2].axhline(0.25, color="#7c3aed", linestyle="--", linewidth=0.8)
-        axes[2].axhline(0.60, color="#dc2626", linestyle="--", linewidth=0.8)
-        axes[2].axhline(0.35, color="#d97706", linestyle="--", linewidth=0.8)
-        classes = np.clip(beat[:, 8].astype(int), 0, 3)
-        axes[2].scatter(tb, np.full(tb.size, 1.04), s=20,
-                        c=BEAT_COLORS[classes], marker="v", label="Beat class")
-    axes[2].set_ylim(-0.04, 1.10)
-    axes[2].set_ylabel("Probability")
-    axes[2].set_title("AI output at native beat timestamps", loc="left", fontsize=10)
-    axes[2].legend(loc="upper right", ncols=4)
+        tb = _time_s(beat, origin)
+        axes[4].plot(tb, beat[:, 5] / 1000.0, "o-", color="#6c4aa1", markersize=3, linewidth=0.8, label="Gate")
+        axes[4].plot(tb, beat[:, 6] / 1000.0, "o-", color="#c73535", markersize=3, linewidth=0.8, label="P(V)")
+        axes[4].plot(tb, beat[:, 7] / 1000.0, "o-", color="#d8831f", markersize=3, linewidth=0.8, label="P(S)")
+        for row, beat_time in zip(beat, tb):
+            class_id = int(row[8])
+            axes[4].scatter(beat_time, 1.04, color=BEAT_COLORS.get(class_id, "#4b5563"), s=18, zorder=4)
+        axes[4].axhline(0.25, color="#6c4aa1", linestyle=":", linewidth=0.8)
+        axes[4].set_ylim(-0.05, 1.1)
+        axes[4].set_ylabel("Probability")
+        axes[4].legend(loc="upper right", ncols=3)
+    else:
+        _empty_axis(axes[4], "No @A beat inference records captured")
+    axes[4].set_title("AI gate, S/V classifier, and beat labels", loc="left")
 
+    has_clinical = False
     if beat.size:
-        axes[3].step(tb, beat[:, 11], where="post", color="#111827", linewidth=1.0,
-                     label="HR")
-        hrv_axis = axes[3].twinx()
-        hrv_axis.step(tb, beat[:, 12], where="post", color="#2563eb", linewidth=0.9,
-                      label="SDNN")
-        hrv_axis.step(tb, beat[:, 13], where="post", color="#059669", linewidth=0.9,
-                      label="RMSSD")
-        _rhythm_bands(axes[3], tb, beat[:, 10])
-        axes[3].set_ylabel("HR (BPM)")
-        hrv_axis.set_ylabel("HRV (ms)")
-        lines = axes[3].get_lines() + hrv_axis.get_lines()
-        axes[3].legend(lines, [line.get_label() for line in lines],
-                       loc="upper right", ncols=5)
-    axes[3].set_title("Clinical state and rhythm flags", loc="left", fontsize=10)
-    axes[3].set_xlabel("Device time from capture start (s)")
+        tb = _time_s(beat, origin)
+        axes[5].plot(tb, beat[:, 11], color="#20262d", linewidth=1.0, marker=".", label="ECG HR")
+        has_clinical = True
+    if metrics.size:
+        tm = _time_s(metrics, origin)
+        axes[5].plot(tm, metrics[:, 3], color="#14785d", linewidth=1.0, marker=".", label="PPG pulse")
+        oxygen_axis = axes[5].twinx()
+        oxygen_axis.plot(tm, metrics[:, 2], color="#1f62a2", linewidth=1.0, marker=".", label="SpO2")
+        oxygen_axis.set_ylabel("SpO2 (%)")
+        has_clinical = True
+        lines = axes[5].get_lines() + oxygen_axis.get_lines()
+        axes[5].legend(lines, [line.get_label() for line in lines], loc="upper right", ncols=3)
+    elif beat.size:
+        axes[5].legend(loc="upper right")
+    if not has_clinical:
+        _empty_axis(axes[5], "No beat or PPG metric records captured")
+    axes[5].set_ylabel("Rate (BPM)")
+    axes[5].set_title("Clinical metrics", loc="left")
+
+    if diagnostics.size:
+        td = _time_s(diagnostics, origin)
+        axes[6].step(td, diagnostics[:, 2], where="post", color="#bd3030", label="ECG overruns")
+        axes[6].step(td, diagnostics[:, 15], where="post", color="#d27616", label="Dropped frames")
+        axes[6].step(td, diagnostics[:, 16], where="post", color="#6e4d94", label="DSP queue overflow")
+        nlms_axis = axes[6].twinx()
+        nlms_axis.plot(td, diagnostics[:, 13] / 10.0, color="#137366", marker=".", label="NLMS suppression")
+        nlms_axis.set_ylabel("Suppression (%)")
+        axes[6].set_ylabel("Cumulative count")
+        lines = axes[6].get_lines() + nlms_axis.get_lines()
+        axes[6].legend(lines, [line.get_label() for line in lines], loc="upper right", ncols=4)
+    else:
+        _empty_axis(axes[6], "No @D diagnostics captured")
+    axes[6].set_title("Pipeline integrity and NLMS diagnostics", loc="left")
+    axes[6].set_xlabel("Device time from capture start (seconds)")
 
     for axis in axes:
-        axis.grid(True, color="#d1d5db", linewidth=0.45, alpha=0.65)
+        axis.set_facecolor("#ffffff")
+        axis.grid(True, color="#d8dde0", linewidth=0.45, alpha=0.75)
         axis.margins(x=0)
+        axis.tick_params(labelsize=8)
+        axis.title.set_fontsize(10)
+        axis.title.set_fontweight("bold")
 
-    full_limits = (float(ts[0]), float(ts[-1]))
-    flagged = np.empty(0)
+    figure.tight_layout(rect=(0.03, 0.02, 0.98, 0.975))
+    return figure
+
+
+def build_dsp_figure(session: Session, title: str) -> plt.Figure:
+    """Generate high-resolution plot of all processed DSP pipeline stages."""
+    data = session.arrays()
+    origin = _origin_ms(data)
+    ecg = data["ecg"]
+    beat = data["beat"]
+
+    figure, axes = plt.subplots(4, 1, figsize=(16, 12), sharex=True)
+    figure.patch.set_facecolor("#f5f7f8")
+    figure.suptitle(f"{title} - Processed DSP Waveforms", x=0.055, ha="left", fontsize=15, fontweight="bold", color="#172126")
+
+    te = _time_s(ecg, origin)
+
+    # Panel 1: Raw vs Clean
+    axes[0].plot(te, ecg[:, 2], color="#2d3748", linewidth=0.7, label="Raw AD8232 ADC")
+    axes[0].plot(te, ecg[:, 3], color="#e53e3e", linewidth=0.8, alpha=0.85, label="NLMS Motion-Cleaned ADC")
     if beat.size:
-        flagged = tb[(beat[:, 8] != 0) | (beat[:, 10] != 0)]
-    navigator = EventNavigator(figure, axes, flagged, full_limits)
-    figure._tarang_event_navigator = navigator
-    figure.tight_layout(rect=(0, 0, 1, 0.97))
-    return figure, data, flagged
+        tb = _time_s(beat, origin)
+        for row, beat_time in zip(beat, tb):
+            cid = int(row[8])
+            axes[0].axvline(beat_time, color=BEAT_COLORS.get(cid, "#718096"), linestyle=":", alpha=0.6, linewidth=0.8)
+    axes[0].set_ylabel("ADC Counts")
+    axes[0].set_title("1. Raw Acquisition vs. NLMS Motion-Filtered ECG", loc="left")
+    axes[0].legend(loc="upper right", ncols=2)
 
+    # Panel 2: Bandpass (0.5 - 40 Hz)
+    axes[1].plot(te, ecg[:, 4] / 1000.0, color="#0d9488", linewidth=0.8, label="Morphology Bandpass (0.5–40 Hz)")
+    axes[1].axhline(0, color="#94a3b8", linestyle="--", linewidth=0.6)
+    axes[1].set_ylabel("Amplitude")
+    axes[1].set_title("2. Baseline-Removed 4th-Order Butterworth Bandpass", loc="left")
+    axes[1].legend(loc="upper right")
 
-def print_summary(data: dict[str, np.ndarray], flagged: np.ndarray):
-    sample, imu, ppg, beat = (
-        data["sample"], data["imu"], data["ppg"], data["beat"]
-    )
-    duration_s = (sample[-1, 0] - sample[0, 0]) / 1000.0
-    ecg_drops = int(np.sum(
-        (np.diff(sample[:, 1]) != 1) | (np.diff(sample[:, 0]) > 7.0)
-    ))
-    imu_drops = int(np.sum(np.diff(imu[:, 1]) != 1)) if imu.size else 0
-    ppg_drops = int(np.sum(np.diff(ppg[:, 1]) != 1)) if ppg.size else 0
-    print(f"[SESSION] duration={duration_s:.3f}s ECG={len(sample)} IMU={len(imu)} PPG={len(ppg)} beats={len(beat)}")
-    print(f"[GAPS] ECG={ecg_drops} IMU={imu_drops} PPG={ppg_drops} flagged_events={len(flagged)}")
-    print("[VIEW] n=next event, p=previous event, a=entire session")
+    # Panel 3: Z-Score Normalized
+    axes[2].plot(te, ecg[:, 5] / 1000.0, color="#7c3aed", linewidth=0.8, label="Rolling 30s Z-Score Normalized (μ=0, σ=1)")
+    axes[2].axhline(0, color="#94a3b8", linestyle="--", linewidth=0.6)
+    axes[2].set_ylabel("Z-Score (σ)")
+    axes[2].set_title("3. Rolling Standardized Amplitude for ML Inference", loc="left")
+    axes[2].legend(loc="upper right")
 
-
-HTML_TEMPLATE = r"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>__TITLE__</title>
-<style>
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 13px system-ui, sans-serif; color: #18212b; background: #f4f6f8; }
-  header { height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #fff; border-bottom: 1px solid #cfd5dc; }
-  h1 { margin: 0; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 650; }
-  .status { color: #56616d; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .tools { display: flex; gap: 4px; }
-  button { width: 32px; height: 30px; border: 1px solid #b8c0c9; border-radius: 4px; background: #fff; color: #18212b; font-size: 16px; cursor: pointer; }
-  button:hover { background: #edf2f6; }
-  main { padding: 10px 12px 16px; }
-  .plot { position: relative; height: 190px; margin-bottom: 8px; background: #fff; border: 1px solid #cfd5dc; border-radius: 4px; overflow: hidden; }
-  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
-  .legend { position: absolute; top: 6px; right: 9px; display: flex; gap: 10px; pointer-events: none; font-size: 11px; background: rgba(255,255,255,.86); padding: 3px 5px; }
-  .key::before { content: ''; display: inline-block; width: 12px; height: 2px; margin-right: 4px; vertical-align: middle; background: var(--c); }
-  @media (max-width: 720px) { .plot { height: 155px; } .status { display: none; } main { padding: 6px; } }
-</style>
-</head>
-<body>
-<header>
-  <h1>__TITLE__</h1>
-  <div class="status" id="status"></div>
-  <div class="tools">
-    <button id="home" title="Full session" aria-label="Full session">&#8962;</button>
-    <button id="prev" title="Previous flagged event" aria-label="Previous event">&#9664;</button>
-    <button id="next" title="Next flagged event" aria-label="Next event">&#9654;</button>
-  </div>
-</header>
-<main>
-  <section class="plot"><canvas data-row="0"></canvas><div class="legend"><span class="key" style="--c:#20262e">Raw ECG</span><span class="key" style="--c:#f59e0b">Motion</span></div></section>
-  <section class="plot"><canvas data-row="1"></canvas><div class="legend"><span class="key" style="--c:#2563eb">Bandpass</span><span class="key" style="--c:#059669">Z-score</span><span class="key" style="--c:#a855f7">MWI</span><span class="key" style="--c:#dc2626">TH1</span></div></section>
-  <section class="plot"><canvas data-row="2"></canvas><div class="legend"><span class="key" style="--c:#7c3aed">Gate</span><span class="key" style="--c:#dc2626">P(V)</span><span class="key" style="--c:#d97706">P(S)</span></div></section>
-  <section class="plot"><canvas data-row="3"></canvas><div class="legend"><span class="key" style="--c:#111827">HR</span><span class="key" style="--c:#2563eb">SDNN</span><span class="key" style="--c:#059669">RMSSD</span></div></section>
-</main>
-<script>
-const D = __DATA__;
-const canvases = [...document.querySelectorAll('canvas')];
-const origin = D.S[0][0], full = [origin, D.S[D.S.length - 1][0]];
-let view = [...full], dragging = false, dragX = 0, dragView = null, cursorX = null, eventIndex = -1;
-const pad = {l: 62, r: 54, t: 26, b: 25};
-const colors = ['#707780','#d97706','#dc2626','#111827'];
-
-function lowerBound(rows, value) { let lo=0, hi=rows.length; while(lo<hi){const m=(lo+hi)>>1; if(rows[m][0]<value)lo=m+1;else hi=m;} return lo; }
-function bounds(rows) { return [Math.max(0, lowerBound(rows, view[0])-1), Math.min(rows.length, lowerBound(rows, view[1])+1)]; }
-function xMap(t,w) { return pad.l + (t-view[0])/(view[1]-view[0])*(w-pad.l-pad.r); }
-function yMap(v,min,max,h) { return pad.t + (max-v)/(max-min||1)*(h-pad.t-pad.b); }
-function range(rows, cols, validCol=null) {
-  if(!rows.length) return [0,1]; const [a,b]=bounds(rows); let mn=Infinity,mx=-Infinity;
-  for(let i=a;i<b;i++){ if(validCol!==null && !rows[i][validCol]) continue; for(const c of cols){const v=rows[i][c]; if(v<mn)mn=v;if(v>mx)mx=v;} }
-  if(!isFinite(mn)) return [0,1]; const d=Math.max((mx-mn)*.08, 1e-6); return [mn-d,mx+d];
-}
-function series(ctx,rows,col,min,max,w,h,color,validCol=null,gap=Infinity,scale=1) {
-  if(!rows.length)return; const [a,b]=bounds(rows); ctx.strokeStyle=color;ctx.lineWidth=1;ctx.beginPath();let open=false,prev=0;
-  for(let i=a;i<b;i++){const r=rows[i], ok=(validCol===null||r[validCol]) && (i===a||r[0]-prev<=gap); const x=xMap(r[0],w),y=yMap(r[col]/scale,min,max,h); if(!ok||!isFinite(y)){open=false;} else if(!open){ctx.moveTo(x,y);open=true;}else ctx.lineTo(x,y); prev=r[0];}
-  ctx.stroke();
-}
-function axes(ctx,w,h,title,left,right='') {
-  ctx.strokeStyle='#d5dbe1';ctx.lineWidth=1;ctx.fillStyle='#5b6570';ctx.font='11px system-ui';
-  for(let i=0;i<=5;i++){const x=pad.l+i*(w-pad.l-pad.r)/5;ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,h-pad.b);ctx.stroke();const sec=(view[0]-origin+(view[1]-view[0])*i/5)/1000;ctx.fillText(sec.toFixed(sec<10?2:1)+'s',x-12,h-7);}
-  ctx.fillStyle='#18212b';ctx.font='600 12px system-ui';ctx.fillText(title,9,16);ctx.save();ctx.translate(14,h/2);ctx.rotate(-Math.PI/2);ctx.fillText(left,0,0);ctx.restore();if(right){ctx.save();ctx.translate(w-8,h/2);ctx.rotate(Math.PI/2);ctx.fillText(right,0,0);ctx.restore();}
-}
-function motionBands(ctx,w,h){for(const r of D.motion){if(r[1]<view[0]||r[0]>view[1])continue;ctx.fillStyle='rgba(245,158,11,.17)';const x0=xMap(Math.max(r[0],view[0]),w),x1=xMap(Math.min(r[1],view[1]),w);ctx.fillRect(x0,pad.t,x1-x0,h-pad.t-pad.b);}}
-function rhythmBands(ctx,w,h){for(const r of D.rhythm){if(r[1]<view[0]||r[0]>view[1])continue;ctx.fillStyle=r[3];const x0=xMap(Math.max(r[0],view[0]),w),x1=xMap(Math.min(r[1],view[1]),w);ctx.fillRect(x0,pad.t,x1-x0,h-pad.t-pad.b);}}
-function points(ctx,rows,col,w,h,color,condition){const [a,b]=bounds(rows);ctx.fillStyle=color;for(let i=a;i<b;i++){const r=rows[i];if(!condition(r))continue;const x=xMap(r[0],w),y=yMap(r[col]/1000,0,1.1,h);ctx.fillRect(x-2,y-2,4,4);}}
-function draw(canvas){
-  const dpr=devicePixelRatio||1,w=canvas.clientWidth,h=canvas.clientHeight;canvas.width=w*dpr;canvas.height=h*dpr;const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);const row=+canvas.dataset.row;
-  if(row===0){axes(ctx,w,h,'1. Raw ECG and native-rate motion','ADC counts');motionBands(ctx,w,h);const y=range(D.S,[2],8);series(ctx,D.S,2,y[0],y[1],w,h,'#20262e',8,7);}
-  if(row===1){axes(ctx,w,h,'2. Firmware DSP and R-peaks','ECG','MWI');const y=range(D.S,[3,4],8),q=range(D.S,[5,6],8);series(ctx,D.S,3,y[0]/1000,y[1]/1000,w,h,'#2563eb',8,7,1000);series(ctx,D.S,4,y[0]/1000,y[1]/1000,w,h,'#059669',8,7,1000);series(ctx,D.S,5,q[0]/1000,q[1]/1000,w,h,'#a855f7',8,7,1000);series(ctx,D.S,6,q[0]/1000,q[1]/1000,w,h,'#dc2626',8,7,1000);ctx.strokeStyle='#dc2626';for(const b of D.B){if(b[0]>=view[0]&&b[0]<=view[1]){const x=xMap(b[0],w);ctx.beginPath();ctx.moveTo(x,pad.t);ctx.lineTo(x,pad.t+8);ctx.stroke();}}}
-  if(row===2){axes(ctx,w,h,'3. AI output at beat timestamps','Probability');points(ctx,D.B,5,w,h,'#7c3aed',r=>r[5]>=0);points(ctx,D.B,6,w,h,'#dc2626',r=>r[6]>=0);points(ctx,D.B,7,w,h,'#d97706',r=>r[7]>=0);for(const [v,c] of [[.25,'#7c3aed'],[.6,'#dc2626'],[.35,'#d97706']]){ctx.strokeStyle=c;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(pad.l,yMap(v,0,1.1,h));ctx.lineTo(w-pad.r,yMap(v,0,1.1,h));ctx.stroke();ctx.setLineDash([]);}for(const b of D.B){if(b[0]>=view[0]&&b[0]<=view[1]){ctx.fillStyle=colors[Math.max(0,Math.min(3,b[8]))];ctx.fillRect(xMap(b[0],w)-2,pad.t+2,4,5);}}}
-  if(row===3){axes(ctx,w,h,'4. Clinical state and rhythm flags','HR','HRV');rhythmBands(ctx,w,h);const hr=range(D.B,[11]),hv=range(D.B,[12,13]);series(ctx,D.B,11,hr[0],hr[1],w,h,'#111827');series(ctx,D.B,12,hv[0],hv[1],w,h,'#2563eb');series(ctx,D.B,13,hv[0],hv[1],w,h,'#059669');}
-  if(cursorX!==null){ctx.strokeStyle='rgba(24,33,43,.35)';ctx.beginPath();ctx.moveTo(cursorX,pad.t);ctx.lineTo(cursorX,h-pad.b);ctx.stroke();}
-}
-function redraw(){for(const c of canvases)draw(c);const span=(view[1]-view[0])/1000;document.getElementById('status').textContent=`${span.toFixed(2)} s visible | ${D.S.length.toLocaleString()} ECG samples | ${D.B.length} beats`;}
-function clamp(){const span=view[1]-view[0];if(view[0]<full[0]){view[0]=full[0];view[1]=full[0]+span;}if(view[1]>full[1]){view[1]=full[1];view[0]=full[1]-span;}}
-for(const c of canvases){
-  c.addEventListener('wheel',e=>{e.preventDefault();const r=c.getBoundingClientRect(),p=(e.clientX-r.left-pad.l)/(r.width-pad.l-pad.r),anchor=view[0]+Math.max(0,Math.min(1,p))*(view[1]-view[0]),factor=e.deltaY>0?1.25:.8,span=Math.max(100,Math.min(full[1]-full[0],(view[1]-view[0])*factor));view=[anchor-span*p,anchor+span*(1-p)];clamp();redraw();},{passive:false});
-  c.addEventListener('pointerdown',e=>{dragging=true;dragX=e.clientX;dragView=[...view];c.setPointerCapture(e.pointerId);});
-  c.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect();cursorX=e.clientX-r.left;if(dragging){const dx=e.clientX-dragX,span=dragView[1]-dragView[0],dt=-dx/(r.width-pad.l-pad.r)*span;view=[dragView[0]+dt,dragView[1]+dt];clamp();}redraw();});
-  c.addEventListener('pointerup',()=>dragging=false);c.addEventListener('pointerleave',()=>{if(!dragging){cursorX=null;redraw();}});c.addEventListener('dblclick',()=>{view=[...full];redraw();});
-}
-function jump(step){if(!D.events.length)return;eventIndex=(eventIndex+step+D.events.length)%D.events.length;const t=D.events[eventIndex],span=Math.min(10000,full[1]-full[0]);view=[t-span/2,t+span/2];clamp();redraw();}
-document.getElementById('home').onclick=()=>{view=[...full];redraw();};document.getElementById('prev').onclick=()=>jump(-1);document.getElementById('next').onclick=()=>jump(1);
-addEventListener('keydown',e=>{if(e.key==='a'){view=[...full];redraw();}if(e.key==='n')jump(1);if(e.key==='p')jump(-1);});addEventListener('resize',redraw);redraw();
-</script>
-</body>
-</html>"""
-
-
-def _intervals(time_ms: np.ndarray, mask: np.ndarray) -> list[list[float]]:
-    if time_ms.size == 0 or not np.any(mask):
-        return []
-    changes = np.diff(np.r_[False, mask.astype(bool), False].astype(np.int8))
-    starts = np.flatnonzero(changes == 1)
-    ends = np.flatnonzero(changes == -1) - 1
-    result = []
-    for start, end in zip(starts, ends):
-        right = time_ms[end + 1] if end + 1 < time_ms.size else time_ms[end]
-        result.append([float(time_ms[start]), float(right)])
-    return result
-
-
-def write_html_viewer(data: dict[str, np.ndarray], path: Path, title: str):
-    imu, beat = data["imu"], data["beat"]
-    motion = _intervals(imu[:, 0], _motion_mask(imu)) if imu.size else []
-    rhythm = []
-    rhythm_colors = {
-        0x01: "rgba(124,58,237,.12)", 0x02: "rgba(239,68,68,.10)",
-        0x04: "rgba(37,99,235,.10)", 0x08: "rgba(249,115,22,.12)",
-        0x10: "rgba(234,179,8,.12)", 0x20: "rgba(185,28,28,.14)",
-        0x40: "rgba(219,39,119,.12)", 0x80: "rgba(69,10,10,.20)",
-    }
+    # Panel 4: Pan-Tompkins MWI and Adaptive Threshold
+    axes[3].plot(te, ecg[:, 6] / 1000.0, color="#d97706", linewidth=0.85, label="Moving Window Integrator (MWI)")
+    axes[3].plot(te, ecg[:, 7] / 1000.0, color="#dc2626", linewidth=0.8, linestyle="--", label="Adaptive Threshold (TH1)")
     if beat.size:
-        for bit, color in rhythm_colors.items():
-            for start, end in _intervals(beat[:, 0], (beat[:, 10].astype(np.uint8) & bit) != 0):
-                rhythm.append([start, end, bit, color])
-    events = beat[(beat[:, 8] != 0) | (beat[:, 10] != 0), 0].tolist() if beat.size else []
-    payload = {
-        "S": data["sample"].tolist(), "I": imu.tolist(),
-        "P": data["ppg"].tolist(), "B": beat.tolist(),
-        "motion": motion, "rhythm": rhythm, "events": events,
+        tb = _time_s(beat, origin)
+        for row, beat_time in zip(beat, tb):
+            cid = int(row[8])
+            axes[3].scatter(beat_time, 1.0, color=BEAT_COLORS.get(cid, "#dc2626"), s=24, zorder=5)
+    axes[3].set_ylabel("MWI Energy")
+    axes[3].set_title("4. Pan-Tompkins QRS Energy & Dynamic Detection Threshold", loc="left")
+    axes[3].set_xlabel("Device time from capture start (seconds)")
+    axes[3].legend(loc="upper right", ncols=2)
+
+    for ax in axes:
+        ax.set_facecolor("#ffffff")
+        ax.grid(True, color="#e2e8f0", linewidth=0.5, alpha=0.8)
+        ax.margins(x=0)
+        ax.tick_params(labelsize=8)
+        ax.title.set_fontsize(10)
+        ax.title.set_fontweight("bold")
+
+    figure.tight_layout(rect=(0.03, 0.02, 0.98, 0.975))
+    return figure
+
+
+def build_imu_correlation_figure(session: Session, title: str) -> tuple[plt.Figure | None, dict]:
+    """Generate IMU-to-ECG motion correlation, artifact cancellation, and scatter plots."""
+    data = session.arrays()
+    ecg = data["ecg"]
+    imu = data["imu"]
+
+    if ecg.size == 0 or imu.size == 0:
+        return None, {"available": False}
+
+    origin = _origin_ms(data)
+    te = _time_s(ecg, origin)
+    ti = _time_s(imu, origin)
+
+    # Calculate ECG motion cancellation artifact = |Raw - Clean|
+    raw_ecg = ecg[:, 2]
+    clean_ecg = ecg[:, 3]
+    ecg_artifact = np.abs(raw_ecg - clean_ecg)
+
+    # Calculate 3D acceleration magnitude (in g)
+    ax = imu[:, 2] / 16384.0
+    ay = imu[:, 3] / 16384.0
+    az = imu[:, 4] / 16384.0
+    accel_mag = np.sqrt(ax**2 + ay**2 + az**2)
+    motion_mg = imu[:, 8]
+
+    # Interpolate IMU motion onto ECG sample timestamps for accurate correlation
+    motion_interp = np.interp(ecg[:, 0], imu[:, 0], motion_mg, left=0, right=0)
+    accel_mag_interp = np.interp(ecg[:, 0], imu[:, 0], accel_mag, left=1.0, right=1.0)
+
+    # Compute Pearson Correlation
+    if np.std(motion_interp) > 1e-6 and np.std(ecg_artifact) > 1e-6:
+        corr_matrix = np.corrcoef(motion_interp, ecg_artifact)
+        r_motion_artifact = float(corr_matrix[0, 1])
+    else:
+        r_motion_artifact = 0.0
+
+    # NLMS Suppression stats
+    active_motion_mask = motion_interp > 50.0  # > 50 mg motion threshold
+    mean_artifact_motion = float(np.mean(ecg_artifact[active_motion_mask])) if np.any(active_motion_mask) else 0.0
+    mean_artifact_rest = float(np.mean(ecg_artifact[~active_motion_mask])) if np.any(~active_motion_mask) else 0.0
+    max_artifact = float(np.max(ecg_artifact)) if ecg_artifact.size else 0.0
+
+    metrics = {
+        "available": True,
+        "pearson_r_motion_artifact": round(r_motion_artifact, 4),
+        "mean_artifact_during_motion": round(mean_artifact_motion, 2),
+        "mean_artifact_at_rest": round(mean_artifact_rest, 2),
+        "max_nlms_correction_adc": round(max_artifact, 2),
+        "motion_samples_pct": round(float(np.mean(active_motion_mask)) * 100.0, 1),
     }
-    document = HTML_TEMPLATE.replace("__TITLE__", html.escape(title)).replace(
-        "__DATA__", json.dumps(payload, separators=(",", ":"), allow_nan=False)
+
+    figure, axes = plt.subplots(3, 1, figsize=(16, 11))
+    figure.patch.set_facecolor("#f5f7f8")
+    figure.suptitle(f"{title} - IMU Motion vs. ECG Artifact Correlation", x=0.055, ha="left", fontsize=15, fontweight="bold", color="#172126")
+
+    # Panel 1: Time-domain comparison of NLMS Correction vs IMU Motion
+    axes[0].plot(te, ecg_artifact, color="#c53030", linewidth=0.8, label="ECG Artifact (|Raw - Clean ADC|)")
+    ax0_twin = axes[0].twinx()
+    ax0_twin.plot(ti, motion_mg, color="#3182ce", linewidth=0.75, alpha=0.7, label="IMU Motion Index (mg)")
+    ax0_twin.set_ylabel("Motion (mg)", color="#3182ce")
+    axes[0].set_ylabel("ADC Correction")
+    axes[0].set_title("1. Dynamic NLMS Motion Artifact Cancellation vs. IMU Motion Intensity", loc="left")
+    lines0 = axes[0].get_lines() + ax0_twin.get_lines()
+    axes[0].legend(lines0, [l.get_label() for l in lines0], loc="upper right", ncols=2)
+
+    # Panel 2: Scatter correlation plot (ECG Artifact vs. Motion Intensity)
+    sample_step = max(1, len(ecg) // 2000)  # Downsample scatter points for clean rendering
+    axes[1].scatter(motion_interp[::sample_step], ecg_artifact[::sample_step], color="#2b6cb0", alpha=0.35, s=12, edgecolors="none")
+    if len(motion_interp) > 10 and np.std(motion_interp) > 1e-4:
+        poly_fit = np.polyfit(motion_interp, ecg_artifact, deg=1)
+        fit_x = np.linspace(float(np.min(motion_interp)), float(np.max(motion_interp)), 100)
+        fit_y = np.polyval(poly_fit, fit_x)
+        axes[1].plot(fit_x, fit_y, color="#e53e3e", linewidth=2.0, label=f"Linear Fit (r = {r_motion_artifact:+.3f})")
+    axes[1].set_xlabel("IMU Motion Magnitude (mg)")
+    axes[1].set_ylabel("ECG Artifact Magnitude (ADC Counts)")
+    axes[1].set_title(f"2. IMU-to-ECG Motion Coupling (Pearson Correlation r = {r_motion_artifact:+.3f})", loc="left")
+    axes[1].legend(loc="upper left")
+
+    # Panel 3: 3-Axis Accelerometer Profile
+    axes[2].plot(ti, ax, color="#319795", linewidth=0.8, label="Ax (g)")
+    axes[2].plot(ti, ay, color="#dd6b20", linewidth=0.8, label="Ay (g)")
+    axes[2].plot(ti, az, color="#38a169", linewidth=0.8, label="Az (g)")
+    axes[2].set_ylabel("Acceleration (g)")
+    axes[2].set_xlabel("Device time from capture start (seconds)")
+    axes[2].set_title("3. 3-Axis IMU Acceleration Profile", loc="left")
+    axes[2].legend(loc="upper right", ncols=3)
+
+    for ax_i in axes:
+        ax_i.set_facecolor("#ffffff")
+        ax_i.grid(True, color="#e2e8f0", linewidth=0.5, alpha=0.8)
+        ax_i.tick_params(labelsize=8)
+        ax_i.title.set_fontsize(10)
+        ax_i.title.set_fontweight("bold")
+
+    figure.tight_layout(rect=(0.03, 0.02, 0.98, 0.975))
+    return figure, metrics
+
+
+def write_html_report(path: Path, png_overview: Path, png_dsp: Path, png_imu: Path | None, summary: dict, imu_metrics: dict) -> None:
+    encoded_overview = base64.b64encode(png_overview.read_bytes()).decode("ascii")
+    encoded_dsp = base64.b64encode(png_dsp.read_bytes()).decode("ascii") if png_dsp.exists() else ""
+    encoded_imu = base64.b64encode(png_imu.read_bytes()).decode("ascii") if png_imu and png_imu.exists() else ""
+
+    summary_rows = "".join(
+        f"<tr><th>{html.escape(str(key))}</th><td><code>{html.escape(json.dumps(value))}</code></td></tr>"
+        for key, value in summary.items()
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
+
+    imu_section = ""
+    if imu_metrics.get("available"):
+        imu_section = f"""
+        <h2>IMU-to-ECG Motion Correlation</h2>
+        <p><strong>Pearson Correlation (r):</strong> {imu_metrics['pearson_r_motion_artifact']} | 
+           <strong>Mean Artifact during Motion:</strong> {imu_metrics['mean_artifact_during_motion']} ADC | 
+           <strong>Active Motion:</strong> {imu_metrics['motion_samples_pct']}% of session</p>
+        """
+
+    document = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TARANG Validation Report</title><style>
+body{{margin:0;background:#eef1f2;color:#172126;font:14px system-ui,sans-serif}}
+main{{max-width:1500px;margin:auto;padding:24px}}
+h1{{font-size:22px;margin:0 0 16px}}
+h2{{font-size:18px;margin:24px 0 8px;color:#1a202c}}
+img{{display:block;width:100%;background:white;border:1px solid #cfd6d9;margin-bottom:20px;border-radius:6px}}
+table{{width:100%;margin-top:18px;border-collapse:collapse;background:white;border-radius:6px;overflow:hidden}}
+th,td{{padding:9px 12px;border:1px solid #d8dde0;text-align:left;vertical-align:top}}
+th{{width:220px;background:#f6f8f8}}code{{white-space:pre-wrap;word-break:break-word}}
+</style></head><body><main>
+<h1>TARANG Clinical & Sensor Validation Report</h1>
+
+<h2>1. Complete 7-Panel Overview</h2>
+<img src="data:image/png;base64,{encoded_overview}" alt="TARANG sensor validation overview">
+
+<h2>2. Processed DSP Waveforms (NLMS, Bandpass, Z-Score, MWI)</h2>
+<img src="data:image/png;base64,{encoded_dsp}" alt="TARANG DSP pipeline waveforms">
+
+{f'<h2>3. IMU Motion vs ECG Artifact Correlation</h2><img src="data:image/png;base64,{encoded_imu}" alt="IMU correlation">' if encoded_imu else ''}
+
+{imu_section}
+
+<h2>Capture Summary & Health Diagnostics</h2>
+<table>{summary_rows}</table>
+</main></body></html>"""
     path.write_text(document, encoding="utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("csv", type=Path, help="VCOM CSV or raw telemetry text file")
-    parser.add_argument("--html", type=Path, help="output HTML path")
-    parser.add_argument("--save", type=Path, help="also save a static PNG")
-    parser.add_argument("--no-open", action="store_true", help="do not open the HTML viewer")
+    parser.add_argument("csv", type=Path, help="log_vcom CSV or raw VCOM text file")
+    parser.add_argument("--output-dir", type=Path, help="directory for PNG, HTML, and JSON outputs")
+    parser.add_argument("--save", type=Path, help="override output PNG path")
+    parser.add_argument("--html", type=Path, help="override output HTML path")
+    parser.add_argument("--no-open", action="store_true", help="do not open the HTML report")
     parser.add_argument("--no-show", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
@@ -467,19 +704,61 @@ def main() -> int:
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
 
-    data = session.arrays()
-    beat = data["beat"]
-    flagged = beat[(beat[:, 8] != 0) | (beat[:, 10] != 0), 0] if beat.size else np.empty(0)
-    print_summary(data, flagged)
-    html_path = args.html or args.csv.with_suffix(".html")
-    write_html_viewer(data, html_path, f"TARANG: {args.csv.name}")
-    print(f"[SAVED] {html_path}")
-    if args.save:
-        figure, _, _ = build_figure(session, f"TARANG: {args.csv.name}")
-        args.save.parent.mkdir(parents=True, exist_ok=True)
-        figure.savefig(args.save, dpi=160)
-        print(f"[SAVED] {args.save}")
-        plt.close(figure)
+    output_dir = args.output_dir or args.csv.parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    png_path = args.save or output_dir / f"{args.csv.stem}_overview.png"
+    dsp_png_path = output_dir / f"{args.csv.stem}_dsp_waveforms.png"
+    imu_png_path = output_dir / f"{args.csv.stem}_imu_correlation.png"
+    html_path = args.html or output_dir / f"{args.csv.stem}_report.html"
+    json_path = output_dir / f"{args.csv.stem}_summary.json"
+
+    summary = build_summary(session, args.csv)
+    title = f"TARANG validation: {args.csv.stem}"
+
+    # 1. Overview Figure
+    fig_overview = build_figure(session, title)
+    fig_overview.savefig(png_path, dpi=150, facecolor=fig_overview.get_facecolor())
+    plt.close(fig_overview)
+
+    # 2. Processed DSP Waveforms Figure
+    fig_dsp = build_dsp_figure(session, title)
+    fig_dsp.savefig(dsp_png_path, dpi=150, facecolor=fig_dsp.get_facecolor())
+    plt.close(fig_dsp)
+
+    # 3. IMU-ECG Motion Correlation Figure
+    fig_imu, imu_metrics = build_imu_correlation_figure(session, title)
+    if fig_imu is not None:
+        fig_imu.savefig(imu_png_path, dpi=150, facecolor=fig_imu.get_facecolor())
+        plt.close(fig_imu)
+        summary["imu_correlation"] = imu_metrics
+    else:
+        imu_png_path = None
+
+    json_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    write_html_report(html_path, png_path, dsp_png_path, imu_png_path, summary, imu_metrics)
+
+    records = summary["records"]
+    rates = summary["measured_rates_hz"]
+    print("=" * 65)
+    print(f"  TARANG DSP VALIDATION & IMU CORRELATION: {args.csv.name}")
+    print("=" * 65)
+    print(
+        f"[SESSION] Duration={summary['duration_seconds']:.2f}s | ECG={records['ecg']} "
+        f"PPG={records['ppg']} IMU={records['imu']} Beats={records['beats']}"
+    )
+    print(f"[RATES]   ECG={rates['ecg']} Hz | PPG={rates['ppg']} Hz | IMU={rates['imu']} Hz")
+    if imu_metrics.get("available"):
+        print(f"[IMU-DSP] Pearson Correlation r(Motion, ECG Artifact) = {imu_metrics['pearson_r_motion_artifact']:+.4f}")
+        print(f"[IMU-DSP] Mean Artifact during Motion = {imu_metrics['mean_artifact_during_motion']} ADC | Rest = {imu_metrics['mean_artifact_at_rest']} ADC")
+    print("-" * 65)
+    print(f"[SAVED] Overview Plot  : {png_path}")
+    print(f"[SAVED] DSP Waveforms  : {dsp_png_path}")
+    if imu_png_path:
+        print(f"[SAVED] IMU Correlation: {imu_png_path}")
+    print(f"[SAVED] HTML Report    : {html_path}")
+    print(f"[SAVED] JSON Summary   : {json_path}")
+    print("=" * 65)
+
     if not (args.no_open or args.no_show):
         webbrowser.open(html_path.resolve().as_uri())
     return 0

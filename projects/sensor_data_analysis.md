@@ -15,7 +15,8 @@ graph TD
     G -->|"printf"| J["UART/VCOM"]
     H -->|"printf"| J
     I -->|"printf"| J
-    J -->|"serial"| K["tarang_live_plot.py"]
+    J -->|"serial"| K["Integration/log_vcom.py"]
+    K -->|"captured CSV"| L["integration_validation/plot_tarang.py"]
 ```
 
 ---
@@ -174,19 +175,13 @@ if ((drained > 1u) || ((ppg_sample_count != 0u) && ((ppg_sample_count % 100u) ==
 - ECG: prints 1 sample every super-loop tick (~62 Hz stream)
 - IMU: prints every 100 samples too, but at least the diagnostic block in `app.c` prints the latest values every 2 seconds
 
-### Bug 4: PPG data reaches the live plot **only through the diagnostic block in app.c**
+### Historical Bug 4: PPG was downsampled in the retired live plot
 
-The live plot parses `[PPG] samples=N RED=N IR=N sensor=OK|FAIL` from the diagnostic block in [app.c:182-201](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-firmware/Integration/app.c#L182-L201). But the regex in [tarang_live_plot.py:89-91](file:///c:/MMDPublic/Hackathons/TeamOcelleon/projects/tarang-firmware/Integration/tarang_live_plot.py#L89-L91) also matches the `cnt=` format from `tarang_ppg_process()`:
-
-```python
-RE_PPG = re.compile(r"\[PPG\]\s+(?:samples|cnt)=(\d+)\s+.*RED=(\d+)\s+IR=(\d+)")
-```
-
-So the Python side can parse both formats. But PPG data only gets emitted:
-- Once every 100 samples from `tarang_ppg_process()` 
-- Once every ~2 seconds from `app.c` diagnostics
-
-**This means the live plot gets at most ~1-2 PPG data points per second**, compared to ECG's ~62 Hz. The PPG plot will look dead/flat.
+This limitation applied to the old human-readable logger. The current high-rate
+validation stream emits one `@P` record per MAX30102 sample at 100 Hz, and the
+supported recorder preserves every RED/IR sample in its raw-line CSV. The firmware also
+emits rolling `@M` records for SpO2, pulse, SQI, perfusion index, contact, and
+motion-rejection state. `plot_tarang.py` parses both current and legacy records.
 
 ### Bug 5: Diagnostic timebase is ECG-first — with ECG disabled, PPG drives diagnostics
 

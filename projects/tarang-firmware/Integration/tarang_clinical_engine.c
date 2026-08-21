@@ -462,6 +462,15 @@ void tarang_clinical_engine_process_beat(tarang_clinical_engine_t *engine,
   engine->prev_rhythm_flags = engine->rhythm_flags;
   engine->significant_event = false;
 
+  /* Poor lead/finger contact produces beat classifications and RR
+   * intervals that are pure artifact. Do not let a low-SQI beat mutate
+   * the RR/pattern rings or run rhythm detection -- it will masquerade
+   * as couplets, V-runs, or AFib and fire spurious BLE events. */
+  if (beat->signal_quality < TARANG_SQI_MIN) {
+    engine->last_beat_class = beat->beat_class;
+    return;
+  }
+
   /* ── Push RR interval into ring buffer ──────────────────────────────── */
   if (beat->rr_interval_ms > 0) {
     rr_ring_push(engine->rr_buffer, &engine->rr_head, &engine->rr_count,
@@ -469,7 +478,7 @@ void tarang_clinical_engine_process_beat(tarang_clinical_engine_t *engine,
     engine->rr_valid_push_count++;  /* monotonic — never saturates */
   }
 
-  /* ── Push beat class into pattern buffer ────────────────────────────── */
+  /* ── Push beat class into pattern buffer ─────────────────────── */
   pattern_ring_push(engine->pattern_buffer, &engine->pattern_head,
                     &engine->pattern_count, TARANG_PATTERN_WINDOW_SIZE,
                     beat->beat_class);

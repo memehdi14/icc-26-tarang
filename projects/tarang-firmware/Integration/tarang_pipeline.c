@@ -170,6 +170,12 @@ static bool beat_is_suspicious(const tarang_pipeline_t *pipeline,
 {
   if (reason_out) *reason_out = "normal";
 
+  /* Signal too poor to trust -- don't spend a CNN inference on artifact. */
+  if (signal_quality < TARANG_SQI_MIN) {
+    if (reason_out) *reason_out = "sqi_reject";
+    return false;
+  }
+
   /* Need at least 2 RR intervals to compute prematurity */
   if (pipeline->rr_history_count < 2) return false;
 
@@ -214,12 +220,6 @@ static bool beat_is_suspicious(const tarang_pipeline_t *pipeline,
       if (reason_out) *reason_out = "pause";
       return true;
     }
-  }
-
-  /* 5. Poor signal quality */
-  if (signal_quality < TARANG_SQI_MIN) {
-    if (reason_out) *reason_out = "sqi";
-    return true;
   }
 
   return false;  /* All checks pass — likely normal sinus */
@@ -740,8 +740,19 @@ bool tarang_pipeline_should_send_event(tarang_pipeline_t *pipeline)
    * That flag drives the per-beat CSV telemetry log (app.c), not BLE sends.
    * Including it here caused tarang_ble_process() to clear engine flags on
    * every superloop tick even when BLE was disconnected, corrupting state. */
-  return pipeline->engine.rhythm_changed ||
-         pipeline->engine.significant_event;
+  bool event_flagged = pipeline->engine.rhythm_changed ||
+                        pipeline->engine.significant_event;
+  if (!event_flagged) return false;
+
+  /* Belt-and-suspenders: even though the clinical engine no longer lets
+   * low-SQI beats mutate rhythm_flags, guard the BLE send itself against
+   * any case where flags latched true before contact degraded. */
+  if (pipeline->latest_beat_telemetry.signal_quality < TARANG_SQI_MIN) {
+    pipeline->diag.dropped_frames++;
+    return false;
+  }
+
+  return true;
 }
 
 void tarang_pipeline_get_packet(const tarang_pipeline_t *pipeline,

@@ -150,157 +150,170 @@ async def run_session(device, target_name: str) -> None:
     disconnected = asyncio.Event()
 
     def on_disconnect(_client):
-        print("\n [!] BLE Connection lost. Reconnecting...")
+        t_str = time.strftime("%H:%M:%S")
+        print(f"\n🚨 [{t_str}] [!] BLE Connection lost / Link dropped by peripheral or central. Triggering reconnection sequence...")
         disconnected.set()
 
-    client = BleakClient(device, disconnected_callback=on_disconnect, timeout=30.0, pair=False)
-    await client.connect()
+    async with BleakClient(device, disconnected_callback=on_disconnect, timeout=15.0) as client:
+        print(" [✓] Link Connected! Checking security / pairing...")
+        try:
+            await client.pair()
+            print(" [✓] BLE Security / Pairing Confirmed.")
+            await asyncio.sleep(0.3)
+        except Exception as e:
+            err_msg = str(e)
+            if "AlreadyExists" in err_msg or "already" in err_msg.lower():
+                print(" [✓] Bonded using cached BlueZ security keys.")
+            else:
+                print(f" [i] Pairing note: {err_msg}")
 
-    if not client.is_connected:
-        print(" [!] Failed to establish active link.")
-        return
+        print(f" [✓] MTU size: {client.mtu_size}")
+        print(" [3/3] Subscribing to Mode A Telemetry Streams...\n")
 
-    print(" [✓] Link Connected! Checking security / pairing...")
-    try:
-        await client.pair()
-        print(" [✓] BLE Security / Pairing Confirmed.")
-        await asyncio.sleep(0.5)
-    except Exception as e:
-        err_msg = str(e)
-        if "AlreadyExists" in err_msg or "already" in err_msg.lower():
-            print(" [✓] Bonded using cached BlueZ security keys.")
-        else:
-            print(f" [i] Pairing status note: {err_msg}")
+        # --------------------------------------------------------------------
+        # Handlers
+        # --------------------------------------------------------------------
+        def on_vitals_hr(_sender, data: bytearray):
+            if len(data) >= 2:
+                hr = struct.unpack("<H", data[:2])[0]
+                t_str = time.strftime("%H:%M:%S")
+                bar = '█' * min(15, hr // 10)
+                print(f"[{t_str}] [VITALS] ❤️  Heart Rate: {hr:3d} BPM  | {bar}")
 
-    print(f" [✓] MTU size: {client.mtu_size}")
-    print(" [3/3] Subscribing to Mode A Telemetry Streams...\n")
+        def on_vitals_spo2(_sender, data: bytearray):
+            if len(data) >= 1:
+                spo2 = data[0]
+                t_str = time.strftime("%H:%M:%S")
+                print(f"[{t_str}] [VITALS] 🫁  SpO2:       {spo2:3d} %")
 
-    # --------------------------------------------------------------------
-    # Handlers
-    # --------------------------------------------------------------------
-    def on_vitals_hr(_sender, data: bytearray):
-        if len(data) >= 2:
-            hr = struct.unpack("<H", data[:2])[0]
+        def print_analytics():
             t_str = time.strftime("%H:%M:%S")
-            bar = '█' * min(15, hr // 10)
-            print(f"[{t_str}] [VITALS] ❤️  Heart Rate: {hr:3d} BPM  | {bar}")
+            print(
+                f"[{t_str}] [ANALYTICS] PVC: {analytics_state['pvc']}% | "
+                f"PAC: {analytics_state['pac']}% | "
+                f"SDNN: {analytics_state['sdnn']}ms | "
+                f"RMSSD: {analytics_state['rmssd']}ms | "
+                f"pRR50: {analytics_state['prr50']}% | "
+                f"AI Duty: {analytics_state['ai_duty']:.1f}% | "
+                f"EM2 Sleep: {analytics_state['sleep']}%"
+            )
 
-    def on_vitals_spo2(_sender, data: bytearray):
-        if len(data) >= 1:
-            spo2 = data[0]
+        def on_pvc(_sender, data: bytearray):
+            if data:
+                analytics_state["pvc"] = data[0]
+                print_analytics()
+
+        def on_pac(_sender, data: bytearray):
+            if data:
+                analytics_state["pac"] = data[0]
+                print_analytics()
+
+        def on_sdnn(_sender, data: bytearray):
+            if len(data) >= 2:
+                analytics_state["sdnn"] = struct.unpack("<H", data[:2])[0]
+                print_analytics()
+
+        def on_rmssd(_sender, data: bytearray):
+            if len(data) >= 2:
+                analytics_state["rmssd"] = struct.unpack("<H", data[:2])[0]
+                print_analytics()
+
+        def on_prr50(_sender, data: bytearray):
+            if data:
+                analytics_state["prr50"] = data[0]
+                print_analytics()
+
+        def on_aiduty(_sender, data: bytearray):
+            if data:
+                analytics_state["ai_duty"] = data[0] / 10.0
+                print_analytics()
+
+        def on_em2(_sender, data: bytearray):
+            if data:
+                analytics_state["sleep"] = data[0]
+                print_analytics()
+
+        def on_event_rhythm(_sender, data: bytearray):
+            if data:
+                rhythm = data[0]
+                r_name = RHYTHM_NAMES.get(rhythm, f"Unknown (0x{rhythm:02X})")
+                t_str = time.strftime("%H:%M:%S")
+                print(f"\n🚨 [{t_str}] >>> CLINICAL ALERT: {r_name} <<<")
+
+        def on_event_meta(_sender, data: bytearray):
+            if len(data) >= 8:
+                ev_id, ev_type, conf, ts = struct.unpack("<HBBI", data[:8])
+                t_str = time.strftime("%H:%M:%S")
+                print(f"[{t_str}] [EVENT META] Event #{ev_id} | Type: {ev_type} | Conf: {conf}/255 ({conf/255*100:.1f}%) | Timestamp: {ts}ms")
+
+        def on_glitch_ticker(_sender, data: bytearray):
+            if len(data) >= 6:
+                pattern, ts = struct.unpack("<HI", data[:6])
+                p_name = PATTERN_NAMES.get(pattern, f"Pattern-{pattern}")
+                t_str = time.strftime("%H:%M:%S")
+                print(f"[{t_str}] ⚡ [ARRHYTHMIA TICKER] Pattern Detected: {p_name} @ {ts}ms")
+
+        def on_ecg_chunk(_sender, data: bytearray):
+            waveform = reassembler.ingest_chunk(bytes(data))
+            if waveform:
+                t_str = time.strftime("%H:%M:%S")
+                print(f"\n[{t_str}] 📈 [ECG SNIPPET REASSEMBLED] 4.0s @ 250 Hz ({len(waveform)} samples)")
+                mid = len(waveform) // 2
+                subset = waveform[mid:mid+45]
+                mn, mx = min(subset), max(subset)
+                rng = max(1, mx - mn)
+                bars = "  ▂▃▄▅▆▇█"
+                spark = "".join(bars[min(len(bars)-1, int((s - mn) / rng * (len(bars)-1)))] for s in subset)
+                print(f"     Waveform Preview: [{spark}] (min={mn/1000.0:.2f}, max={mx/1000.0:.2f} mV)")
+
+        def on_beat_annotations(_sender, data: bytearray):
+            count = len(data) // 4
             t_str = time.strftime("%H:%M:%S")
-            print(f"[{t_str}] [VITALS] 🫁  SpO2:       {spo2:3d} %")
+            print(f"[{t_str}] 🏷️  [AI BEAT CLASSIFICATIONS] {count} beat(s) classified:")
+            for i in range(count):
+                offset, label_code, conf = struct.unpack_from("<HBB", data, i * 4)
+                c_name = BEAT_CLASSES.get(label_code, f"Class {label_code}")
+                print(f"     Beat {i+1}: Offset={offset:4d}ms | Class='{c_name}' | Confidence={conf}/255 ({conf/255*100:.1f}%)")
 
-    def print_analytics():
-        t_str = time.strftime("%H:%M:%S")
-        print("\n" + "-" * 65)
-        print(f"[{t_str}] 📊 [5-MIN CLINICAL ANALYTICS UPDATE]")
-        print(f"     • PVC Burden : {analytics_state['pvc']}%    | PAC Burden : {analytics_state['pac']}%")
-        print(f"     • SDNN       : {analytics_state['sdnn']} ms | RMSSD      : {analytics_state['rmssd']} ms")
-        print(f"     • pRR50      : {analytics_state['prr50']}%    | AI Duty    : {analytics_state['ai_duty']:.1f}%")
-        print(f"     • EM2 Sleep  : {analytics_state['sleep']}%")
-        print("-" * 65 + "\n")
+        # Subscriptions list
+        subs = [
+            (UUID_CHAR_VITALS_HR, on_vitals_hr, "Vitals HR"),
+            (UUID_CHAR_VITALS_SPO2, on_vitals_spo2, "Vitals SpO2"),
+            (UUID_CHAR_ANALYTICS_PVC, on_pvc, "Analytics PVC"),
+            (UUID_CHAR_ANALYTICS_PAC, on_pac, "Analytics PAC"),
+            (UUID_CHAR_ANALYTICS_SDNN, on_sdnn, "Analytics SDNN"),
+            (UUID_CHAR_ANALYTICS_RMSSD, on_rmssd, "Analytics RMSSD"),
+            (UUID_CHAR_ANALYTICS_PRR50, on_prr50, "Analytics pRR50"),
+            (UUID_CHAR_ANALYTICS_AIDUTY, on_aiduty, "Analytics AI Duty"),
+            (UUID_CHAR_ANALYTICS_EM2, on_em2, "Analytics EM2 Sleep"),
+            (UUID_CHAR_EVENT_RHYTHM, on_event_rhythm, "Event Rhythm"),
+            (UUID_CHAR_EVENT_META, on_event_meta, "Event Meta"),
+            (UUID_CHAR_EVENT_CHUNK, on_ecg_chunk, "ECG Snippet Chunks"),
+            (UUID_CHAR_EVENT_ANNOT, on_beat_annotations, "Beat Annotations"),
+            (UUID_CHAR_EVENT_TICKER, on_glitch_ticker, "Glitch Ticker"),
+        ]
 
-    def on_pvc(_sender, data: bytearray):
-        if data: analytics_state["pvc"] = data[0]; print_analytics()
-    def on_pac(_sender, data: bytearray):
-        if data: analytics_state["pac"] = data[0]
-    def on_sdnn(_sender, data: bytearray):
-        if len(data) >= 2: analytics_state["sdnn"] = struct.unpack("<H", data[:2])[0]
-    def on_rmssd(_sender, data: bytearray):
-        if len(data) >= 2: analytics_state["rmssd"] = struct.unpack("<H", data[:2])[0]
-    def on_prr50(_sender, data: bytearray):
-        if data: analytics_state["prr50"] = data[0]
-    def on_aiduty(_sender, data: bytearray):
-        if data: analytics_state["ai_duty"] = data[0] / 10.0
-    def on_em2(_sender, data: bytearray):
-        if data: analytics_state["sleep"] = data[0]
+        subscribed_count = 0
+        for char_uuid, handler, desc in subs:
+            for attempt in range(2):
+                try:
+                    await client.start_notify(char_uuid, handler)
+                    print(f"  ✓ Subscribed to {desc}")
+                    subscribed_count += 1
+                    await asyncio.sleep(0.04)  # Pacing delay between CCCD writes
+                    break
+                except Exception as e:
+                    if attempt == 0:
+                        await asyncio.sleep(0.2)
+                    else:
+                        print(f"  ✗ {desc} subscription note: {e}")
 
-    def on_event_rhythm(_sender, data: bytearray):
-        if data:
-            rhythm = data[0]
-            r_name = RHYTHM_NAMES.get(rhythm, f"Unknown (0x{rhythm:02X})")
-            t_str = time.strftime("%H:%M:%S")
-            print(f"\n🚨 [{t_str}] >>> CLINICAL ALERT: {r_name} <<<")
+        print(f"\n [✓] {subscribed_count}/{len(subs)} Mode A Telemetry Streams Active.")
+        print("=" * 70)
+        print("  STREAMING LIVE TARANG POD TELEMETRY (Press Ctrl+C to stop)")
+        print("=" * 70 + "\n")
 
-    def on_event_meta(_sender, data: bytearray):
-        if len(data) >= 8:
-            ev_id, ev_type, conf, ts = struct.unpack("<HBBI", data[:8])
-            t_str = time.strftime("%H:%M:%S")
-            print(f"[{t_str}] [EVENT META] Event #{ev_id} | Type: {ev_type} | Conf: {conf}/255 ({conf/255*100:.1f}%) | Timestamp: {ts}ms")
-
-    def on_glitch_ticker(_sender, data: bytearray):
-        if len(data) >= 6:
-            pattern, ts = struct.unpack("<HI", data[:6])
-            p_name = PATTERN_NAMES.get(pattern, f"Pattern-{pattern}")
-            t_str = time.strftime("%H:%M:%S")
-            print(f"[{t_str}] ⚡ [ARRHYTHMIA TICKER] Pattern Detected: {p_name} @ {ts}ms")
-
-    def on_ecg_chunk(_sender, data: bytearray):
-        waveform = reassembler.ingest_chunk(bytes(data))
-        if waveform:
-            t_str = time.strftime("%H:%M:%S")
-            print(f"\n[{t_str}] 📈 [ECG SNIPPET REASSEMBLED] 4.0s @ 250 Hz ({len(waveform)} samples)")
-            mid = len(waveform) // 2
-            subset = waveform[mid:mid+45]
-            mn, mx = min(subset), max(subset)
-            rng = max(1, mx - mn)
-            bars = "  ▂▃▄▅▆▇█"
-            spark = "".join(bars[min(len(bars)-1, int((s - mn) / rng * (len(bars)-1)))] for s in subset)
-            print(f"     Waveform Preview: [{spark}] (min={mn/1000.0:.2f}, max={mx/1000.0:.2f} mV)")
-
-    def on_beat_annotations(_sender, data: bytearray):
-        count = len(data) // 4
-        t_str = time.strftime("%H:%M:%S")
-        print(f"[{t_str}] 🏷️  [AI BEAT CLASSIFICATIONS] {count} beat(s) classified:")
-        for i in range(count):
-            offset, label_code, conf = struct.unpack_from("<HBB", data, i * 4)
-            c_name = BEAT_CLASSES.get(label_code, f"Class {label_code}")
-            print(f"     Beat {i+1}: Offset={offset:4d}ms | Class='{c_name}' | Confidence={conf}/255 ({conf/255*100:.1f}%)")
-
-    # Subscriptions list
-    subs = [
-        (UUID_CHAR_VITALS_HR, on_vitals_hr, "Vitals HR"),
-        (UUID_CHAR_VITALS_SPO2, on_vitals_spo2, "Vitals SpO2"),
-        (UUID_CHAR_ANALYTICS_PVC, on_pvc, "Analytics PVC"),
-        (UUID_CHAR_ANALYTICS_PAC, on_pac, "Analytics PAC"),
-        (UUID_CHAR_ANALYTICS_SDNN, on_sdnn, "Analytics SDNN"),
-        (UUID_CHAR_ANALYTICS_RMSSD, on_rmssd, "Analytics RMSSD"),
-        (UUID_CHAR_ANALYTICS_PRR50, on_prr50, "Analytics pRR50"),
-        (UUID_CHAR_ANALYTICS_AIDUTY, on_aiduty, "Analytics AI Duty"),
-        (UUID_CHAR_ANALYTICS_EM2, on_em2, "Analytics EM2 Sleep"),
-        (UUID_CHAR_EVENT_RHYTHM, on_event_rhythm, "Event Rhythm"),
-        (UUID_CHAR_EVENT_META, on_event_meta, "Event Meta"),
-        (UUID_CHAR_EVENT_CHUNK, on_ecg_chunk, "ECG Snippet Chunks"),
-        (UUID_CHAR_EVENT_ANNOT, on_beat_annotations, "Beat Annotations"),
-        (UUID_CHAR_EVENT_TICKER, on_glitch_ticker, "Glitch Ticker"),
-    ]
-
-    subscribed_count = 0
-    for char_uuid, handler, desc in subs:
-        for attempt in range(2):
-            try:
-                await client.start_notify(char_uuid, handler)
-                print(f"  ✓ Subscribed to {desc}")
-                subscribed_count += 1
-                await asyncio.sleep(0.06)  # Pacing delay between CCCD writes
-                break
-            except Exception as e:
-                if attempt == 0:
-                    await asyncio.sleep(0.3)
-                else:
-                    print(f"  ✗ {desc} subscription note: {e}")
-
-    print(f"\n [✓] {subscribed_count}/{len(subs)} Mode A Telemetry Streams Active.")
-    print("=" * 70)
-    print("  STREAMING LIVE TARANG POD TELEMETRY (Press Ctrl+C to stop)")
-    print("=" * 70 + "\n")
-
-    try:
         await disconnected.wait()
-    finally:
-        if client.is_connected:
-            await client.disconnect()
 
 
 async def main():

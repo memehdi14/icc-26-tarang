@@ -53,8 +53,8 @@
     <characteristic const="false" id="vitals_heart_rate" name="Heart Rate" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66a">
       <value length="2" type="hex" variable_length="false">4B00</value>
       <properties>
-        <read authenticated="false" bonded="true" encrypted="true"/>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <read authenticated="false" bonded="false" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -62,8 +62,8 @@
     <characteristic const="false" id="vitals_spo2" name="SpO2" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66b">
       <value length="1" type="hex" variable_length="false">62</value>
       <properties>
-        <read authenticated="false" bonded="true" encrypted="true"/>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <read authenticated="false" bonded="false" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -71,7 +71,7 @@
     <characteristic const="false" id="vitals_timestamp" name="Vitals Timestamp" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66c">
       <value length="4" type="hex" variable_length="false">00000000</value>
       <properties>
-        <read authenticated="false" bonded="true" encrypted="true"/>
+        <read authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
   </service>
@@ -84,7 +84,7 @@
     <characteristic const="false" id="analytics_pvc_burden" name="PVC Burden" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77b">
       <value length="1" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -92,7 +92,7 @@
     <characteristic const="false" id="analytics_pac_burden" name="PAC Burden" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77c">
       <value length="1" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -100,7 +100,7 @@
     <characteristic const="false" id="analytics_sdnn" name="SDNN" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77d">
       <value length="2" type="hex" variable_length="false">0000</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -108,7 +108,7 @@
     <characteristic const="false" id="analytics_rmssd" name="RMSSD" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77e">
       <value length="2" type="hex" variable_length="false">0000</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -116,7 +116,7 @@
     <characteristic const="false" id="analytics_prr50" name="pRR50" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee77f">
       <value length="1" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -124,7 +124,7 @@
     <characteristic const="false" id="analytics_ai_duty_cycle" name="AI Duty Cycle" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee780">
       <value length="1" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -132,7 +132,7 @@
     <characteristic const="false" id="analytics_em2_sleep" name="EM2 Sleep" sourceId="" uuid="c5da9988-ca2b-425d-b00e-ef96b24ee781">
       <value length="1" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
   </service>
@@ -145,7 +145,7 @@
     <characteristic const="false" id="event_rhythm_status" name="Rhythm Status" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88a">
       <value length="1" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -153,7 +153,7 @@
     <characteristic const="false" id="event_meta" name="Event Meta" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88b">
       <value length="8" type="hex" variable_length="false">0000000000000000</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -161,7 +161,8 @@
     <characteristic const="false" id="event_ecg_chunk" name="ECG Snippet Chunk" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88c">
       <value length="244" type="hex" variable_length="true">00</value>
       <properties>
-        <indicate authenticated="false" bonded="true" encrypted="true"/>
+        <read authenticated="false" bonded="false" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -169,8 +170,7 @@
     <characteristic const="false" id="event_ecg_control" name="ECG Snippet Control" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88d">
       <value length="1" type="hex" variable_length="false">00</value>
       <properties>
-        <write authenticated="false" bonded="true" encrypted="true"/>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -178,8 +178,8 @@
     <characteristic const="false" id="event_beat_annotations" name="Beat Annotations" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88e">
       <value length="244" type="hex" variable_length="true">00</value>
       <properties>
-        <indicate authenticated="false" bonded="true" encrypted="true"/>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <read authenticated="false" bonded="false" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -187,7 +187,7 @@
     <characteristic const="false" id="event_glitch_ticker" name="Glitch Ticker Event" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88f">
       <value length="6" type="hex" variable_length="false">000000000000</value>
       <properties>
-        <notify authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="false" encrypted="true"/>
       </properties>
     </characteristic>
   </service>
