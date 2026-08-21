@@ -55,9 +55,11 @@
 #define SL_BT_INVALID_BONDING_HANDLE 0xFFu
 #endif
 
-/* Bonding is enabled with Security Manager and automatic stale-bond recovery */
+/* [CRITICAL FIX] 0 = Direct Open / Zero-Security Mode.
+ * BlueZ SMP pairing layer desynchronizes with NVM3 on flash and causes
+ * immediate controller connection aborts before GATT opens. */
 #ifndef TARANG_BLE_ENABLE_BONDING
-#define TARANG_BLE_ENABLE_BONDING 1
+#define TARANG_BLE_ENABLE_BONDING 0
 #endif
 
 /* ── Fallback handles for robust compilation if gatt_db.h differs ─────────── */
