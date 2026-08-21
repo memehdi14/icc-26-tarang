@@ -1395,17 +1395,9 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
         }
 
         uint8_t total_subs = tarang_ble_get_active_sub_count();
-        printf("[BLE][CCCD] Handle 0x%04X (%s) -> %s (Active Streams: %u/14)\r\n",
-               (unsigned)characteristic,
-               tarang_ble_char_name(characteristic),
-               enabled ? "SUBSCRIBED [ON]" : "UNSUBSCRIBED [OFF]",
-               total_subs);
-      }
-
-      if (status_flags & sl_bt_gatt_server_confirmation) {
-        printf("[BLE][GATT] Indication confirmation received for handle 0x%04X (%s)\r\n",
-               (unsigned)characteristic,
-               tarang_ble_char_name(characteristic));
+        if (total_subs == 14u) {
+          printf("[BLE][CCCD] >>> ALL 14/14 MODE A STREAMS SUBSCRIBED & ACTIVE! <<<\r\n");
+        }
       }
       break;
     }
