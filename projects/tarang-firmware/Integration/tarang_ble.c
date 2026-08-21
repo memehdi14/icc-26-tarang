@@ -574,44 +574,28 @@ bool tarang_ble_send_analytics(const tarang_ble_analytics_packet_t *analytics)
     return false;
   }
 
-  bool ok = true;
-  ok &= write_and_notify(gattdb_analytics_pvc_burden,
-                         sub_analytics_pvc,
-                         &analytics->pvc_burden_pct,
-                         sizeof(analytics->pvc_burden_pct));
-  ok &= write_and_notify(gattdb_analytics_pac_burden,
-                         sub_analytics_pac,
-                         &analytics->pac_burden_pct,
-                         sizeof(analytics->pac_burden_pct));
-  ok &= write_and_notify(gattdb_analytics_sdnn,
-                         sub_analytics_sdnn,
-                         &analytics->sdnn_ms,
-                         sizeof(analytics->sdnn_ms));
-  ok &= write_and_notify(gattdb_analytics_rmssd,
-                         sub_analytics_rmssd,
-                         &analytics->rmssd_ms,
-                         sizeof(analytics->rmssd_ms));
-  ok &= write_and_notify(gattdb_analytics_prr50,
-                         sub_analytics_prr50,
-                         &analytics->prr50_pct,
-                         sizeof(analytics->prr50_pct));
-  ok &= write_and_notify(gattdb_analytics_ai_duty_cycle,
-                         sub_analytics_duty,
-                         &analytics->ai_duty_cycle_pct10,
-                         sizeof(analytics->ai_duty_cycle_pct10));
-  ok &= write_and_notify(gattdb_analytics_em2_sleep,
-                         sub_analytics_sleep,
-                         &analytics->em2_sleep_pct,
-                         sizeof(analytics->em2_sleep_pct));
+  /* Always update local GATT attribute values so clients can read at any time (0 radio buffer cost) */
+  (void)sl_bt_gatt_server_write_attribute_value(gattdb_analytics_pvc_burden, 0u, sizeof(analytics->pvc_burden_pct), &analytics->pvc_burden_pct);
+  (void)sl_bt_gatt_server_write_attribute_value(gattdb_analytics_pac_burden, 0u, sizeof(analytics->pac_burden_pct), &analytics->pac_burden_pct);
+  (void)sl_bt_gatt_server_write_attribute_value(gattdb_analytics_sdnn, 0u, sizeof(analytics->sdnn_ms), (const uint8_t *)&analytics->sdnn_ms);
+  (void)sl_bt_gatt_server_write_attribute_value(gattdb_analytics_rmssd, 0u, sizeof(analytics->rmssd_ms), (const uint8_t *)&analytics->rmssd_ms);
+  (void)sl_bt_gatt_server_write_attribute_value(gattdb_analytics_prr50, 0u, sizeof(analytics->prr50_pct), &analytics->prr50_pct);
+  (void)sl_bt_gatt_server_write_attribute_value(gattdb_analytics_ai_duty_cycle, 0u, sizeof(analytics->ai_duty_cycle_pct10), &analytics->ai_duty_cycle_pct10);
+  (void)sl_bt_gatt_server_write_attribute_value(gattdb_analytics_em2_sleep, 0u, sizeof(analytics->em2_sleep_pct), &analytics->em2_sleep_pct);
 
-  if (ok) {
-    printf("[BLE][ANALYTICS] 5-Min Rollup: PVC=%u%% PAC=%u%% SDNN=%ums RMSSD=%ums Sleep=%u%%\r\n",
-           analytics->pvc_burden_pct, analytics->pac_burden_pct,
-           analytics->sdnn_ms, analytics->rmssd_ms, analytics->em2_sleep_pct);
-    return true;
-  }
-  printf("[BLE][ANALYTICS] One or more characteristic updates failed\r\n");
-  return false;
+  /* Send notifications safely without blocking or triggering stack reset */
+  if (sub_analytics_pvc)   (void)sl_bt_gatt_server_send_notification(tarang_ble_conn_handle, gattdb_analytics_pvc_burden, sizeof(analytics->pvc_burden_pct), &analytics->pvc_burden_pct);
+  if (sub_analytics_pac)   (void)sl_bt_gatt_server_send_notification(tarang_ble_conn_handle, gattdb_analytics_pac_burden, sizeof(analytics->pac_burden_pct), &analytics->pac_burden_pct);
+  if (sub_analytics_sdnn)  (void)sl_bt_gatt_server_send_notification(tarang_ble_conn_handle, gattdb_analytics_sdnn, sizeof(analytics->sdnn_ms), (const uint8_t *)&analytics->sdnn_ms);
+  if (sub_analytics_rmssd) (void)sl_bt_gatt_server_send_notification(tarang_ble_conn_handle, gattdb_analytics_rmssd, sizeof(analytics->rmssd_ms), (const uint8_t *)&analytics->rmssd_ms);
+  if (sub_analytics_prr50) (void)sl_bt_gatt_server_send_notification(tarang_ble_conn_handle, gattdb_analytics_prr50, sizeof(analytics->prr50_pct), &analytics->prr50_pct);
+  if (sub_analytics_duty)  (void)sl_bt_gatt_server_send_notification(tarang_ble_conn_handle, gattdb_analytics_ai_duty_cycle, sizeof(analytics->ai_duty_cycle_pct10), &analytics->ai_duty_cycle_pct10);
+  if (sub_analytics_sleep) (void)sl_bt_gatt_server_send_notification(tarang_ble_conn_handle, gattdb_analytics_em2_sleep, sizeof(analytics->em2_sleep_pct), &analytics->em2_sleep_pct);
+
+  printf("[BLE][ANALYTICS] 5-Min Rollup: PVC=%u%% PAC=%u%% SDNN=%ums RMSSD=%ums Sleep=%u%%\r\n",
+         analytics->pvc_burden_pct, analytics->pac_burden_pct,
+         analytics->sdnn_ms, analytics->rmssd_ms, analytics->em2_sleep_pct);
+  return true;
 #else
   (void)analytics;
   return false;
