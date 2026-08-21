@@ -232,7 +232,7 @@ static bool tarang_ble_clinical_event_ready(void)
 #if TARANG_ENABLE_IMU
   if (!tarang_imu_is_found()) return false;
 #endif
-  return tarang_ai_is_ready() && mtu_exchange_confirmed;
+  return tarang_ai_is_ready() && tarang_ble_mtu_ready_for_burst();
 }
 
 #define TARANG_EVENT_MAX_ANNOTATIONS TARANG_EVENT_ANNOTATION_HISTORY
@@ -643,9 +643,14 @@ bool tarang_ble_trigger_clinical_event(
    * for re-flagging the event if it is genuinely significant — see
    * tarang_ble_process() flag-clear logic. */
   if (!tarang_ble_event_cooldown_elapsed()) {
-    printf("[BLE][EVENT] Cooldown: dropped event (last completed %lums ago, need %ums)\r\n",
-           (unsigned long)(tarang_now_ms() - last_event_completion_ms),
-           (unsigned)TARANG_EVENT_COOLDOWN_MS);
+    static uint32_t last_cooldown_log_ms = 0;
+    uint32_t now = tarang_now_ms();
+    if (now - last_cooldown_log_ms >= 2000u) {
+      last_cooldown_log_ms = now;
+      printf("[BLE][EVENT] Cooldown active: burst deferred (last completed %lums ago, window=%ums)\r\n",
+             (unsigned long)(now - last_event_completion_ms),
+             (unsigned)TARANG_EVENT_COOLDOWN_MS);
+    }
     return false;
   }
 
