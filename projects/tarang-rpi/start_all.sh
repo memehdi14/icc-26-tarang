@@ -112,9 +112,5 @@ echo "  Kiosk     : Active on 5-inch Touchscreen"
 echo "=========================================="
 echo "Press Ctrl+C to stop all services."
 
-set +e
-wait -n "${PIDS[@]}"
-status=$?
-set -e
-echo "[ERROR] A Tarang service exited with status $status."
-exit "$status"
+# Keep all services running until user presses Ctrl+C
+wait
