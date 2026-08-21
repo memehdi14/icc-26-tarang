@@ -683,13 +683,6 @@ class BleGateway:
                 reconnect_delay = min(30.0, reconnect_delay * 1.5)
                 continue
 
-            disconnected = asyncio.Event()
-            loop = asyncio.get_running_loop()
-
-            def on_disconnect(_client: BleakClient) -> None:
-                LOG.warning("BLE link disconnected by peer/controller. Reconnecting...")
-                loop.call_soon_threadsafe(disconnected.set)
-
             session = GatewaySession(
                 self.config, self.publisher, device, self.config.session_id
             )
@@ -702,7 +695,6 @@ class BleGateway:
             try:
                 async with BleakClient(
                     device,
-                    disconnected_callback=on_disconnect,
                     timeout=self.config.connect_timeout_s,
                 ) as client:
                     if self.config.pair:
@@ -747,7 +739,9 @@ class BleGateway:
                     await session.subscribe(client)
                     session.publish_diagnostics(True)
                     session.start_diagnostics()
-                    await disconnected.wait()
+                    while client.is_connected:
+                        await asyncio.sleep(1.0)
+                    LOG.warning("BLE link disconnected by peer/controller. Reconnecting...")
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
