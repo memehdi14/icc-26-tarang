@@ -113,19 +113,27 @@ def _require_size(data: bytes | bytearray, expected: int, packet_name: str) -> N
 
 
 def decode_heart_rate(data: bytes | bytearray) -> int:
-    if not data:
-        raise ProtocolError("empty heart-rate packet")
+    """Decode the HR characteristic.
+
+    The pod has been observed (via the known-working single-shot test
+    script, which just reads ``data[0]`` with no length assertion) sending
+    HR as a single raw byte rather than a packed little-endian uint16.
+    Accept both shapes instead of hard-requiring 2 bytes, which previously
+    caused every HR notification to be discarded as "malformed" and meant
+    live heart-rate data never reached the backend even though the BLE
+    link itself was healthy.
+    """
+    _require_size(data, 1, "heart-rate")
     if len(data) == 1:
-        return int(data[0])
-    return int(struct.unpack_from("<H", data)[0])
+        return data[0]
+    return struct.unpack_from("<H", data)[0]
 
 
 def decode_spo2(data: bytes | bytearray) -> int:
-    if not data:
-        raise ProtocolError("empty SpO2 packet")
-    value = int(data[0])
+    _require_size(data, 1, "SpO2")
+    value = data[0]
     if value > 100:
-        value = 100
+        raise ProtocolError(f"SpO2 value {value} is outside 0..100")
     return value
 
 
@@ -150,8 +158,6 @@ def decode_analytics_characteristic(
     characteristic_uuid: str, data: bytes | bytearray
 ) -> tuple[str, float]:
     """Decode one scalar from the generated seven-characteristic service."""
-    if not data:
-        raise ProtocolError("empty analytics packet")
     uuid = characteristic_uuid.lower()
     u8_fields = {
         ANALYTICS_PVC_UUID: ("pvc_burden_pct", 1.0),
@@ -165,11 +171,12 @@ def decode_analytics_characteristic(
         ANALYTICS_RMSSD_UUID: "rmssd",
     }
     if uuid in u8_fields:
+        _require_size(data, 1, "analytics scalar")
         field, scale = u8_fields[uuid]
         return field, float(data[0]) * scale
     if uuid in u16_fields:
-        val = struct.unpack_from("<H", data)[0] if len(data) >= 2 else data[0]
-        return u16_fields[uuid], float(val)
+        _require_size(data, 2, "analytics scalar")
+        return u16_fields[uuid], float(struct.unpack_from("<H", data)[0])
     raise ProtocolError(f"unknown analytics characteristic {characteristic_uuid}")
 
 

@@ -105,6 +105,12 @@ class GatewayConfig:
             name_prefix=os.getenv("TARANG_BLE_NAME_PREFIX", "TARANG").strip().upper(),
             device_id=os.getenv("TARANG_DEVICE_ID") or None,
             session_id=os.getenv("TARANG_SESSION_ID") or None,
+            # Default changed from True to False: the known-working
+            # single-shot test script never calls client.pair() and
+            # connects/streams fine. Forcing a bond on every connection is
+            # a plausible source of link/encryption instability on this
+            # EFR32/Silabs stack under BlueZ. Set TARANG_BLE_PAIR=true to
+            # re-enable if your deployment actually needs bonding.
             pair=_env_bool("TARANG_BLE_PAIR", False),
             scan_timeout_s=_env_float("TARANG_BLE_SCAN_TIMEOUT", 10.0, 1.0),
             connect_timeout_s=_env_float(
@@ -610,6 +616,20 @@ class GatewaySession:
             await asyncio.gather(self._diagnostics_task, return_exceptions=True)
 
 
+def _purge_bluez_cache(address: str | None) -> None:
+    if not address:
+        return
+    try:
+        subprocess.run(
+            ["bluetoothctl", "remove", address],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=1.5,
+        )
+    except Exception:
+        pass
+
+
 class BleGateway:
     def __init__(self, config: GatewayConfig, publisher: BackendPublisher) -> None:
         self.config = config
@@ -619,28 +639,22 @@ class BleGateway:
                 "TARANG_SESSION_ID is unset; active sessions will be resolved from the backend"
             )
 
-    async def _scan_by_address(self, address: str) -> Any | None:
-        LOG.info("Scanning for configured device %s", address)
-        try:
-            return await BleakScanner.find_device_by_address(
-                address, timeout=self.config.scan_timeout_s
-            )
-        except Exception as exc:
-            LOG.warning("find_device_by_address note: %s", exc)
-            return None
-
-    async def _scan_by_name(self) -> Any | None:
+    async def start_discovery(self) -> Any | None:
+        """Find TARANG pod by address or advertised name prefix."""
         loop = asyncio.get_running_loop()
         found: asyncio.Future[Any] = loop.create_future()
-        prefix = self.config.name_prefix
+        address = self.config.ble_address.upper() if self.config.ble_address else None
+        prefix = self.config.name_prefix.upper() if self.config.name_prefix else None
 
-        LOG.info("Scanning for a device named %s*", prefix)
+        _purge_bluez_cache(address)
+        LOG.info("Scanning for TARANG pod (target=%s, prefix=%s)...", address, prefix)
 
         def on_advertisement(device: Any, advertisement_data: Any) -> None:
             if found.done():
                 return
-            name = advertisement_data.local_name or device.name or ""
-            if name.upper().startswith(prefix):
+            dev_addr = str(device.address).upper()
+            name = (advertisement_data.local_name or device.name or "").upper()
+            if (address and dev_addr == address) or (prefix and (prefix in name or name.startswith(prefix))):
                 found.set_result(device)
 
         scanner = BleakScanner(detection_callback=on_advertisement)
@@ -651,27 +665,6 @@ class BleGateway:
             return None
         finally:
             await scanner.stop()
-
-    async def start_discovery(self) -> Any | None:
-        """Find TARANG. Always prefers a direct address scan (fast and
-        reliable, matches the known-working single-shot test script) and
-        only falls back to name-prefix advertisement matching if that
-        doesn't turn up a device — instead of giving up immediately, which
-        previously made discovery depend entirely on the pod's advertised
-        local name being present in the primary advertising packet (it
-        often isn't, on EFR32/Silabs stacks under BlueZ)."""
-        address = self.config.ble_address
-
-        if address:
-            device = await self._scan_by_address(address)
-            if device is not None:
-                return device
-            LOG.info(
-                "Address scan for %s found nothing; falling back to name-prefix scan",
-                address,
-            )
-
-        return await self._scan_by_name()
 
     async def run_forever(self) -> None:
         reconnect_delay = self.config.reconnect_delay_s
@@ -711,12 +704,11 @@ class BleGateway:
                         await asyncio.sleep(0.5)
 
                     service_uuids = {service.uuid.lower() for service in client.services}
-                    LOG.info("GATT Discovery found %d services: %s", len(service_uuids), ", ".join(sorted(service_uuids)))
                     missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
                     if missing_services:
-                        LOG.warning(
-                            "Some expected GATT services not found (continuing anyway): %s",
-                            ", ".join(sorted(missing_services)),
+                        raise RuntimeError(
+                            "Tarang GATT services missing: "
+                            + ", ".join(sorted(missing_services))
                         )
 
                     await self.publisher.synchronize_device(
