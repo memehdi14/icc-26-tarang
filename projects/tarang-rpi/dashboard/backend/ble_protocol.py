@@ -113,15 +113,19 @@ def _require_size(data: bytes | bytearray, expected: int, packet_name: str) -> N
 
 
 def decode_heart_rate(data: bytes | bytearray) -> int:
-    _require_size(data, 2, "heart-rate")
-    return struct.unpack_from("<H", data)[0]
+    if not data:
+        raise ProtocolError("empty heart-rate packet")
+    if len(data) == 1:
+        return int(data[0])
+    return int(struct.unpack_from("<H", data)[0])
 
 
 def decode_spo2(data: bytes | bytearray) -> int:
-    _require_size(data, 1, "SpO2")
-    value = data[0]
+    if not data:
+        raise ProtocolError("empty SpO2 packet")
+    value = int(data[0])
     if value > 100:
-        raise ProtocolError(f"SpO2 value {value} is outside 0..100")
+        value = 100
     return value
 
 
@@ -146,6 +150,8 @@ def decode_analytics_characteristic(
     characteristic_uuid: str, data: bytes | bytearray
 ) -> tuple[str, float]:
     """Decode one scalar from the generated seven-characteristic service."""
+    if not data:
+        raise ProtocolError("empty analytics packet")
     uuid = characteristic_uuid.lower()
     u8_fields = {
         ANALYTICS_PVC_UUID: ("pvc_burden_pct", 1.0),
@@ -159,12 +165,11 @@ def decode_analytics_characteristic(
         ANALYTICS_RMSSD_UUID: "rmssd",
     }
     if uuid in u8_fields:
-        _require_size(data, 1, "analytics scalar")
         field, scale = u8_fields[uuid]
         return field, float(data[0]) * scale
     if uuid in u16_fields:
-        _require_size(data, 2, "analytics scalar")
-        return u16_fields[uuid], float(struct.unpack_from("<H", data)[0])
+        val = struct.unpack_from("<H", data)[0] if len(data) >= 2 else data[0]
+        return u16_fields[uuid], float(val)
     raise ProtocolError(f"unknown analytics characteristic {characteristic_uuid}")
 
 

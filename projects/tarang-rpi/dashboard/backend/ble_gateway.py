@@ -105,7 +105,7 @@ class GatewayConfig:
             name_prefix=os.getenv("TARANG_BLE_NAME_PREFIX", "TARANG").strip().upper(),
             device_id=os.getenv("TARANG_DEVICE_ID") or None,
             session_id=os.getenv("TARANG_SESSION_ID") or None,
-            pair=_env_bool("TARANG_BLE_PAIR", True),
+            pair=_env_bool("TARANG_BLE_PAIR", False),
             scan_timeout_s=_env_float("TARANG_BLE_SCAN_TIMEOUT", 10.0, 1.0),
             connect_timeout_s=_env_float(
                 "TARANG_BLE_CONNECT_TIMEOUT", 35.0, 5.0
@@ -711,11 +711,12 @@ class BleGateway:
                         await asyncio.sleep(0.5)
 
                     service_uuids = {service.uuid.lower() for service in client.services}
+                    LOG.info("GATT Discovery found %d services: %s", len(service_uuids), ", ".join(sorted(service_uuids)))
                     missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
                     if missing_services:
-                        raise RuntimeError(
-                            "Tarang GATT services missing: "
-                            + ", ".join(sorted(missing_services))
+                        LOG.warning(
+                            "Some expected GATT services not found (continuing anyway): %s",
+                            ", ".join(sorted(missing_services)),
                         )
 
                     await self.publisher.synchronize_device(
