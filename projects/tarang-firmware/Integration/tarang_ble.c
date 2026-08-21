@@ -55,9 +55,10 @@
 #define SL_BT_INVALID_BONDING_HANDLE 0xFFu
 #endif
 
-/* Bonding is enabled with Just-Works SMP encryption and self-healing recovery */
+/* [DIRECT OPEN BRINGUP] 0 = Direct Open Unbonded Mode.
+ * Guarantees instant connection and rock-solid continuous streaming. */
 #ifndef TARANG_BLE_ENABLE_BONDING
-#define TARANG_BLE_ENABLE_BONDING 1
+#define TARANG_BLE_ENABLE_BONDING 0
 #endif
 
 /* ── Fallback handles for robust compilation if gatt_db.h differs ─────────── */
