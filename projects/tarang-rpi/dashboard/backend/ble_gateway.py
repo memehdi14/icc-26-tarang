@@ -42,6 +42,15 @@ from ble_protocol import (
 
 LOG = logging.getLogger("tarang.ble_gateway")
 
+# ============================================================================
+# Fallback target MAC. Mirrors the known-working single-shot test script.
+# Used only when TARANG_BLE_ADDRESS is not set in the environment, so the
+# gateway still connects reliably out of the box instead of depending on
+# name-prefix advertisement matching (which many EFR32/Silabs BLE stacks
+# don't surface in the primary advertising packet via BlueZ/Bleak).
+# ============================================================================
+DEFAULT_BLE_ADDRESS = "64:02:8F:64:26:14"
+
 
 def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
@@ -78,11 +87,21 @@ class GatewayConfig:
     @classmethod
     def from_env(cls) -> "GatewayConfig":
         address = os.getenv("TARANG_BLE_ADDRESS")
+        if address:
+            resolved_address = address.strip().upper()
+        else:
+            # No address configured — fall back to the known default MAC
+            # rather than relying solely on name-prefix scanning, which is
+            # the discovery path that was silently failing before.
+            resolved_address = DEFAULT_BLE_ADDRESS
+            LOG.info(
+                "TARANG_BLE_ADDRESS not set; defaulting to %s", resolved_address
+            )
         return cls(
             backend_url=os.getenv(
                 "TARANG_BACKEND_URL", "http://localhost:8000"
             ).rstrip("/"),
-            ble_address=address.strip().upper() if address else None,
+            ble_address=resolved_address,
             name_prefix=os.getenv("TARANG_BLE_NAME_PREFIX", "TARANG").strip().upper(),
             device_id=os.getenv("TARANG_DEVICE_ID") or None,
             session_id=os.getenv("TARANG_SESSION_ID") or None,
@@ -335,7 +354,7 @@ class GatewaySession:
         payload["heart_rate_bpm"] = self.last_hr if (self.last_hr is not None and self.last_hr > 0) else None
         payload["spo2_pct"] = self.last_spo2 if (self.last_spo2 is not None and self.last_spo2 > 0) else None
         self.publisher.enqueue("/api/vitals", payload, "vitals")
-        
+
         hr_str = f"{self.last_hr} BPM" if (self.last_hr is not None and self.last_hr > 0) else "Searching (0)"
         spo2_str = f"{self.last_spo2}%" if (self.last_spo2 is not None and self.last_spo2 > 0) else "No finger (0%)"
         LOG.info("[BLE][VITALS 2.5s] Periodic Packet Received -> HR: %s | SpO2: %s", hr_str, spo2_str)
@@ -531,7 +550,7 @@ class GatewaySession:
                     await asyncio.wait_for(client.start_notify(uuid, handler), timeout=2.0)
                     active.add(uuid)
                     LOG.info("Subscribed to %s", uuid)
-                    await asyncio.sleep(0.10)  # Pacing delay (100ms / ~2 CIs) to prevent stack buffer exhaustion
+                    await asyncio.sleep(0.15)  # Pacing delay (150ms / ~4 CIs) to prevent stack buffer exhaustion
                     break
                 except Exception as exc:
                     if attempt == 0:
@@ -600,49 +619,59 @@ class BleGateway:
                 "TARANG_SESSION_ID is unset; active sessions will be resolved from the backend"
             )
 
-    async def start_discovery(self) -> tuple[BleakScanner | None, Any | None]:
-        """Find TARANG while leaving discovery active for the initial connect."""
+    async def _scan_by_address(self, address: str) -> Any | None:
+        LOG.info("Scanning for configured device %s", address)
+        try:
+            return await BleakScanner.find_device_by_address(
+                address, timeout=self.config.scan_timeout_s
+            )
+        except Exception as exc:
+            LOG.warning("find_device_by_address note: %s", exc)
+            return None
+
+    async def _scan_by_name(self) -> Any | None:
         loop = asyncio.get_running_loop()
         found: asyncio.Future[Any] = loop.create_future()
-        address = self.config.ble_address
         prefix = self.config.name_prefix
 
-        if address:
-            LOG.info("Scanning for configured device %s", address)
-            try:
-                subprocess.run(
-                    ["bluetoothctl", "remove", address],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=1.5,
-                )
-            except Exception:
-                pass
-        else:
-            LOG.info("Scanning for a device named %s*", prefix)
+        LOG.info("Scanning for a device named %s*", prefix)
 
         def on_advertisement(device: Any, advertisement_data: Any) -> None:
             if found.done():
                 return
-            device_address = str(device.address).upper()
             name = advertisement_data.local_name or device.name or ""
-            if (address and device_address == address) or (
-                not address and name.upper().startswith(prefix)
-            ):
+            if name.upper().startswith(prefix):
                 found.set_result(device)
 
         scanner = BleakScanner(detection_callback=on_advertisement)
         await scanner.start()
         try:
-            device = await asyncio.wait_for(found, timeout=self.config.scan_timeout_s)
-            await scanner.stop()
-            return device
+            return await asyncio.wait_for(found, timeout=self.config.scan_timeout_s)
         except asyncio.TimeoutError:
-            await scanner.stop()
             return None
-        except BaseException:
+        finally:
             await scanner.stop()
-            raise
+
+    async def start_discovery(self) -> Any | None:
+        """Find TARANG. Always prefers a direct address scan (fast and
+        reliable, matches the known-working single-shot test script) and
+        only falls back to name-prefix advertisement matching if that
+        doesn't turn up a device — instead of giving up immediately, which
+        previously made discovery depend entirely on the pod's advertised
+        local name being present in the primary advertising packet (it
+        often isn't, on EFR32/Silabs stacks under BlueZ)."""
+        address = self.config.ble_address
+
+        if address:
+            device = await self._scan_by_address(address)
+            if device is not None:
+                return device
+            LOG.info(
+                "Address scan for %s found nothing; falling back to name-prefix scan",
+                address,
+            )
+
+        return await self._scan_by_name()
 
     async def run_forever(self) -> None:
         reconnect_delay = self.config.reconnect_delay_s

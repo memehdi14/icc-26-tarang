@@ -69,7 +69,7 @@
 // <i> NOTE: SL_BT_CONFIG_BUFFER_SIZE is deprecated in Simplicity SDK Suite v2026.6.0 and marked
 // <i> for removal in Simplicity SDK Suite v2027.6.0. SL_BT_CONFIG_BUFFER_SIZE is replaced by
 // <i> SL_BLUETOOTH_COMMON_BUFFER_MEMORY_SIZE in the Bluetooth Common Component.
-#define SL_BT_CONFIG_BUFFER_SIZE    (3150)
+#define SL_BT_CONFIG_BUFFER_SIZE    (8192)
 
 // <e SL_BT_CONFIG_SET_CUSTOM_ADDRESS_FROM_NVM3> Enable using a custom Bluetooth address stored in NVM3
 // <i> Enable or disable using a custom Bluetooth address stored the Bluetooth space of NVM3. When enabled,

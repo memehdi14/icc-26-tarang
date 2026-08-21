@@ -78,6 +78,15 @@ else
 fi
 PIDS+=("$!")
 
+echo "[INFO] Waiting for frontend to initialize on port 3000..."
+for _ in $(seq 1 30); do
+    if curl --silent --fail "http://localhost:3000" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+sleep 1
+
 echo "[3/3] Starting paired BLE gateway..."
 cd "$BACKEND_DIR"
 "$PYTHON" -u ble_gateway.py &

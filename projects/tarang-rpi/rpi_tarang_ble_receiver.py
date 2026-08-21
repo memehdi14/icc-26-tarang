@@ -112,20 +112,13 @@ class TarangSnippetReassembler:
 
 async def find_tarang_device(target: Optional[str] = None):
     """Active BLE scanner finding TARANG device with local name and MAC resolution."""
+    if target and ":" in target:
+        device = await BleakScanner.find_device_by_address(target, timeout=8.0)
+        return None, device
+
     loop = asyncio.get_running_loop()
     found: asyncio.Future = loop.create_future()
     target_clean = target.upper() if target else None
-
-    if target and ":" in target:
-        try:
-            subprocess.run(
-                ["bluetoothctl", "remove", target],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=1.5
-            )
-        except Exception:
-            pass
 
     def on_adv(device, adv_data):
         if found.done():
@@ -169,23 +162,7 @@ async def run_session(device, target_name: str) -> None:
         disconnected.set()
 
     async with BleakClient(device, disconnected_callback=on_disconnect, timeout=15.0) as client:
-        print(" [✓] Link Connected! Checking BLE Security / Pairing...")
-        pair_env = os.getenv("TARANG_BLE_PAIR", "false").lower() in ("1", "true", "yes")
-        if pair_env:
-            try:
-                await client.pair()
-                print(" [✓] BLE Security / Pairing Confirmed (Bonded & Encrypted).")
-            except Exception as e:
-                err_msg = str(e)
-                if "AlreadyExists" in err_msg or "already" in err_msg.lower():
-                    print(" [✓] Bonded using verified BlueZ security keys.")
-                else:
-                    print(f" [i] Pairing handshake note: {err_msg}")
-            await asyncio.sleep(0.3)
-        else:
-            print(" [✓] Direct Open Connection (Zero-Security Bringup Mode).")
-
-        print(f" [✓] MTU size: {client.mtu_size}")
+        print(f" [✓] Link Connected! (MTU={client.mtu_size})")
         print(" [3/3] Subscribing to Mode A Telemetry Streams...\n")
 
         # --------------------------------------------------------------------
@@ -318,7 +295,7 @@ async def run_session(device, target_name: str) -> None:
                     await client.start_notify(char_uuid, handler)
                     print(f"  ✓ Subscribed to {desc}")
                     subscribed_count += 1
-                    await asyncio.sleep(0.10)  # Pacing delay (100ms / ~2 CIs) to prevent stack buffer exhaustion
+                    await asyncio.sleep(0.15)  # Pacing delay (150ms / ~4 CIs) to prevent stack buffer exhaustion
                     break
                 except Exception as e:
                     if attempt == 0:
@@ -331,7 +308,9 @@ async def run_session(device, target_name: str) -> None:
         print("  STREAMING LIVE TARANG POD TELEMETRY (Press Ctrl+C to stop)")
         print("=" * 70 + "\n")
 
-        await disconnected.wait()
+        while client.is_connected:
+            await asyncio.sleep(1.0)
+        print("\n [!] BLE Link dropped. Initiating reconnection...")
 
 
 async def main():

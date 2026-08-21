@@ -12,14 +12,14 @@
 // <i> marked for removal in Simplicity SDK Suite v2027.6.0. SL_BT_CONTROLLER_BUFFER_MEMORY is
 // <i> replaced by SL_BLUETOOTH_COMMON_BUFFER_MEMORY_SIZE in the Bluetooth Common Component.
 #ifndef SL_BT_CONTROLLER_BUFFER_MEMORY
-#define SL_BT_CONTROLLER_BUFFER_MEMORY     (8192)
+#define SL_BT_CONTROLLER_BUFFER_MEMORY     (16384)
 #endif
 
 // <o SL_BT_CONTROLLER_LE_BUFFER_SIZE_MAX> Bluetooth Controller ACL data packets that can be stored
 // <i> Default: SL_BT_CONTROLLER_LE_BUFFER_SIZE_MAX
 // <i> Define the total number of the maximum sized ACL data packets that can be received from the host
 #ifndef SL_BT_CONTROLLER_LE_BUFFER_SIZE_MAX
-#define SL_BT_CONTROLLER_LE_BUFFER_SIZE_MAX     (3)
+#define SL_BT_CONTROLLER_LE_BUFFER_SIZE_MAX     (12)
 #endif
 
 // <o SL_BT_CONFIG_MAX_QUEUED_ADV_REPORTS> Maximum number of queued advertisement reports <1-255>
