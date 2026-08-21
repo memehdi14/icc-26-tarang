@@ -292,6 +292,7 @@ static const char *tarang_ble_reason_to_str(uint16_t reason)
     case 0x023B: return "UNACCEPTABLE CONNECTION INTERVAL (0x023B)";
     case 0x0242: return "DIFFERENT TRANSACTION COLLISION (0x0242)";
     case 0x1001: return "RESOURCE EXHAUSTED (0x1001) - BGAPI out of memory / TX buffers full";
+    case 0x1005: return "INSUFFICIENT AUTHENTICATION (0x1005) - Characteristic requires pairing/encryption";
     case 0x100C: return "CCCD IMPROPERLY CONFIGURED (0x100C)";
     case 0x100D: return "PROCEDURE IN PROGRESS (0x100D)";
     case 0x1011: return "INSUFFICIENT ENCRYPTION (0x1011)";
