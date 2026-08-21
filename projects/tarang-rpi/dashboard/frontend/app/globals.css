@@ -490,3 +490,128 @@ body {
     transform: translateY(0);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5-INCH (800x480) RASPBERRY PI TOUCH DISPLAY & KIOSK OPTIMIZATIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media screen and (max-width: 900px), screen and (max-height: 540px) {
+  :root {
+    --header-height: 38px;
+    --sidebar-width: 54px;
+    --sidebar-collapsed-width: 54px;
+    --patient-rail-width: 0px;
+  }
+
+  body {
+    font-size: 12px;
+    overflow-x: hidden;
+  }
+
+  /* Compact TopBar */
+  .app-topbar {
+    height: 38px;
+    padding: 0 8px;
+  }
+
+  .app-topbar h1, .app-topbar .brand-title {
+    font-size: 13px !important;
+  }
+
+  /* Auto-collapse sidebar to compact icon strip */
+  .app-sidebar {
+    width: 54px !important;
+    min-width: 54px !important;
+  }
+
+  .app-sidebar .sidebar-clinician {
+    padding: 6px 4px;
+    min-height: 42px;
+    justify-content: center;
+  }
+
+  .app-sidebar .sidebar-clinician div:not(.sidebar-avatar) {
+    display: none !important;
+  }
+
+  .app-sidebar .sidebar-nav {
+    padding: 6px 4px;
+    gap: 2px;
+  }
+
+  .app-sidebar .sidebar-nav button {
+    justify-content: center;
+    padding: 0;
+    width: 44px;
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .app-sidebar .sidebar-nav button span {
+    display: none !important;
+  }
+
+  .app-sidebar .sidebar-status,
+  .app-sidebar .sidebar-footer div,
+  .app-sidebar .sidebar-footer button span {
+    display: none !important;
+  }
+
+  .app-sidebar .sidebar-footer button {
+    justify-content: center;
+    padding: 6px 0;
+    width: 44px;
+  }
+
+  /* Full-width Workspace without dead margins */
+  .app-main {
+    margin-left: 54px !important;
+    margin-right: 0 !important;
+    padding: calc(var(--header-height) + 6px) 10px 10px !important;
+    min-height: calc(100vh - 38px);
+  }
+
+  .patient-rail {
+    display: none !important;
+  }
+
+  .view-frame {
+    max-width: 100% !important;
+  }
+
+  .view-header {
+    margin-bottom: 8px !important;
+    padding-bottom: 6px !important;
+    gap: 8px;
+  }
+
+  .view-header h1 {
+    font-size: 16px !important;
+  }
+
+  .view-header p {
+    font-size: 11px !important;
+  }
+
+  /* Compact Vitals & Cards Grid */
+  .grid {
+    gap: 8px !important;
+  }
+
+  /* Compact Waveform Container */
+  .waveform-grid {
+    min-height: 140px !important;
+    height: auto !important;
+  }
+
+  canvas {
+    max-height: 180px !important;
+  }
+
+  /* Big touch-friendly buttons */
+  button, .button-primary, .button-secondary {
+    min-height: 34px !important;
+    font-size: 11px !important;
+    padding: 0 10px !important;
+  }
+}
+
