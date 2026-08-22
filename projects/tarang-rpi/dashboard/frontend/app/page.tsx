@@ -134,7 +134,7 @@ const DEFAULT_SETTINGS: SystemSettings = {
 };
 
 export default function Page() {
-  const [phase, setPhase] = useState<AppPhase>('worklist');
+  const [phase, setPhase] = useState<AppPhase>('dashboard');
   const [activeTab, setActiveTab] = useState<ActiveTab>('workstation');
   const [bootstrapLoading, setBootstrapLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
