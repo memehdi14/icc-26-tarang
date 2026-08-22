@@ -31,6 +31,10 @@ export const TopBar: React.FC<TopBarProps> = ({
   onEmergency,
   onOpenWorkstation,
   onOpenSettings,
+  sidebarCollapsed,
+  patientRailCollapsed,
+  onToggleSidebar,
+  onTogglePatientRail,
 }) => (
   <header className="app-topbar !h-[54px] !px-4 flex items-center justify-between whitespace-nowrap bg-white border-b border-[var(--line)] shadow-xs">
     {/* Left: Brand + Bed + MRN in a single clean line */}

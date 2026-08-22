@@ -164,6 +164,35 @@ export default function Page() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [patientRailCollapsed, setPatientRailCollapsed] = useState(true);
 
+  const loadMonitoringData = useCallback(async (session: MonitoringSession) => {
+    const query = new URLSearchParams();
+    if (session.session_id) query.set('session_id', session.session_id);
+    if (session.device_id) query.set('device_id', session.device_id);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    const [latestVitals, latestAnalytics, events, currentDiagnostics] = await Promise.all([
+      requestJson<VitalsSample>(`/api/vitals/latest${suffix}`),
+      requestJson<Analytics5Min>(`/api/analytics/latest${suffix}`),
+      requestJson<ClinicalEvent[]>(`/api/events/latest${suffix}${suffix ? '&' : '?'}limit=30`),
+      requestJson<TelemetryDiagnostics>('/api/diagnostics/latest'),
+    ]);
+    setVitals(latestVitals.id ? latestVitals : EMPTY_VITALS);
+    setAnalytics(latestAnalytics.id ? latestAnalytics : EMPTY_ANALYTICS);
+    setGlitchTicker(events);
+    setLatestEvent(events[0] ?? null);
+    setActiveSnippet(null);
+    setDiagnostics(currentDiagnostics);
+    setBleConnected(currentDiagnostics.bleConnected);
+
+    const firstEvent = events[0];
+    if (firstEvent?.id) {
+      try {
+        setActiveSnippet(await requestJson<EcgSnippet>(`/api/events/${firstEvent.id}/snippet`));
+      } catch {
+        setActiveSnippet(null);
+      }
+    }
+  }, []);
+
   const loadBootstrap = useCallback(async () => {
     setBootstrapLoading(true);
     setBootstrapError(null);
@@ -213,35 +242,6 @@ export default function Page() {
   useEffect(() => {
     loadBootstrap();
   }, [loadBootstrap]);
-
-  const loadMonitoringData = useCallback(async (session: MonitoringSession) => {
-    const query = new URLSearchParams();
-    if (session.session_id) query.set('session_id', session.session_id);
-    if (session.device_id) query.set('device_id', session.device_id);
-    const suffix = query.toString() ? `?${query.toString()}` : '';
-    const [latestVitals, latestAnalytics, events, currentDiagnostics] = await Promise.all([
-      requestJson<VitalsSample>(`/api/vitals/latest${suffix}`),
-      requestJson<Analytics5Min>(`/api/analytics/latest${suffix}`),
-      requestJson<ClinicalEvent[]>(`/api/events/latest${suffix}${suffix ? '&' : '?'}limit=30`),
-      requestJson<TelemetryDiagnostics>('/api/diagnostics/latest'),
-    ]);
-    setVitals(latestVitals.id ? latestVitals : EMPTY_VITALS);
-    setAnalytics(latestAnalytics.id ? latestAnalytics : EMPTY_ANALYTICS);
-    setGlitchTicker(events);
-    setLatestEvent(events[0] ?? null);
-    setActiveSnippet(null);
-    setDiagnostics(currentDiagnostics);
-    setBleConnected(currentDiagnostics.bleConnected);
-
-    const firstEvent = events[0];
-    if (firstEvent?.id) {
-      try {
-        setActiveSnippet(await requestJson<EcgSnippet>(`/api/events/${firstEvent.id}/snippet`));
-      } catch {
-        setActiveSnippet(null);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     const wsUrl = getWsUrl();
@@ -519,7 +519,7 @@ export default function Page() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         bleConnected={bleConnected}
-        patientName={patient.name}
+        patientName={activePatient.name}
         attendingDoctor={settings.attendingDoctor}
         onChangePatient={() => setPhase('worklist')}
         collapsed={sidebarCollapsed}
@@ -540,7 +540,7 @@ export default function Page() {
             latestEvent={latestEvent}
             activeSnippet={activeSnippet}
             glitchTicker={glitchTicker}
-            patient={patient}
+            patient={activePatient}
             onClearSnapshot={() => setActiveSnippet(null)}
             onSelectEvent={selectEvent}
             loadingEventId={loadingEventId}
@@ -552,7 +552,7 @@ export default function Page() {
 
       {activeTab === 'workstation' && (
         <PatientSummarySidebar
-          patient={patient}
+          patient={activePatient}
           telemetry={legacyTelemetry}
           canExportEcg={Boolean(activeSnippet?.eventId && activeSnippet.waveform?.length)}
           exportBusy={exportBusy}
