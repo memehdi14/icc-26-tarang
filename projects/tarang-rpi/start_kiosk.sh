@@ -83,8 +83,8 @@ fi
 
 echo "[2/4] Starting frontend on port 3000..."
 cd "$FRONTEND_DIR"
-if [[ ! -d ".next" ]]; then
-    echo "[INFO] Production build missing; running npm run build..."
+if [[ ! -f ".next/BUILD_ID" ]]; then
+    echo "[INFO] Production build missing; running npm run build (takes ~30s)..."
     npm run build
 fi
 npm run start &
@@ -118,6 +118,8 @@ if command -v xset >/dev/null 2>&1; then
     xset s off 2>/dev/null || true
     xset -dpms 2>/dev/null || true
     xset s noblank 2>/dev/null || true
+fi
+
 # Auto-calibrate display resolution for 4.5-inch LCD
 if command -v wlr-randr >/dev/null 2>&1; then
     wlr-randr --output HDMI-A-1 --mode 848x480 2>/dev/null || true
