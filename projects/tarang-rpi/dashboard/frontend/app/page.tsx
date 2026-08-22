@@ -31,6 +31,10 @@ function getApiBase(): string {
   if (typeof window !== 'undefined') {
     const envUrl = process.env.NEXT_PUBLIC_API_URL;
     if (envUrl && !envUrl.includes('localhost')) return envUrl;
+    // If accessed via Cloudflare Tunnel (HTTPS) or Next.js proxy on port 3000, use relative paths
+    if (window.location.protocol === 'https:' || window.location.port === '' || window.location.port === '443' || window.location.port === '3000') {
+      return '';
+    }
     return `${window.location.protocol}//${window.location.hostname}:8000`;
   }
   return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -41,6 +45,10 @@ function getWsUrl(): string {
     const envUrl = process.env.NEXT_PUBLIC_WS_URL;
     if (envUrl && !envUrl.includes('localhost')) return envUrl;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // If accessed via Cloudflare Tunnel (HTTPS) on standard 443 port
+    if (window.location.protocol === 'https:' || window.location.port === '' || window.location.port === '443') {
+      return `${protocol}//${window.location.host}/ws/telemetry`;
+    }
     return `${protocol}//${window.location.hostname}:8000/ws/telemetry`;
   }
   return process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000/ws/telemetry';
@@ -243,6 +251,10 @@ export default function Page() {
             setLatestEvent(raw.event);
             setGlitchTicker((current) => [raw.event, ...current.filter((item) => item.id !== raw.event.id)].slice(0, 30));
             if (raw.snippet) setActiveSnippet(raw.snippet);
+          } else if (raw.type === 'events_cleared') {
+            setLatestEvent(null);
+            setActiveSnippet(null);
+            setGlitchTicker([]);
           } else if (raw.type === 'diagnostics' && raw.data) {
             setDiagnostics(raw.data);
             setBleConnected(Boolean(raw.data.bleConnected));

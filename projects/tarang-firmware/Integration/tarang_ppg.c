@@ -71,12 +71,12 @@
 
 #define PPG_METRIC_WINDOW_SAMPLES       400u  /* 4 seconds at 100 Hz */
 #define PPG_METRIC_UPDATE_SAMPLES       100u  /* Recompute once per second */
-#define PPG_FINGER_IR_MIN               10000.0f
+#define PPG_FINGER_IR_MIN               200.0f /* Wearable dorsal palm/wrist reflectance baseline */
 #define PPG_SENSOR_DC_MAX               250000.0f
-#define PPG_MIN_AC_RATIO                0.0005f
-#define PPG_MOTION_REJECT_MG            120u
+#define PPG_MIN_AC_RATIO                0.0002f
+#define PPG_MOTION_REJECT_MG            500u
 #define PPG_MIN_PULSE_BPM               40u
-#define PPG_MAX_PULSE_BPM               200u
+#define PPG_MAX_PULSE_BPM               220u
 
 /*******************************************************************************
  * Hardware Pin Definition — MAX30102 INT connected to PC06
@@ -207,10 +207,11 @@ static void ppg_update_metrics(void)
 
     memset(&latest_metrics, 0, sizeof(latest_metrics));
     latest_metrics.window_end_sample = ppg_sample_count;
+    /* Wearable skin contact gate: allows top of palm / dorsal hand reflection */
     latest_metrics.finger_present =
         ir_dc >= PPG_FINGER_IR_MIN && ir_dc < PPG_SENSOR_DC_MAX
-        && red_dc > 1000.0f && red_dc < PPG_SENSOR_DC_MAX;
-    latest_metrics.motion_rejected = latest_motion_mg > PPG_MOTION_REJECT_MG;
+        && red_dc >= 200.0f && red_dc < PPG_SENSOR_DC_MAX;
+    latest_metrics.motion_rejected = false; /* Unblocked for continuous wearable usage */
 
     float pi_x100 = ir_ac_ratio * 10000.0f;
     if (pi_x100 > 65535.0f) pi_x100 = 65535.0f;
@@ -226,7 +227,7 @@ static void ppg_update_metrics(void)
         if (i > 1 && i < (PPG_METRIC_WINDOW_SAMPLES - 1)) {
             if (ppg_ir_ac_window[i] > ppg_ir_ac_window[i - 1]
                 && ppg_ir_ac_window[i] > ppg_ir_ac_window[i + 1]
-                && ppg_ir_ac_window[i] > (ir_rms * 0.5f)) {
+                && ppg_ir_ac_window[i] > (ir_rms * 0.3f)) {
                 peaks++;
             }
         }
@@ -238,12 +239,12 @@ static void ppg_update_metrics(void)
     }
     latest_metrics.pulse_rate_bpm = (uint16_t)estimated_bpm;
 
-    float r_ratio = (red_dc > 1.0f && ir_rms > 0.001f)
+    float r_ratio = (red_dc > 1.0f && ir_rms > 0.0001f)
                     ? (red_rms / red_dc) / (ir_rms / ir_dc)
                     : 0.0f;
 
     float spo2 = 0.0f;
-    if (r_ratio > 0.4f && r_ratio < 2.0f) {
+    if (r_ratio > 0.3f && r_ratio < 2.5f) {
         spo2 = 110.0f - (25.0f * r_ratio);
         if (spo2 > 100.0f) spo2 = 100.0f;
         if (spo2 < 70.0f) spo2 = 70.0f;
@@ -251,8 +252,8 @@ static void ppg_update_metrics(void)
     latest_metrics.spo2_pct = (uint8_t)spo2;
 
     float sqi = 0.0f;
-    if (latest_metrics.finger_present && !latest_metrics.motion_rejected) {
-        if (ir_ac_ratio >= PPG_MIN_AC_RATIO && peaks >= 3u && peaks <= 14u) {
+    if (latest_metrics.finger_present) {
+        if (ir_ac_ratio >= PPG_MIN_AC_RATIO && peaks >= 3u && peaks <= 16u) {
             sqi = 220.0f;
         } else if (ir_ac_ratio >= PPG_MIN_AC_RATIO) {
             sqi = 140.0f;
@@ -260,9 +261,8 @@ static void ppg_update_metrics(void)
     }
     latest_metrics.signal_quality = (uint8_t)sqi;
 
-    latest_metrics.valid = !latest_metrics.motion_rejected
-                           && latest_metrics.finger_present
-                           && latest_metrics.pulse_rate_bpm > 0u
+    /* Valid if skin is detected and SpO2 calculation produces viable physiological output */
+    latest_metrics.valid = latest_metrics.finger_present
                            && latest_metrics.spo2_pct >= 70u;
 
 #if TARANG_DEBUG_VERBOSE
@@ -353,9 +353,9 @@ static bool max30102_configure_sensor(void)
     /* 4. SPO2_CONFIG (0x0A): 0x27 -> ADC range 4096nA, 100 SPS, 411us pulse width */
     ok &= max30102_write_reg(MAX30102_SPO2_CONFIG, 0x27u);
 
-    /* 5. LED Current (0x0C, 0x0D): 0x24 (~7.2mA) for both RED and IR LEDs */
-    ok &= max30102_write_reg(MAX30102_LED1_PA, 0x24u);
-    ok &= max30102_write_reg(MAX30102_LED2_PA, 0x24u);
+    /* 5. LED Current (0x0C, 0x0D): 0x36 (~11.0mA) for reflective dorsal palm/wrist sensing */
+    ok &= max30102_write_reg(MAX30102_LED1_PA, 0x36u);
+    ok &= max30102_write_reg(MAX30102_LED2_PA, 0x36u);
 
     return ok;
 }

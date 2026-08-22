@@ -547,3 +547,16 @@ async def simulate_ecg_event(payload: SimulateEventRequest, db: Session = Depend
         "viewInDashboard": f"http://10.167.232.123:3000 (Event #{event.id})"
     }
 
+
+@router.delete("/api/events")
+@router.delete("/events")
+async def clear_events(db: Session = Depends(get_db)):
+    """Clear all past clinical events, waveforms, and beat annotations from the database."""
+    db.query(BeatAnnotation).delete()
+    db.query(EcgSnippet).delete()
+    db.query(ClinicalEvent).delete()
+    db.commit()
+    await manager.broadcast({"type": "events_cleared"})
+    return {"status": "ok", "message": "All clinical events and waveforms cleared successfully."}
+
+

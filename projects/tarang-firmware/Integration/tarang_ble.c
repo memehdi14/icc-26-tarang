@@ -826,13 +826,11 @@ uint16_t tarang_fuse_heart_rate(
   uint8_t ppg_sqi = 0u;
   bool ppg_valid = false;
 
-  if (ppg_metrics != NULL && ppg_metrics->valid && ppg_metrics->finger_present) {
+  if (ppg_metrics != NULL && ppg_metrics->finger_present) {
     ppg_hr = ppg_metrics->pulse_rate_bpm;
     ppg_sqi = ppg_metrics->signal_quality;
     ppg_valid = (ppg_hr >= TARANG_HR_MIN_PHYSIOLOGICAL
-                 && ppg_hr <= TARANG_HR_MAX_PHYSIOLOGICAL
-                 && !ppg_metrics->motion_rejected
-                 && ppg_sqi >= 35u);
+                 && ppg_hr <= TARANG_HR_MAX_PHYSIOLOGICAL);
   }
 
   tarang_hr_source_t chosen_source = TARANG_HR_SOURCE_NONE;
@@ -937,7 +935,7 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
     /* Floating ECG input must not create a plausible-looking heart rate. */
     if (tarang_ppg_is_found()) {
       hr = tarang_fuse_heart_rate(pipeline, &ppg_metrics, &hr_source);
-      if (ppg_metrics.valid && ppg_metrics.finger_present) {
+      if (ppg_metrics.spo2_pct >= 70u) {
         spo2 = ppg_metrics.spo2_pct;
       }
     }

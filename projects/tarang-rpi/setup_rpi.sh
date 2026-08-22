@@ -47,7 +47,7 @@ if [[ ! -f "$SCRIPT_DIR/tarang.env" ]]; then
     cp "$SCRIPT_DIR/tarang.env.example" "$SCRIPT_DIR/tarang.env"
     echo "Created $SCRIPT_DIR/tarang.env"
 fi
-chmod +x "$SCRIPT_DIR/start_all.sh" "$SCRIPT_DIR/update_rpi.sh"
+chmod +x "$SCRIPT_DIR/start_all.sh" "$SCRIPT_DIR/update_rpi.sh" "$SCRIPT_DIR/start_tunnel.sh"
 
 echo
 echo "Setup complete."
