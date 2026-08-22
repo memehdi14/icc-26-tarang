@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
 Name=Tarang Clinical Hub
-Comment=Start Tarang Fullscreen Kiosk
+Comment=Start Tarang Fullscreen Clinical Kiosk
 Exec=/bin/bash -c "cd /home/teamocelleon/icc-26-tarang/projects/tarang-rpi && ./start_kiosk.sh"
-Icon=/home/teamocelleon/icc-26-tarang/projects/tarang-rpi/dashboard/frontend/public/logo_mark.svg
+Icon=/home/teamocelleon/icc-26-tarang/projects/tarang-rpi/dashboard/frontend/public/tarang-logo.png
 Terminal=true
 Categories=Healthcare;Medical;
 StartupNotify=true
