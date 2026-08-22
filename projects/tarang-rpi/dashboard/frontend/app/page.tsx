@@ -191,7 +191,7 @@ export default function Page() {
       if (active) {
         setActiveSession(active);
         setActiveDeviceId(active.device_id ?? null);
-        const matchedPatient = normalizedPatients.find((p) => p.dbId === active.patient_id || p.id === active.mrn) ?? normalizedPatients[0];
+        const matchedPatient = normalizedPatients.find((p) => p.dbId === active.patient_id) ?? normalizedPatients[0];
         if (matchedPatient) {
           setPatient(matchedPatient);
           await loadMonitoringData(active);
