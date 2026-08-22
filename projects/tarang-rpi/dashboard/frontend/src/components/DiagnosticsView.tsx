@@ -121,37 +121,43 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
           <div className="divide-y divide-[var(--line-soft)] text-xs">
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2.5">
-                <HeartPulse size={16} className="text-[var(--clinical-teal)]" />
+                <HeartPulse size={16} className={isConnected ? "text-[var(--clinical-teal)]" : "text-[var(--muted)]"} />
                 <div>
                   <p className="font-semibold text-[var(--ink)]">ECG analog front-end (AD8232 / IADC)</p>
-                  <p className="text-[10px] text-[var(--muted)]">Signal Quality Index (SQI): {health ? `${health.ecgSqi}/255` : 'Active'}</p>
+                  <p className="text-[10px] text-[var(--muted)]">
+                    {isConnected ? (health?.ecgSqi != null ? `Signal Quality Index (SQI): ${health.ecgSqi}/255` : 'Active • 250 Hz Paced Stream') : 'Awaiting Bluetooth Link'}
+                  </p>
                 </div>
               </div>
-              <span className="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">● Good</span>
-            </div>
-
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-2.5">
-                <Activity size={16} className="text-[var(--deep-ocean)]" />
-                <div>
-                  <p className="font-semibold text-[var(--ink)]">PPG optical pulse (MAX30102)</p>
-                  <p className="text-[10px] text-[var(--muted)]">Red & IR reflection pulse stream</p>
-                </div>
-              </div>
-              <span className={`font-medium px-2 py-0.5 rounded ${health?.ppgFingerPresent ? 'text-emerald-700 bg-emerald-50' : 'text-amber-700 bg-amber-50'}`}>
-                {health?.ppgFingerPresent ? '● Contact present' : '○ Standby / No contact'}
+              <span className={`font-medium px-2 py-0.5 rounded ${isConnected ? 'text-emerald-700 bg-emerald-50' : 'text-slate-600 bg-slate-100'}`}>
+                {isConnected ? '● Streaming 250 Hz' : '○ Standby'}
               </span>
             </div>
 
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2.5">
-                <Gauge size={16} className="text-[var(--accent)]" />
+                <Activity size={16} className={health?.ppgFingerPresent ? "text-[var(--deep-ocean)]" : "text-[var(--muted)]"} />
+                <div>
+                  <p className="font-semibold text-[var(--ink)]">PPG optical pulse (MAX30102)</p>
+                  <p className="text-[10px] text-[var(--muted)]">Red & IR reflection pulse stream</p>
+                </div>
+              </div>
+              <span className={`font-medium px-2 py-0.5 rounded ${health?.ppgFingerPresent ? 'text-emerald-700 bg-emerald-50' : isConnected ? 'text-amber-700 bg-amber-50' : 'text-slate-600 bg-slate-100'}`}>
+                {health?.ppgFingerPresent ? '● Contact present' : isConnected ? '○ Standby / No contact' : '○ Offline'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <Gauge size={16} className={isConnected ? "text-[var(--accent)]" : "text-[var(--muted)]"} />
                 <div>
                   <p className="font-semibold text-[var(--ink)]">Motion cancellation IMU (MPU6050)</p>
                   <p className="text-[10px] text-[var(--muted)]">6-DOF Accelerometer & Gyroscope</p>
                 </div>
               </div>
-              <span className="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">● Connected</span>
+              <span className={`font-medium px-2 py-0.5 rounded ${isConnected ? 'text-emerald-700 bg-emerald-50' : 'text-slate-600 bg-slate-100'}`}>
+                {isConnected ? '● 100 Hz Active' : '○ Standby'}
+              </span>
             </div>
           </div>
         </article>
@@ -162,13 +168,13 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
             <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[var(--ink)]">
               <Cpu size={14} /> Device metadata
             </h2>
-            <CheckCircle2 size={15} className="text-emerald-600" />
+            <CheckCircle2 size={15} className={isConnected ? "text-emerald-600" : "text-amber-600"} />
           </div>
           <dl className="divide-y divide-[var(--line-soft)] text-xs">
             <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Device name</dt><dd className="font-mono font-semibold text-[var(--ink)]">{diagnostics.deviceName || 'TARANG-2614'}</dd></div>
             <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Bluetooth address</dt><dd className="font-mono font-semibold text-[var(--ink)]">{diagnostics.deviceMac || '64:02:8F:64:26:14'}</dd></div>
             <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Firmware version</dt><dd className="font-mono font-semibold text-[var(--ink)]">v1.0.0-EFR32MG26</dd></div>
-            <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Uptime</dt><dd className="font-mono font-semibold text-[var(--ink)]">{health ? formatUptime(health.uptimeS) : 'Online'}</dd></div>
+            <div className="py-2"><dt className="text-[10px] text-[var(--muted)] uppercase">Link Status</dt><dd className="font-mono font-semibold text-[var(--ink)]">{isConnected ? 'Online & Encrypted' : isStale ? 'Reconnecting...' : 'Awaiting Connection'}</dd></div>
           </dl>
         </article>
       </section>
