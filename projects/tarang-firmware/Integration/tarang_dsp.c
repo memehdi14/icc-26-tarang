@@ -526,7 +526,7 @@ void tarang_dsp_init(tarang_dsp_state_t *state)
   state->notch.a2 = NOTCH_50_A[2];
   state->notch.z1 = 0.0f;
   state->notch.z2 = 0.0f;
-  state->notch.enabled = false;
+  state->notch.enabled = true; /* 50Hz IIR notch active by default for AC mains hum suppression */
 
   /* Block 4: QRS HP (5Hz) */
   state->qrs_hp[0].b0 = QRS_HP_SOS[0][0];
