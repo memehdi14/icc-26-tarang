@@ -161,8 +161,8 @@ export default function Page() {
   const [exportBusy, setExportBusy] = useState(false);
   const [pageBusy, setPageBusy] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [patientRailCollapsed, setPatientRailCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [patientRailCollapsed, setPatientRailCollapsed] = useState(true);
 
   const loadBootstrap = useCallback(async () => {
     setBootstrapLoading(true);

@@ -3,6 +3,8 @@
 import React from 'react';
 import {
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
   CircleUserRound,
 } from 'lucide-react';
 import { PatientInfo } from '../types/telemetry';
@@ -71,7 +73,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       </span>
     </div>
 
-    {/* Right: Emergency Button + Settings */}
+    {/* Right: Emergency Button + Toggle Patient Rail + Settings */}
     <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
       <button
         className="emergency-button !py-1.5 !px-3.5 !text-xs"
@@ -82,6 +84,17 @@ export const TopBar: React.FC<TopBarProps> = ({
         <AlertTriangle size={13} />
         <span>{pageBusy ? 'Paging...' : 'Emergency'}</span>
       </button>
+
+      {onTogglePatientRail && (
+        <button
+          className="icon-button !w-8 !h-8 !border !border-[var(--line)]"
+          onClick={onTogglePatientRail}
+          title={patientRailCollapsed ? "Expand Right Summary Sidebar" : "Collapse Right Summary (Focus Central)"}
+          aria-label="Toggle patient summary rail"
+        >
+          {patientRailCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+        </button>
+      )}
 
       <button
         className="icon-button !w-8 !h-8"

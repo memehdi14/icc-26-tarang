@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertTriangle, BrainCircuit, CheckCircle2, FileDown, PhoneCall, RefreshCw } from 'lucide-react';
+import { AlertTriangle, BrainCircuit, CheckCircle2, ChevronRight, FileDown, PhoneCall, RefreshCw } from 'lucide-react';
 import { ClinicalTelemetryPacket, PatientInfo } from '../types/telemetry';
 
 interface PatientSummarySidebarProps {
@@ -57,11 +57,12 @@ export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({
             {onToggleCollapse && (
               <button
                 onClick={onToggleCollapse}
-                className="icon-button !w-6 !h-6 !min-h-0 text-[var(--muted)] hover:text-[var(--ink)]"
-                title="Collapse patient summary"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--paper-2)] border border-[var(--line)] text-[10px] font-semibold text-[var(--ink)] hover:bg-[var(--line-soft)] cursor-pointer"
+                title="Collapse sidebar to focus central monitor"
                 aria-label="Collapse patient summary"
               >
-                ✕
+                <ChevronRight size={13} />
+                <span>Hide</span>
               </button>
             )}
           </div>

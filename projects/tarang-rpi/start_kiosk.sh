@@ -118,6 +118,9 @@ if command -v xset >/dev/null 2>&1; then
     xset s off 2>/dev/null || true
     xset -dpms 2>/dev/null || true
     xset s noblank 2>/dev/null || true
+# Auto-calibrate display resolution for 4.5-inch LCD
+if command -v wlr-randr >/dev/null 2>&1; then
+    wlr-randr --output HDMI-A-1 --mode 848x480 2>/dev/null || true
 fi
 
 echo "[4/4] Launching fullscreen Touchscreen Kiosk (calibrated for 4.5-inch LCD)..."
@@ -131,7 +134,7 @@ CHROME_FLAGS=(
     --overscroll-history-navigation=0
     --touch-events=enabled
     --hide-scrollbars
-    --force-device-scale-factor=0.75
+    --force-device-scale-factor=0.68
     --no-sandbox
     --disable-gpu
     --user-data-dir=/tmp/chromium_kiosk_data
