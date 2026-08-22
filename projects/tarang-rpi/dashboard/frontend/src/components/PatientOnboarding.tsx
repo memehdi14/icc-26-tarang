@@ -265,7 +265,11 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
                   const selectedDevice = selectedDevices[patient.id] || activeSession?.device_id || assignedDevice?.device_id || availableDevices[0]?.device_id || '';
                   const initials = patient.name.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
                   return (
-                    <tr key={patient.id} className="transition-colors hover:bg-[var(--paper-2)]/50">
+                    <tr
+                      key={patient.id}
+                      onClick={() => startPatient(patient)}
+                      className="transition-colors hover:bg-slate-50/80 cursor-pointer active:bg-slate-100"
+                    >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className="grid h-9 w-9 shrink-0 place-items-center rounded bg-[var(--paper-2)] text-xs font-bold text-[var(--ink)]">{initials}</div>
