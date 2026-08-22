@@ -58,6 +58,10 @@ class BleProtocolTest(unittest.TestCase):
         self.assertEqual(meta.event_type, 2)
         self.assertEqual(meta.confidence, 245)
 
+        routine_meta = decode_event_meta(struct.pack("<HBBI", 43, 254, 250, 123456))
+        self.assertEqual(routine_meta.event_id, 43)
+        self.assertEqual(routine_meta.event_type, 254)
+
         ticker = decode_event_ticker(struct.pack("<HI", 5, 123456))
         self.assertEqual(ticker.pattern_type, 5)
 

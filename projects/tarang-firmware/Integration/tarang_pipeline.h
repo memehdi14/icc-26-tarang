@@ -238,6 +238,9 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
  ******************************************************************************/
 void tarang_pipeline_run_deferred(tarang_pipeline_t *pipeline);
 
+bool tarang_pipeline_snippet_ready(
+    const tarang_pipeline_t *pipeline);
+
 uint16_t tarang_pipeline_copy_event_snippet(
     const tarang_pipeline_t *pipeline,
     int16_t *samples,

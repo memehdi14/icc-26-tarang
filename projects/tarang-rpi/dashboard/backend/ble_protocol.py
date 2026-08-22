@@ -77,6 +77,9 @@ RHYTHM_NAMES: Final = {
     128: "VT suspected",
 }
 
+EVENT_TYPE_ROUTINE: Final = 0xFE
+
+
 _ANALYTICS = struct.Struct("<BBHHBBB")
 _EVENT_META = struct.Struct("<HBBI")
 _EVENT_TICKER = struct.Struct("<HI")

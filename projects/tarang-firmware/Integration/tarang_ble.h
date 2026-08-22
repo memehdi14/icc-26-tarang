@@ -150,6 +150,18 @@ bool tarang_ble_trigger_clinical_event(
     uint8_t annotation_count);
 
 /***************************************************************************//**
+ * @brief Trigger Mode A Service C Routine Periodic ECG snapshot push (60s cadence).
+ ******************************************************************************/
+bool tarang_ble_trigger_routine_event(
+    uint8_t rhythm_status,
+    uint8_t confidence,
+    uint32_t ts_ms,
+    const int16_t *ecg_4s_samples,
+    uint16_t sample_count,
+    const tarang_ble_beat_annotation_t *annotations,
+    uint8_t annotation_count);
+
+/***************************************************************************//**
  * @brief Build legacy health packet for diagnostics compatibility.
  ******************************************************************************/
 void tarang_ble_build_health_packet(tarang_pipeline_t *pipeline, tarang_health_packet_t *pkt);

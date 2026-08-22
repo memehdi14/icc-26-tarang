@@ -206,6 +206,16 @@ extern "C" {
 #define TARANG_RHYTHM_VT_SUSPECTED      0x80    /* CRITICAL — life-threatening */
 
 /*******************************************************************************
+ * Routine Periodic ECG Snapshot Parameters (60s Cadence)
+ ******************************************************************************/
+#define TARANG_EVENT_TYPE_ROUTINE       0xFEu   /* Special wire marker in event_meta */
+#define TARANG_ROUTINE_ECG_INTERVAL_MS  60000u  /* 60s periodic snapshot cadence */
+#define TARANG_ROUTINE_ECG_FIRST_DELAY_MS 15000u /* 15s post-warmup first snapshot */
+#define TARANG_ROUTINE_ECG_MIN_SQI      30u     /* Soft SQI floor (lead-off guard) */
+#define TARANG_ROUTINE_ECG_RETRY_MS     5000u   /* Retry delay if deferred */
+
+
+/*******************************************************************************
  * BLE Event Packet (Section 6.5 — exact struct, 16 bytes packed)
  ******************************************************************************/
 typedef struct __attribute__((packed)) {

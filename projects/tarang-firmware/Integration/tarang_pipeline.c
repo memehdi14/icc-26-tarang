@@ -665,6 +665,10 @@ void tarang_pipeline_run_deferred(tarang_pipeline_t *pipeline)
                              beat.waveform,
                              beat.signal_quality);
   }
+bool tarang_pipeline_snippet_ready(const tarang_pipeline_t *pipeline)
+{
+  if (pipeline == NULL) return false;
+  return (pipeline->clean_ecg_count >= TARANG_EVENT_SNIPPET_SAMPLES);
 }
 
 uint16_t tarang_pipeline_copy_event_snippet(

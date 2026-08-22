@@ -23,6 +23,7 @@ from ble_protocol import (
     EVENT_META_UUID,
     EVENT_RHYTHM_UUID,
     EVENT_TICKER_UUID,
+    EVENT_TYPE_ROUTINE,
     PATTERN_NAMES,
     ProtocolError,
     REQUIRED_SERVICE_UUIDS,
@@ -267,6 +268,7 @@ class ClinicalEventBuffer:
     event_id: int | None = None
     rhythm_status: int | None = None
     pattern_type: int | None = None
+    routine: bool = False
     confidence: float = 1.0
     timestamp_ms: int | None = None
     waveform: list[float] | None = None
@@ -279,6 +281,7 @@ class ClinicalEventBuffer:
         self.event_id = None
         self.rhythm_status = preserve_rhythm
         self.pattern_type = None
+        self.routine = False
         self.confidence = 1.0
         self.timestamp_ms = None
         self.waveform = None
@@ -426,7 +429,13 @@ class GatewaySession:
             self._flush_event()
             self._event.reset(preserve_rhythm=self._event.rhythm_status)
         self._event.event_id = meta.event_id
-        self._event.rhythm_status = meta.event_type
+        if meta.event_type == EVENT_TYPE_ROUTINE:
+            self._event.routine = True
+            if self._event.rhythm_status is None:
+                self._event.rhythm_status = 0
+        else:
+            self._event.routine = False
+            self._event.rhythm_status = meta.event_type
         self._event.confidence = meta.confidence / 255.0
         self._event.timestamp_ms = meta.timestamp_ms
         self._snippet.reset()
@@ -435,12 +444,20 @@ class GatewaySession:
         self._event.snippet_started = True
         self._event.snippet_ended = False
         self._schedule_event_flush(2.0)
-        LOG.info(
-            "Clinical event %d: rhythm=%d confidence=%.1f%%",
-            meta.event_id,
-            meta.event_type,
-            self._event.confidence * 100.0,
-        )
+        if self._event.routine:
+            LOG.info(
+                "Routine ECG snapshot %d: rhythm=%d confidence=%.1f%%",
+                meta.event_id,
+                self._event.rhythm_status,
+                self._event.confidence * 100.0,
+            )
+        else:
+            LOG.info(
+                "Clinical event %d: rhythm=%d confidence=%.1f%%",
+                meta.event_id,
+                meta.event_type,
+                self._event.confidence * 100.0,
+            )
 
     def on_event_ticker(self, _sender: Any, data: bytearray) -> None:
         ticker = self._decode("event-ticker", decode_event_ticker, data)
@@ -508,12 +525,15 @@ class GatewaySession:
                 self._snippet.total_chunks,
             )
 
-        pattern = None
-        if self._event.pattern_type is not None:
-            pattern = PATTERN_NAMES.get(
-                self._event.pattern_type,
-                f"Pattern-{self._event.pattern_type}",
-            )
+        if self._event.routine:
+            pattern = "Routine"
+        else:
+            pattern = None
+            if self._event.pattern_type is not None:
+                pattern = PATTERN_NAMES.get(
+                    self._event.pattern_type,
+                    f"Pattern-{self._event.pattern_type}",
+                )
 
         payload: dict[str, Any] = self._base_payload()
         payload.update(

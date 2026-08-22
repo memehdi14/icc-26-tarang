@@ -100,6 +100,30 @@ class GatewaySessionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["waveform"], [0.01, 0.02, 0.03, 0.04])
         self.assertEqual(payload["annotations"][0]["label"], "V")
 
+    async def test_assembles_routine_ecg_snapshot(self):
+        # 1. Real rhythm status arrives first
+        self.session.on_rhythm(None, bytearray([0]))
+        # 2. Meta arrives with EVENT_TYPE_ROUTINE (254)
+        self.session.on_event_meta(
+            None, bytearray(struct.pack("<HBBI", 10, 254, 255, 123456))
+        )
+        self.session.on_event_control(None, bytearray([1]))
+        self.session.on_ecg_chunk(
+            None, bytearray(struct.pack("<HH2h", 0, 2, 10, 20))
+        )
+        self.session.on_ecg_chunk(
+            None, bytearray(struct.pack("<HH2h", 1, 2, 30, 40))
+        )
+        self.session.on_event_control(None, bytearray([3]))
+        self.session._flush_event()
+
+        event_items = [item for item in self.publisher.items if item[0] == "/api/events"]
+        self.assertEqual(len(event_items), 1)
+        payload = event_items[0][1]
+        self.assertEqual(payload["rhythm_status"], 0)  # Preserved real rhythm, not 254
+        self.assertEqual(payload["pattern_type"], "Routine")
+        self.assertEqual(payload["waveform"], [0.01, 0.02, 0.03, 0.04])
+
     async def test_coalesces_scalar_analytics(self):
         self.session.on_analytics_scalar(
             ANALYTICS_PVC_UUID, None, bytearray([3])

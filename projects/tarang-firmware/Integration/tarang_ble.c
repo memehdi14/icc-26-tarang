@@ -275,6 +275,9 @@ static uint32_t ble_total_vitals_sent    = 0u;
 static uint32_t ble_total_analytics_sent = 0u;
 static uint32_t ble_total_events_sent    = 0u;
 static uint32_t ble_total_chunks_sent    = 0u;
+static uint32_t ble_total_routine_sent   = 0u;
+static uint32_t last_routine_ecg_ms      = 0u;
+static bool     routine_sent_once        = false;
 static bool     ble_warmup_logged        = false;
 
 static const char *tarang_ble_reason_to_str(uint16_t reason)
@@ -624,10 +627,12 @@ bool tarang_ble_send_analytics(const tarang_ble_analytics_packet_t *analytics)
 }
 
 /******************************************************************************
- *                SERVICE C: EVENT-DRIVEN ANOMALY TRIGGER
+ *                SERVICE C: EVENT-DRIVEN ANOMALY & ROUTINE TRIGGER
  ******************************************************************************/
-bool tarang_ble_trigger_clinical_event(
+#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
+static bool trigger_event(
     uint8_t rhythm_status,
+    uint8_t meta_event_type,
     uint16_t pattern_type,
     uint8_t confidence,
     uint32_t ts_ms,
@@ -636,7 +641,6 @@ bool tarang_ble_trigger_clinical_event(
     const tarang_ble_beat_annotation_t *annotations,
     uint8_t annotation_count)
 {
-#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
   if (tarang_ble_conn_handle == SL_BT_INVALID_CONNECTION_HANDLE) {
     return false;
   }
@@ -647,9 +651,7 @@ bool tarang_ble_trigger_clinical_event(
 
   /* [FIX-1] Cooldown guard. The radio's TX queue is still draining the
    * previous burst; a fresh 10-chunk indication sequence here will collide
-   * and trip the connection supervision timeout. Caller is responsible
-   * for re-flagging the event if it is genuinely significant — see
-   * tarang_ble_process() flag-clear logic. */
+   * and trip the connection supervision timeout. */
   if (!tarang_ble_event_cooldown_elapsed()) {
     static uint32_t last_cooldown_log_ms = 0;
     uint32_t now = tarang_now_ms();
@@ -666,15 +668,6 @@ bool tarang_ble_trigger_clinical_event(
     return false;
   }
   if (!tarang_ble_mtu_ready_for_burst()) {
-    /* MTU exchange hasn't confirmed yet and the timeout hasn't elapsed --
-     * defer rather than sending a 10+ chunk transfer at the ATT default
-     * MTU while negotiation may still be in flight. This only applies in
-     * the first ~1.5s of a fresh connection. NOTE: whether the caller
-     * re-flags this specific event on a later beat depends on whether
-     * significant_event resets every beat in tarang_clinical_engine.c --
-     * not fully verified here. Worst case in this narrow window is one
-     * missed event notification at connection start, not a repeat of the
-     * disconnect loop. */
     return false;
   }
 
@@ -689,7 +682,7 @@ bool tarang_ble_trigger_clinical_event(
   /* 2. Notify Event Meta */
   tarang_ble_event_meta_t meta;
   meta.event_id     = current_event_id;
-  meta.event_type   = rhythm_status;
+  meta.event_type   = meta_event_type;
   meta.confidence   = confidence;
   meta.timestamp_ms = ts_ms;
 
@@ -751,15 +744,104 @@ bool tarang_ble_trigger_clinical_event(
   }
   event_transfer_send_next();
 
-  printf("[BLE][EVENT] Event#%u Rhythm=0x%02X Conf=%u TS=%lu samples=%u mtu_payload=%u\r\n",
-         current_event_id, rhythm_status, confidence, (unsigned long)ts_ms,
+  printf("[BLE][EVENT] Event#%u Type=0x%02X Rhythm=0x%02X Conf=%u TS=%lu samples=%u mtu_payload=%u\r\n",
+         current_event_id, meta_event_type, rhythm_status, confidence, (unsigned long)ts_ms,
          event_transfer.sample_count, event_payload_limit());
   return true;
+}
+#endif
+
+bool tarang_ble_trigger_clinical_event(
+    uint8_t rhythm_status,
+    uint16_t pattern_type,
+    uint8_t confidence,
+    uint32_t ts_ms,
+    const int16_t *ecg_4s_samples,
+    uint16_t sample_count,
+    const tarang_ble_beat_annotation_t *annotations,
+    uint8_t annotation_count)
+{
+#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
+  return trigger_event(
+      rhythm_status,
+      rhythm_status, /* meta.event_type == rhythm_status for anomalies */
+      pattern_type,
+      confidence,
+      ts_ms,
+      ecg_4s_samples,
+      sample_count,
+      annotations,
+      annotation_count);
 #else
   (void)rhythm_status; (void)pattern_type; (void)confidence; (void)ts_ms;
   (void)ecg_4s_samples; (void)sample_count; (void)annotations; (void)annotation_count;
   return false;
 #endif
+}
+
+bool tarang_ble_trigger_routine_event(
+    uint8_t rhythm_status,
+    uint8_t confidence,
+    uint32_t ts_ms,
+    const int16_t *ecg_4s_samples,
+    uint16_t sample_count,
+    const tarang_ble_beat_annotation_t *annotations,
+    uint8_t annotation_count)
+{
+#if defined(SL_CATALOG_BLUETOOTH_PRESENT)
+  return trigger_event(
+      rhythm_status,
+      TARANG_EVENT_TYPE_ROUTINE, /* 0xFE wire discriminator */
+      0u,                        /* pattern_type = 0 (no glitch ticker notify) */
+      confidence,
+      ts_ms,
+      ecg_4s_samples,
+      sample_count,
+      annotations,
+      annotation_count);
+#else
+  (void)rhythm_status; (void)confidence; (void)ts_ms;
+  (void)ecg_4s_samples; (void)sample_count; (void)annotations; (void)annotation_count;
+  return false;
+#endif
+}
+
+static uint16_t build_event_snapshot(
+    const tarang_pipeline_t *pipeline,
+    uint8_t *annotation_count_out)
+{
+  if (pipeline == NULL) {
+    if (annotation_count_out != NULL) *annotation_count_out = 0u;
+    return 0u;
+  }
+
+  uint32_t snippet_start_sample = 0u;
+  uint16_t snippet_count = tarang_pipeline_copy_event_snippet(
+      pipeline,
+      event_snapshot,
+      TARANG_EVENT_SNIPPET_SAMPLES,
+      &snippet_start_sample);
+
+  uint8_t annotation_count = tarang_pipeline_copy_event_annotations(
+      pipeline,
+      snippet_start_sample,
+      snippet_count,
+      pipeline_annotation_snapshot,
+      TARANG_EVENT_MAX_ANNOTATIONS);
+
+  for (uint8_t i = 0u; i < annotation_count; i++) {
+    event_annotation_snapshot[i].offset_ms =
+        pipeline_annotation_snapshot[i].offset_ms;
+    event_annotation_snapshot[i].label =
+        pipeline_annotation_snapshot[i].beat_class;
+    event_annotation_snapshot[i].confidence =
+        pipeline_annotation_snapshot[i].confidence;
+  }
+
+  if (annotation_count_out != NULL) {
+    *annotation_count_out = annotation_count;
+  }
+  return snippet_count;
 }
 
 /******************************************************************************
@@ -1005,66 +1087,98 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
   /* ── 3. Event-Driven Anomaly Push ─────────────────────────────────── */
   if (pipeline && tarang_pipeline_should_send_event(pipeline)) {
     if (tarang_ble_clinical_event_ready()) {
-      uint8_t rhythm = pipeline->engine.rhythm_flags;
-      uint16_t pattern = 0;
-      if (rhythm & TARANG_RHYTHM_VT_SUSPECTED) pattern = 5;
-      else if (pipeline->engine.consecutive_v > 3u) pattern = 5;
-      else if (pipeline->engine.consecutive_v == 3u) pattern = 2;
-      else if (pipeline->engine.consecutive_v == 2u) pattern = 1;
-      else if (pipeline->engine.consecutive_s >= 3u) pattern = 6;
-      else if (rhythm & TARANG_RHYTHM_BIGEMINY) pattern = 3;
-      else if (rhythm & TARANG_RHYTHM_TRIGEMINY) pattern = 4;
+      /* Only build snapshot and attempt transfer if cooldown has elapsed and no transfer is active.
+       * If currently busy with a routine transfer, keep trigger flags latched so the anomaly fires
+       * immediately once the link drains. */
+      if (!event_transfer.active && tarang_ble_event_cooldown_elapsed()) {
+        uint8_t rhythm = pipeline->engine.rhythm_flags;
+        uint16_t pattern = 0;
+        if (rhythm & TARANG_RHYTHM_VT_SUSPECTED) pattern = 5;
+        else if (pipeline->engine.consecutive_v > 3u) pattern = 5;
+        else if (pipeline->engine.consecutive_v == 3u) pattern = 2;
+        else if (pipeline->engine.consecutive_v == 2u) pattern = 1;
+        else if (pipeline->engine.consecutive_s >= 3u) pattern = 6;
+        else if (rhythm & TARANG_RHYTHM_BIGEMINY) pattern = 3;
+        else if (rhythm & TARANG_RHYTHM_TRIGEMINY) pattern = 4;
 
-      uint8_t conf = pipeline->latest_beat_telemetry.confidence;
+        uint8_t conf = pipeline->latest_beat_telemetry.confidence;
+        uint8_t annotation_count = 0u;
+        uint16_t snippet_count = build_event_snapshot(pipeline, &annotation_count);
 
-      uint32_t snippet_start_sample = 0u;
-      uint16_t snippet_count = tarang_pipeline_copy_event_snippet(
-          pipeline,
-          event_snapshot,
-          TARANG_EVENT_SNIPPET_SAMPLES,
-          &snippet_start_sample);
-      uint8_t annotation_count = tarang_pipeline_copy_event_annotations(
-          pipeline,
-          snippet_start_sample,
-          snippet_count,
-          pipeline_annotation_snapshot,
-          TARANG_EVENT_MAX_ANNOTATIONS);
-      for (uint8_t i = 0u; i < annotation_count; i++) {
-        event_annotation_snapshot[i].offset_ms =
-            pipeline_annotation_snapshot[i].offset_ms;
-        event_annotation_snapshot[i].label =
-            pipeline_annotation_snapshot[i].beat_class;
-        event_annotation_snapshot[i].confidence =
-            pipeline_annotation_snapshot[i].confidence;
+        bool accepted = tarang_ble_trigger_clinical_event(
+            rhythm,
+            pattern,
+            conf,
+            pipeline->latest_beat_telemetry.timestamp_ms,
+            event_snapshot,
+            snippet_count,
+            event_annotation_snapshot,
+            annotation_count);
+
+        if (accepted) {
+          ble_total_events_sent++;
+          /* Resync routine timer — fresh ECG was just transmitted */
+          last_routine_ecg_ms = now_ms;
+          routine_sent_once = true;
+        }
+
+        pipeline->engine.rhythm_changed = false;
+        pipeline->engine.significant_event = false;
       }
-
-      bool accepted = tarang_ble_trigger_clinical_event(
-          rhythm,
-          pattern,
-          conf,
-          pipeline->latest_beat_telemetry.timestamp_ms,
-          event_snapshot,
-          snippet_count,
-          event_annotation_snapshot,
-          annotation_count);
-
-      if (accepted) {
-        ble_total_events_sent++;
-      }
-
-      /* [FIX-2] ───────────────────────────────────────────────────────────
-       * Clear the trigger flags regardless of whether the event was
-       * accepted, rejected by event_transfer.active, or rejected by the
-       * cooldown. If we only clear on accept, a rejected trigger leaves
-       * the flags set and the next super-loop tick re-fires the same
-       * event in a tight retry loop — keeping the radio busy until
-       * supervision timeout. The next genuine rhythm change will re-arm. */
-      pipeline->engine.rhythm_changed = false;
-      pipeline->engine.significant_event = false;
     } else {
-      /* Do not retry a candidate built from missing sensors or unavailable AI. */
+      /* Do not retry a candidate built from unavailable AI. */
       pipeline->engine.rhythm_changed = false;
       pipeline->engine.significant_event = false;
+    }
+  }
+
+  /* ── 4. Periodic Routine ECG Snapshot (60s Cadence) ──────────────── */
+  if (pipeline
+      && !event_transfer.active
+      && sub_event_meta
+      && tarang_ble_mtu_ready_for_burst()
+      && tarang_pipeline_snippet_ready(pipeline)
+      && !tarang_pipeline_should_send_event(pipeline)) {
+    uint32_t routine_interval = routine_sent_once
+        ? TARANG_ROUTINE_ECG_INTERVAL_MS
+        : TARANG_ROUTINE_ECG_FIRST_DELAY_MS;
+
+    if (now_ms - last_routine_ecg_ms >= routine_interval) {
+      uint8_t sqi = pipeline->latest_beat_telemetry.signal_quality;
+      if (tarang_ble_event_cooldown_elapsed() && sqi >= TARANG_ROUTINE_ECG_MIN_SQI) {
+        uint8_t annotation_count = 0u;
+        uint16_t snippet_count = build_event_snapshot(pipeline, &annotation_count);
+        uint8_t rhythm = pipeline->engine.rhythm_flags;
+        uint8_t conf = pipeline->latest_beat_telemetry.confidence;
+
+        bool accepted = tarang_ble_trigger_routine_event(
+            rhythm,
+            conf,
+            pipeline->latest_beat_telemetry.timestamp_ms > 0
+                ? pipeline->latest_beat_telemetry.timestamp_ms
+                : now_ms,
+            event_snapshot,
+            snippet_count,
+            event_annotation_snapshot,
+            annotation_count);
+
+        if (accepted) {
+          last_routine_ecg_ms = now_ms;
+          routine_sent_once = true;
+          ble_total_routine_sent++;
+          printf("[BLE][ROUTINE] 60s Routine ECG Snapshot sent (#%lu, SQI=%u)\r\n",
+                 (unsigned long)ble_total_routine_sent, sqi);
+        }
+      } else if (sqi < TARANG_ROUTINE_ECG_MIN_SQI) {
+        /* Soft SQI low (lead off / noisy) — defer 5s instead of waiting a full minute */
+        last_routine_ecg_ms = now_ms - (routine_interval - TARANG_ROUTINE_ECG_RETRY_MS);
+        static uint32_t last_sqi_defer_log_ms = 0u;
+        if (now_ms - last_sqi_defer_log_ms >= 5000u) {
+          last_sqi_defer_log_ms = now_ms;
+          printf("[BLE][ROUTINE] ECG lead quality low (SQI=%u < %u) — routine snapshot deferred 5s\r\n",
+                 sqi, (unsigned)TARANG_ROUTINE_ECG_MIN_SQI);
+        }
+      }
     }
   }
 
@@ -1310,11 +1424,12 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
       printf("[BLE][DISCONNECT]   Reason Code:     0x%04X\r\n", (unsigned)reason);
       printf("[BLE][DISCONNECT]   Reason Meaning:  %s\r\n", tarang_ble_reason_to_str(reason));
       printf("[BLE][DISCONNECT]   Link Duration:   %lu seconds\r\n", (unsigned long)conn_duration_s);
-      printf("[BLE][DISCONNECT]   Session Totals:  Vitals=%lu Analytics=%lu Events=%lu Chunks=%lu\r\n",
+      printf("[BLE][DISCONNECT]   Session Totals:  Vitals=%lu Analytics=%lu Events=%lu Chunks=%lu Routine=%lu\r\n",
              (unsigned long)ble_total_vitals_sent,
              (unsigned long)ble_total_analytics_sent,
              (unsigned long)ble_total_events_sent,
-             (unsigned long)ble_total_chunks_sent);
+             (unsigned long)ble_total_chunks_sent,
+             (unsigned long)ble_total_routine_sent);
       printf("[BLE][DISCONNECT]   Disconnect #:    %lu\r\n", (unsigned long)ble_disconnect_count);
       printf("=========================================================\r\n");
 
@@ -1332,6 +1447,8 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
       memset(&event_transfer, 0, sizeof(event_transfer));
       last_event_completion_ms = 0u;
       connection_opened_ms = 0u;
+      last_routine_ecg_ms = 0u;
+      routine_sent_once = false;
       ble_warmup_logged = false;
 
       sub_vitals_hr         = false;
