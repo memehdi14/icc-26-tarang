@@ -45,6 +45,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# Pre-cleanup: terminate any lingering processes from previous runs
+echo "[0/3] Clearing any previous instances on ports 8000 & 3000..."
+pkill -f "uvicorn main:app" 2>/dev/null || true
+pkill -f "ble_gateway.py" 2>/dev/null || true
+pkill -f "next start" 2>/dev/null || true
+pkill -f "next-server" 2>/dev/null || true
+sleep 1
+
 export PYTHONUNBUFFERED=1
 
 echo "[1/3] Starting FastAPI backend on port 8000..."
