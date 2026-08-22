@@ -99,14 +99,16 @@ if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && ! systemctl is-active --quiet clou
     PIDS+=("$!")
 fi
 
-sleep 2
-echo "[4/4] Launching fullscreen Chromium Kiosk on 5-inch display..."
-if command -v chromium-browser >/dev/null 2>&1; then
-    chromium-browser --kiosk --noerrdialogs --disable-infobars --check-for-update-interval=31536000 --app=http://localhost:3000 &
-    PIDS+=("$!")
-elif command -v chromium >/dev/null 2>&1; then
-    chromium --kiosk --noerrdialogs --disable-infobars --app=http://localhost:3000 &
-    PIDS+=("$!")
+if [[ "${TARANG_KIOSK:-0}" == "1" ]]; then
+    export DISPLAY="${DISPLAY:-:0}"
+    echo "[4/4] Launching fullscreen Chromium Kiosk on display..."
+    if command -v chromium-browser >/dev/null 2>&1; then
+        chromium-browser --kiosk --noerrdialogs --disable-infobars --check-for-update-interval=31536000 --app=http://localhost:3000 &
+        PIDS+=("$!")
+    elif command -v chromium >/dev/null 2>&1; then
+        chromium --kiosk --noerrdialogs --disable-infobars --app=http://localhost:3000 &
+        PIDS+=("$!")
+    fi
 fi
 
 echo
