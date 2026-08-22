@@ -87,10 +87,17 @@ for _ in $(seq 1 30); do
 done
 sleep 1
 
-echo "[3/3] Starting paired BLE gateway..."
+echo "[3/4] Starting paired BLE gateway..."
 cd "$BACKEND_DIR"
 "$PYTHON" -u ble_gateway.py &
 PIDS+=("$!")
+
+# Optional: Cloudflare Tunnel auto-start if configured and not already running as a system service
+if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && ! systemctl is-active --quiet cloudflared 2>/dev/null; then
+    echo "[INFO] Launching Cloudflare Tunnel from token..."
+    cloudflared tunnel run --token "$CLOUDFLARE_TUNNEL_TOKEN" &
+    PIDS+=("$!")
+fi
 
 sleep 2
 echo "[4/4] Launching fullscreen Chromium Kiosk on 5-inch display..."
