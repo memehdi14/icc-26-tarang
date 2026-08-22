@@ -177,13 +177,30 @@ export default function Page() {
         requestJson<TelemetryDiagnostics>('/api/diagnostics/latest'),
       ]);
       if (health.status !== 'ok' || health.database !== 'ok') throw new Error('Clinical database is not ready');
-      setPatients(patientRows.map(normalizePatient));
+      const normalizedPatients = patientRows.map(normalizePatient);
+      setPatients(normalizedPatients);
       setDevices(deviceRows);
       setSessions(sessionRows);
       setSettings(savedSettings);
       setDiagnostics(currentDiagnostics);
       setBleConnected(currentDiagnostics.bleConnected);
       setBackendOnline(true);
+
+      // Auto-bind active patient & session so kiosk opens straight to the live dashboard
+      const active = sessionRows.find((s) => s.status === 'active') ?? sessionRows[0];
+      if (active) {
+        setActiveSession(active);
+        setActiveDeviceId(active.device_id ?? null);
+        const matchedPatient = normalizedPatients.find((p) => p.dbId === active.patient_id || p.id === active.mrn) ?? normalizedPatients[0];
+        if (matchedPatient) {
+          setPatient(matchedPatient);
+          await loadMonitoringData(active);
+          setPhase('dashboard');
+        }
+      } else if (normalizedPatients.length > 0) {
+        setPatient(normalizedPatients[0]);
+        setPhase('dashboard');
+      }
     } catch (error) {
       setBackendOnline(false);
       setBleConnected(false);
@@ -191,7 +208,7 @@ export default function Page() {
     } finally {
       setBootstrapLoading(false);
     }
-  }, []);
+  }, [loadMonitoringData]);
 
   useEffect(() => {
     loadBootstrap();
@@ -470,12 +487,23 @@ export default function Page() {
     );
   }
 
-  if (!patient) return null;
+  const activePatient = patient || patients[0] || {
+    name: 'Bedside Monitor',
+    age: 0,
+    gender: 'Other',
+    id: 'TRG-LIVE',
+    bed: 'ICU-01',
+    admitDate: 'Active',
+    attendingPhysician: settings.attendingDoctor || 'Attending Physician',
+    bloodType: 'Unknown',
+    allergies: [],
+    medicalHistory: [],
+  };
 
   return (
     <div className="app-shell">
       <TopBar
-        patient={patient}
+        patient={activePatient}
         bleConnected={bleConnected}
         backendOnline={backendOnline}
         pageBusy={pageBusy}

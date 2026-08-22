@@ -120,7 +120,7 @@ if command -v xset >/dev/null 2>&1; then
     xset s noblank 2>/dev/null || true
 fi
 
-echo "[4/4] Launching fullscreen Touchscreen Kiosk..."
+echo "[4/4] Launching fullscreen Touchscreen Kiosk (calibrated for 4.5-inch LCD)..."
 CHROME_FLAGS=(
     --kiosk
     --noerrdialogs
@@ -131,6 +131,10 @@ CHROME_FLAGS=(
     --overscroll-history-navigation=0
     --touch-events=enabled
     --hide-scrollbars
+    --force-device-scale-factor=0.75
+    --no-sandbox
+    --disable-gpu
+    --user-data-dir=/tmp/chromium_kiosk_data
     --app=http://localhost:3000
 )
 

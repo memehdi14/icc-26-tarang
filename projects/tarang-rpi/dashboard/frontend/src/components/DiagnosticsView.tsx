@@ -91,7 +91,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
             <Radio size={16} className="text-[var(--clinical-teal)]" />
           </div>
           <div className="my-2 flex items-baseline gap-2">
-            <span className="font-mono text-3xl font-bold text-[var(--ink)]">{diagnostics.latencyMs || '--'}</span>
+            <span className="font-mono text-3xl font-bold text-[var(--ink)]">{diagnostics.latencyMs != null ? diagnostics.latencyMs : '--'}</span>
             <span className="font-mono text-xs text-[var(--muted)]">ms delay</span>
           </div>
           <p className="text-[11px] text-[var(--muted)]">RSSI: {rssi > -100 ? `${rssi} dBm` : 'Scanning'}</p>
@@ -104,8 +104,8 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
             <Activity size={16} className="text-[var(--deep-ocean)]" />
           </div>
           <div className="my-2 flex items-baseline gap-2">
-            <span className="font-mono text-3xl font-bold text-[var(--ink)]">{diagnostics.packetsReceived.toLocaleString()}</span>
-            <span className="font-mono text-xs text-[var(--muted)]">({diagnostics.packetsDropped} dropped)</span>
+            <span className="font-mono text-3xl font-bold text-[var(--ink)]">{(diagnostics.packetsReceived ?? 0).toLocaleString()}</span>
+            <span className="font-mono text-xs text-[var(--muted)]">({diagnostics.packetsDropped ?? 0} dropped)</span>
           </div>
           <p className="text-[11px] text-[var(--muted)]">Mode A event-driven streaming</p>
         </article>
