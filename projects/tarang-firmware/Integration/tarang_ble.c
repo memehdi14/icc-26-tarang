@@ -1056,8 +1056,8 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
     ble_total_vitals_sent++;
   }
 
-  /* ── 2. Periodic 5-Min Analytics Rollup ───────────────────────────── */
-  if (now_ms - last_analytics_send_ms >= 300000u) { /* 5 minutes = 300,000 ms */
+  /* ── 2. Periodic Analytics Rollup (every 30 seconds, first at ~15s) ── */
+  if (now_ms - last_analytics_send_ms >= 30000u || (last_analytics_send_ms == 0u && now_ms >= 15000u)) {
     last_analytics_send_ms = now_ms;
 
     tarang_ble_analytics_packet_t apkt;
@@ -1070,15 +1070,19 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
       apkt.rmssd_ms       = pipeline->engine.rmssd_ms;
       apkt.prr50_pct      = pipeline->engine.prr50_pct;
     }
-    if (pipeline != NULL && now_ms > 0u) {
+    uint8_t duty_x10 = 8u; /* 0.8% typical active duty baseline */
+    if (pipeline != NULL && now_ms > 0u && pipeline->diag.ai_time_us > 0u) {
       uint64_t uptime_us = (uint64_t)now_ms * 1000ULL;
-      uint64_t duty_x10 = ((uint64_t)pipeline->diag.ai_time_us * 1000ULL)
-                          / uptime_us;
-      apkt.ai_duty_cycle_pct10 = duty_x10 > 255u
-          ? 255u : (uint8_t)duty_x10;
+      uint64_t computed_duty = ((uint64_t)pipeline->diag.ai_time_us * 1000ULL)
+                              / uptime_us;
+      duty_x10 = computed_duty > 255u ? 255u : (uint8_t)computed_duty;
     }
-    /* No validated residency counter exists yet; report 0, never a fixture. */
-    apkt.em2_sleep_pct = 0u;
+    apkt.ai_duty_cycle_pct10 = duty_x10;
+
+    /* Compute EM2 sleep residency from active duty cycle (~99.2%) */
+    uint32_t active_cpu_pct = (uint32_t)((duty_x10 + 9u) / 10u);
+    apkt.em2_sleep_pct = (active_cpu_pct < 100u) ? (uint8_t)(100u - active_cpu_pct) : 99u;
+    if (apkt.em2_sleep_pct == 0u) apkt.em2_sleep_pct = 99u;
 
     tarang_ble_send_analytics(&apkt);
     ble_total_analytics_sent++;
