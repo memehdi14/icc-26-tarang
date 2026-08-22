@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "em_core.h"
 
 /* Override the weak default HardFault_Handler from startup code */
 void HardFault_Handler(void) __attribute__((naked));
@@ -28,8 +29,7 @@ void HardFault_Handler(void)
 }
 
 /* This function receives the stacked frame pointer */
-void hard_fault_handler_c(uint32_t *hardfault_args)
-    __attribute__((used));
+void hard_fault_handler_c(uint32_t *hardfault_args) __attribute__((used));
 
 void hard_fault_handler_c(uint32_t *hardfault_args)
 {
@@ -42,20 +42,13 @@ void hard_fault_handler_c(uint32_t *hardfault_args)
   volatile uint32_t stacked_pc  = hardfault_args[6];
   volatile uint32_t stacked_psr = hardfault_args[7];
 
-  /* Suppress unused warnings */
-  (void)stacked_r0;
-  (void)stacked_r1;
-  (void)stacked_r2;
-  (void)stacked_r3;
-  (void)stacked_r12;
-
-  printf("\r\n\r\n");
+  printf("\r\n");
   printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n");
-  printf("!!! HARD FAULT — BOARD CRASHED !!!\r\n");
+  printf("!!        HARDFAULT CRASH REPORT        !!\r\n");
   printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n");
-  printf("  PC  = 0x%08lX  <-- crashed HERE\r\n", (unsigned long)stacked_pc);
-  printf("  LR  = 0x%08lX  <-- called FROM\r\n", (unsigned long)stacked_lr);
-  printf("  PSR = 0x%08lX\r\n", (unsigned long)stacked_psr);
+  printf("  PC  = 0x%08lX (crash instruction)\r\n", (unsigned long)stacked_pc);
+  printf("  LR  = 0x%08lX (caller/return)\r\n",     (unsigned long)stacked_lr);
+  printf("  PSR = 0x%08lX\r\n",                     (unsigned long)stacked_psr);
   printf("  R0  = 0x%08lX  R1 = 0x%08lX\r\n",
          (unsigned long)stacked_r0, (unsigned long)stacked_r1);
   printf("  R2  = 0x%08lX  R3 = 0x%08lX\r\n",
@@ -76,8 +69,13 @@ void hard_fault_handler_c(uint32_t *hardfault_args)
   }
 
   printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n");
-  printf("System halted. Reset the board.\r\n");
+  printf("Auto-recovery: restarting board in 2 seconds...\r\n");
 
-  /* Halt in infinite loop so the serial output stays visible */
-  while (1) { }
+  /* Spin-delay ~2s to allow UART TX buffers to flush */
+  for (volatile uint32_t i = 0; i < 8000000u; i++) {
+    __NOP();
+  }
+
+  /* Trigger software system reset for demo auto-recovery */
+  NVIC_SystemReset();
 }

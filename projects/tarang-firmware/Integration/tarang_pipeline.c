@@ -453,6 +453,10 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
       uint32_t t0 = tarang_now_ms();
       gate_ran = tarang_ai_is_ready() && beat_window_130 != NULL;
       gate_prob = tarang_ai_gate(beat_window_130, rr_features);
+      if (gate_prob < 0.0f) {
+        printf("[AI] TIER1 Gate evaluation failed (err=%.2f) — defaulting to 0.0\r\n", gate_prob);
+        gate_prob = 0.0f;
+      }
       uint32_t t1 = tarang_now_ms();
       pipeline->diag.ai_time_us += (t1 - t0) * 1000;
       pipeline->tier1_fires++;

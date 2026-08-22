@@ -268,6 +268,27 @@ void tarang_ecg_process(void)
   uint64_t h0_completed_us = 0u;
   uint64_t h1_completed_us = 0u;
 
+  /* LDMA liveness watchdog: check if DMA completion has stalled >2.0s */
+  static uint32_t last_halves_seen = 0u;
+  static uint32_t last_half_completed_ms = 0u;
+  uint32_t now_ms = tarang_now_ms();
+
+  if (halves_completed != last_halves_seen) {
+    last_halves_seen = halves_completed;
+    last_half_completed_ms = now_ms;
+  } else if (sample_count > 0u && last_half_completed_ms > 0u
+             && (now_ms - last_half_completed_ms > 2000u)) {
+    printf("[ECG-DIAG] WARNING: LDMA stalled (%lums) — re-arming ping-pong transfer\r\n",
+           (unsigned long)(now_ms - last_half_completed_ms));
+    last_half_completed_ms = now_ms;
+
+    LDMA_StopTransfer(ecg_dma_channel);
+    LDMA_TransferCfg_t transferCfg;
+    memset(&transferCfg, 0, sizeof(transferCfg));
+    transferCfg.ldmaReqSel = ldmaPeripheralSignal_IADC0_IADC_SINGLE;
+    LDMA_StartTransfer(ecg_dma_channel, &transferCfg, &ecg_dma_desc[0]);
+  }
+
   /* Atomically snapshot and clear flags to avoid race with DMA ISR */
   CORE_DECLARE_IRQ_STATE;
   CORE_ENTER_ATOMIC();

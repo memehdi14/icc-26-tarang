@@ -224,15 +224,23 @@ static bool tarang_ble_event_cooldown_elapsed(void)
   return (tarang_now_ms() - last_event_completion_ms) >= TARANG_EVENT_COOLDOWN_MS;
 }
 
-/* Avoid clinical-event traffic until its inputs and link transport are real. */
+/* Decouple event readiness from PPG/IMU presence so ECG-leads-only setups can trigger events. */
 static bool tarang_ble_clinical_event_ready(void)
 {
+  static bool logged_warning = false;
+  if (!logged_warning) {
 #if TARANG_ENABLE_PPG
-  if (!tarang_ppg_is_found()) return false;
+    if (!tarang_ppg_is_found()) {
+      printf("[BLE][EVENT] Running in ECG-primary mode: PPG offline.\r\n");
+    }
 #endif
 #if TARANG_ENABLE_IMU
-  if (!tarang_imu_is_found()) return false;
+    if (!tarang_imu_is_found()) {
+      printf("[BLE][EVENT] Running in ECG-primary mode: IMU offline.\r\n");
+    }
 #endif
+    logged_warning = true;
+  }
   return tarang_ai_is_ready() && tarang_ble_mtu_ready_for_burst();
 }
 
@@ -248,6 +256,7 @@ typedef struct {
   uint8_t annotation_count;
   uint8_t next_annotation;
   uint32_t transfer_start_ms;
+  uint32_t last_progress_ms;
   int16_t samples[TARANG_EVENT_SNIPPET_SAMPLES];
   tarang_ble_beat_annotation_t
       annotations[TARANG_EVENT_MAX_ANNOTATIONS];
@@ -423,11 +432,17 @@ static void event_transfer_send_next(void)
         packet_len,
         (const uint8_t *)&chunk);
     if (sc != SL_STATUS_OK) {
-      /* TX buffer full — retried on the next ~10 ms process tick */
-      printf("[BLE][EVENT] Chunk %u/%u TX busy (0x%04lX), will retry\r\n",
-             chunk_index, event_transfer.total_chunks, (unsigned long)sc);
+      /* TX buffer full — rate-limited retry log to avoid UART blocking */
+      static uint32_t last_chunk_busy_log_ms = 0u;
+      uint32_t now = tarang_now_ms();
+      if (now - last_chunk_busy_log_ms >= 500u) {
+        last_chunk_busy_log_ms = now;
+        printf("[BLE][EVENT] Chunk %u/%u TX busy (0x%04lX), retrying\r\n",
+               chunk_index, event_transfer.total_chunks, (unsigned long)sc);
+      }
       return;
     }
+    event_transfer.last_progress_ms = tarang_now_ms();
     event_transfer.next_chunk++;
     return; /* one chunk per tick; annotations continue on later ticks */
   }
@@ -450,10 +465,16 @@ static void event_transfer_send_next(void)
         (uint16_t)(entry_count * sizeof(*first)),
         (const uint8_t *)first);
     if (sc != SL_STATUS_OK) {
-      printf("[BLE][EVENT] Annotation TX busy (0x%04lX), will retry\r\n",
-             (unsigned long)sc);
+      static uint32_t last_annot_busy_log_ms = 0u;
+      uint32_t now = tarang_now_ms();
+      if (now - last_annot_busy_log_ms >= 500u) {
+        last_annot_busy_log_ms = now;
+        printf("[BLE][EVENT] Annotation TX busy (0x%04lX), retrying\r\n",
+               (unsigned long)sc);
+      }
       return;
     }
+    event_transfer.last_progress_ms = tarang_now_ms();
     event_transfer.next_annotation = (uint8_t)(
         event_transfer.next_annotation + entry_count);
     return; /* one annotation packet per tick */
@@ -726,6 +747,7 @@ bool tarang_ble_trigger_clinical_event(
       || (sub_event_annotations && event_transfer.annotation_count > 0u);
   if (event_transfer.active) {
     event_transfer.transfer_start_ms = tarang_now_ms();
+    event_transfer.last_progress_ms = event_transfer.transfer_start_ms;
   }
   event_transfer_send_next();
 
@@ -911,9 +933,9 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
    * makes no progress for 5 s (e.g. peer vanished), abandon it so the
    * next genuine event is not blocked behind a dead one. */
   if (event_transfer.active) {
-    if (now_ms - event_transfer.transfer_start_ms > 5000u) {
-      printf("[BLE][EVENT] Event#%u transfer stalled (%lums elapsed) — aborting\r\n",
-             event_transfer.event_id, (unsigned long)(now_ms - event_transfer.transfer_start_ms));
+    if (now_ms - event_transfer.last_progress_ms > 4000u) {
+      printf("[BLE][EVENT] Event#%u transfer stalled (%lums since progress) — aborting\r\n",
+             event_transfer.event_id, (unsigned long)(now_ms - event_transfer.last_progress_ms));
       memset(&event_transfer, 0, sizeof(event_transfer));
       last_event_completion_ms = now_ms;
     } else {
@@ -932,12 +954,20 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
 #endif
     tarang_hr_source_t hr_source = TARANG_HR_SOURCE_NONE;
 #if TARANG_ENABLE_PPG
-    /* Floating ECG input must not create a plausible-looking heart rate. */
     if (tarang_ppg_is_found()) {
       hr = tarang_fuse_heart_rate(pipeline, &ppg_metrics, &hr_source);
       if (ppg_metrics.spo2_pct >= 70u) {
         spo2 = ppg_metrics.spo2_pct;
       }
+    } else {
+      /* Fall back directly to ECG Heart Rate when PPG sensor is not present */
+      if (pipeline != NULL && pipeline->engine.current_hr > 0u) {
+        hr = pipeline->engine.current_hr;
+      }
+    }
+#else
+    if (pipeline != NULL && pipeline->engine.current_hr > 0u) {
+      hr = pipeline->engine.current_hr;
     }
 #endif
     tarang_ble_send_vitals(hr, spo2, now_ms);
