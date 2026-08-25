@@ -11,6 +11,7 @@ Or from the backend directory:
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from datetime import datetime
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -19,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, init_db, SessionLocal
-from database.models import DeviceDiagnostics, SystemSetting
+from database.models import DeviceDiagnostics, SystemSetting, Patient, Device, MonitoringSession
 
 from routers import (
     telemetry,
