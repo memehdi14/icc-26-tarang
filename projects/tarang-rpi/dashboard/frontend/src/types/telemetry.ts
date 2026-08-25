@@ -162,6 +162,8 @@ export interface SystemSettings {
   gridDensity: 'dense' | 'standard' | 'relaxed';
   audioAlertsEnabled: boolean;
   attendingDoctor: string;
+  sweepSpeed?: '12.5' | '25' | '50';
+  gain?: 'auto' | '0.5x' | '1.0x' | '2.0x';
 }
 
 export type InitializationStageId =

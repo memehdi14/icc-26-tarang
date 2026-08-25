@@ -21,6 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { SystemSettings } from '../types/telemetry';
+import { playMedicalAlertChime, unlockAudio } from '../lib/audio';
 
 interface SettingsViewProps {
   settings: SystemSettings;
@@ -29,57 +30,33 @@ interface SettingsViewProps {
 
 type SettingsSection = 'thresholds' | 'audio' | 'display' | 'clinician';
 
-// Play authentic ISO 60601-1-8 Medical Alarm Sound using Web Audio API
-function playMedicalChime(volume: number = 0.6) {
-  try {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5 (Standard Medical Tri-Tone Chime)
-    const startTime = ctx.currentTime + 0.05;
-
-    notes.forEach((freq, index) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, startTime + index * 0.14);
-
-      gain.gain.setValueAtTime(0, startTime + index * 0.14);
-      gain.gain.linearRampToValueAtTime(volume * 0.4, startTime + index * 0.14 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + index * 0.14 + 0.35);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(startTime + index * 0.14);
-      osc.stop(startTime + index * 0.14 + 0.36);
-    });
-  } catch {
-    // AudioContext blocked by browser autoplay policy until user gesture
-  }
-}
-
 export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSettings }) => {
-  const [form, setForm] = useState<SystemSettings>(settings);
+  const [form, setForm] = useState<SystemSettings>({
+    ...settings,
+    sweepSpeed: settings.sweepSpeed || '25',
+    gain: settings.gain || 'auto',
+  });
   const [activeSection, setActiveSection] = useState<SettingsSection>('thresholds');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Live Display Preview Settings
-  const [gain, setGain] = useState<'0.5x' | '1.0x' | '2.0x' | 'auto'>('auto');
-  const [sweepSpeed, setSweepSpeed] = useState<'12.5' | '25' | '50'>('25');
-  const [alertVolume, setAlertVolume] = useState<number>(75);
   const [soundTested, setSoundTested] = useState(false);
+  const [alertVolume, setAlertVolume] = useState<number>(75);
 
-  useEffect(() => setForm(settings), [settings]);
+  useEffect(() => {
+    setForm({
+      ...settings,
+      sweepSpeed: settings.sweepSpeed || '25',
+      gain: settings.gain || 'auto',
+    });
+  }, [settings]);
 
   const handleTestChime = () => {
-    playMedicalChime(alertVolume / 100);
+    unlockAudio();
+    playMedicalAlertChime();
     setSoundTested(true);
-    window.setTimeout(() => setSoundTested(false), 2000);
+    setTimeout(() => setSoundTested(false), 1200);
   };
 
   const handlePresetApply = (preset: 'adult' | 'pediatric' | 'critical') => {
@@ -363,9 +340,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                     <button
                       key={spd}
                       type="button"
-                      onClick={() => setSweepSpeed(spd)}
+                      onClick={() => setForm({ ...form, sweepSpeed: spd })}
                       className={`p-3 rounded-lg border text-left transition-all ${
-                        sweepSpeed === spd
+                        (form.sweepSpeed || '25') === spd
                           ? 'border-[var(--deep-ocean)] bg-blue-50 text-[var(--deep-ocean)] font-bold shadow-xs'
                           : 'border-[var(--line)] bg-white text-[var(--ink)] hover:bg-[var(--paper-2)]'
                       }`}
@@ -387,9 +364,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ settings, onSaveSett
                     <button
                       key={g}
                       type="button"
-                      onClick={() => setGain(g)}
+                      onClick={() => setForm({ ...form, gain: g })}
                       className={`py-2 px-3 rounded border text-center text-xs font-mono font-bold transition-all ${
-                        gain === g
+                        (form.gain || 'auto') === g
                           ? 'border-[var(--clinical-teal)] bg-emerald-50 text-[var(--clinical-teal)]'
                           : 'border-[var(--line)] bg-white text-[var(--muted)] hover:text-[var(--ink)]'
                       }`}

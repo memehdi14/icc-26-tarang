@@ -8,9 +8,16 @@ interface WaveformCanvasProps {
   currentEvent?: ClinicalEvent | null;
   activeSnippet?: EcgSnippet | null;
   onClearSnapshot?: () => void;
+  sweepSpeed?: '12.5' | '25' | '50';
+  gain?: 'auto' | '0.5x' | '1.0x' | '2.0x';
 }
 
-export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, onClearSnapshot }) => {
+export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ 
+  activeSnippet, 
+  onClearSnapshot,
+  sweepSpeed = '25',
+  gain = 'auto',
+}) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const hasEvent = Boolean(activeSnippet && (activeSnippet.waveform?.length ?? 0) > 0);
@@ -76,8 +83,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
       context.stroke();
 
       // 2. Idle State vs Triggered Event Waveform
+      const speedMult = sweepSpeed === '12.5' ? 0.5 : sweepSpeed === '50' ? 2.0 : 1.0;
       if (!hasEvent) {
-        phase += 0.02;
+        phase += 0.02 * speedMult;
         context.strokeStyle = '#059669'; // Clinical Emerald
         context.lineWidth = 1.8 * dpr;
         context.beginPath();
@@ -98,10 +106,9 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
         return;
       }
 
-      // 3. Render Captured Event Waveform with Robust Amplitude Scaling
+      // 3. Render Captured Event Waveform with Calibrated Amplitude Scaling
       const rawSamples = activeSnippet?.waveform ?? [];
       if (rawSamples.length > 0) {
-        // Calculate statistical range to prevent vertical bar artifact
         let minVal = Infinity;
         let maxVal = -Infinity;
         let sum = 0;
@@ -113,7 +120,8 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
         }
         const mean = sum / rawSamples.length;
         const dynamicRange = Math.max(maxVal - minVal, 0.01);
-        const scaleY = (height * 0.72) / dynamicRange;
+        const gainMult = gain === '0.5x' ? 0.5 : gain === '1.0x' ? 1.0 : gain === '2.0x' ? 2.0 : 1.0;
+        const scaleY = ((height * 0.72) / dynamicRange) * (gain === 'auto' ? 1.0 : gainMult);
 
         context.strokeStyle = '#1d4ed8'; // Crisp Clinical Blue
         context.lineWidth = 1.8 * dpr;
@@ -138,18 +146,19 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
           const x = (annotation.offsetMs / 4000) * width;
           context.strokeStyle =
             annotation.label === 'V'
-              ? 'rgba(220, 38, 38, 0.6)'
+              ? 'rgba(220, 38, 38, 0.9)'
               : annotation.label === 'S'
-              ? 'rgba(217, 119, 6, 0.6)'
-              : 'rgba(5, 150, 105, 0.4)';
-          context.setLineDash([3 * dpr, 4 * dpr]);
+              ? 'rgba(217, 119, 6, 0.9)'
+              : 'rgba(5, 150, 105, 0.7)';
+          context.lineWidth = 1.5 * dpr;
           context.beginPath();
-          context.moveTo(x, 16 * dpr);
-          context.lineTo(x, height - 16 * dpr);
+          context.moveTo(x, center - 40 * dpr);
+          context.lineTo(x, center + 40 * dpr);
           context.stroke();
-          context.setLineDash([]);
         });
       }
+
+      animationId = requestAnimationFrame(render);
     };
 
     render();
@@ -157,22 +166,22 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ activeSnippet, o
       window.removeEventListener('resize', resizeCanvas);
       cancelAnimationFrame(animationId);
     };
-  }, [activeSnippet, hasEvent]);
+  }, [activeSnippet, hasEvent, sweepSpeed, gain]);
 
   return (
-    <div className="rounded-lg border border-[var(--line)] bg-white overflow-hidden shadow-sm">
-      <div className="flex min-h-[42px] items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2 bg-[var(--paper-2)]">
-        <div className="flex items-center gap-2.5">
-          <span className={`h-2 w-2 rounded-full ${hasEvent ? 'bg-[var(--cardiac-rose)]' : 'bg-[var(--clinical-teal)]'}`} />
+    <div className="rounded-lg border border-[var(--line)] bg-white overflow-hidden shadow-xs">
+      <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-2.5 bg-[var(--paper-2)]">
+        <div className="flex items-center gap-2">
+          <Activity size={15} className="text-[var(--deep-ocean)]" />
           <div>
-            <h2 className="text-xs font-semibold text-[var(--ink)]">
-              {hasEvent ? 'ECG anomaly snapshot (4-second capture)' : 'Continuous ECG lead monitoring'}
+            <h2 className="text-xs font-bold text-[var(--ink)] tracking-tight">
+              Lead I Rhythm Strip (250 Hz Real-Time)
             </h2>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] text-[var(--muted)]">
-            Lead I • 25 mm/s • 250 Hz
+            Lead I • {sweepSpeed} mm/s • {gain === 'auto' ? 'Auto Gain' : `${gain} Gain`} • 250 Hz
           </span>
           {hasEvent && onClearSnapshot && (
             <button className="discovery-pill-secondary !py-0.5 !px-2.5 !min-h-[26px] !text-[10px]" onClick={onClearSnapshot}>

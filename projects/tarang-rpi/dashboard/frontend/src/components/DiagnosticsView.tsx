@@ -14,11 +14,12 @@ import {
   TimerReset,
   Wifi,
 } from 'lucide-react';
-import { DeviceHealthTelemetry, TelemetryDiagnostics } from '../types/telemetry';
+import { DeviceHealthTelemetry, TelemetryDiagnostics, VitalsSample } from '../types/telemetry';
 
 interface DiagnosticsViewProps {
   diagnostics: TelemetryDiagnostics;
   deviceHealth?: DeviceHealthTelemetry;
+  vitals?: VitalsSample;
 }
 
 function formatUptime(seconds: number): string {
@@ -27,14 +28,14 @@ function formatUptime(seconds: number): string {
   return hours ? `${hours}h ${minutes}m` : `${minutes}m ${seconds % 60}s`;
 }
 
-export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, deviceHealth }) => {
+export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, deviceHealth, vitals }) => {
   const [lastSeenMs, setLastSeenMs] = useState(Date.now());
   const [isStale, setIsStale] = useState(false);
 
   useEffect(() => {
     setLastSeenMs(Date.now());
     setIsStale(false);
-  }, [deviceHealth, diagnostics]);
+  }, [deviceHealth, diagnostics, vitals]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setIsStale(Date.now() - lastSeenMs > 3500), 1000);
@@ -44,6 +45,10 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
   const health = deviceHealth;
   const rssi = health?.bleRssi ?? diagnostics.rssiDbm ?? -100;
   const isConnected = diagnostics.bleConnected && !isStale;
+  const ppgFingerActive = Boolean(
+    health?.ppgFingerPresent || 
+    (vitals?.spo2Pct !== null && vitals?.spo2Pct !== undefined && vitals.spo2Pct > 0)
+  );
 
   return (
     <div className="view-frame view-enter">
@@ -136,14 +141,14 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
 
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2.5">
-                <Activity size={16} className={health?.ppgFingerPresent ? "text-[var(--deep-ocean)]" : "text-[var(--muted)]"} />
+                <Activity size={16} className={ppgFingerActive ? "text-[var(--deep-ocean)]" : "text-[var(--muted)]"} />
                 <div>
                   <p className="font-semibold text-[var(--ink)]">PPG optical pulse (MAX30102)</p>
                   <p className="text-[10px] text-[var(--muted)]">Red & IR reflection pulse stream</p>
                 </div>
               </div>
-              <span className={`font-medium px-2 py-0.5 rounded ${health?.ppgFingerPresent ? 'text-emerald-700 bg-emerald-50' : isConnected ? 'text-amber-700 bg-amber-50' : 'text-slate-600 bg-slate-100'}`}>
-                {health?.ppgFingerPresent ? '● Contact present' : isConnected ? '○ Standby / No contact' : '○ Offline'}
+              <span className={`font-medium px-2 py-0.5 rounded ${ppgFingerActive ? 'text-emerald-700 bg-emerald-50' : isConnected ? 'text-amber-700 bg-amber-50' : 'text-slate-600 bg-slate-100'}`}>
+                {ppgFingerActive ? '● Contact present' : isConnected ? '○ Standby / No contact' : '○ Offline'}
               </span>
             </div>
 

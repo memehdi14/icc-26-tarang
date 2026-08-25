@@ -23,6 +23,7 @@ import {
   TelemetryDiagnostics,
   VitalsSample,
 } from '../src/types/telemetry';
+import { playMedicalAlertChime, unlockAudio } from '../src/lib/audio';
 
 type AppPhase = 'worklist' | 'initializing' | 'dashboard';
 type ActiveTab = 'workstation' | 'diagnostics' | 'settings';
@@ -268,12 +269,24 @@ export default function Page() {
 
           if (raw.type === 'vitals_sample' && raw.data) {
             setVitals(raw.data);
+            if (settings.audioAlertsEnabled && raw.data.heartRateBpm > 0) {
+              if (
+                raw.data.heartRateBpm < settings.hrLowThreshold ||
+                raw.data.heartRateBpm > settings.hrHighThreshold ||
+                (raw.data.spo2Pct && raw.data.spo2Pct < settings.spo2LowThreshold)
+              ) {
+                playMedicalAlertChime();
+              }
+            }
           } else if (raw.type === 'analytics_5min' && raw.data) {
             setAnalytics(raw.data);
           } else if (raw.type === 'clinical_event' && raw.event) {
             setLatestEvent(raw.event);
             setGlitchTicker((current) => [raw.event, ...current.filter((item) => item.id !== raw.event.id)].slice(0, 30));
             if (raw.snippet) setActiveSnippet(raw.snippet);
+            if (settings.audioAlertsEnabled) {
+              playMedicalAlertChime();
+            }
           } else if (raw.type === 'events_cleared') {
             setLatestEvent(null);
             setActiveSnippet(null);
@@ -550,9 +563,11 @@ export default function Page() {
             onClearSnapshot={() => setActiveSnippet(null)}
             onSelectEvent={selectEvent}
             loadingEventId={loadingEventId}
+            sweepSpeed={settings.sweepSpeed}
+            gain={settings.gain}
           />
         )}
-        {activeTab === 'diagnostics' && <DiagnosticsView diagnostics={diagnostics} deviceHealth={deviceHealth} />}
+        {activeTab === 'diagnostics' && <DiagnosticsView diagnostics={diagnostics} deviceHealth={deviceHealth} vitals={vitals} />}
         {activeTab === 'settings' && <SettingsView settings={settings} onSaveSettings={saveSettings} />}
       </main>
 

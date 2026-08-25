@@ -27,6 +27,8 @@ interface WorkstationViewProps {
   onClearSnapshot?: () => void;
   onSelectEvent?: (event: ClinicalEvent) => void;
   loadingEventId?: number | null;
+  sweepSpeed?: '12.5' | '25' | '50';
+  gain?: 'auto' | '0.5x' | '1.0x' | '2.0x';
 }
 
 function formatTime(value?: string | null): string {
@@ -59,6 +61,8 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
   onClearSnapshot,
   onSelectEvent,
   loadingEventId,
+  sweepSpeed,
+  gain,
 }) => {
   const rhythm = rhythmPresentation(latestEvent);
   const RhythmIcon = rhythm.icon;
@@ -68,24 +72,12 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
 
   return (
     <div className="view-frame view-enter">
-      {/* 1. Patient Header */}
-      <header className="view-header !pb-3">
+      {/* 1. Header / Synchronized Status */}
+      <header className="view-header mb-4">
         <div>
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-[var(--ink)] flex items-center gap-1">
-              <span className="text-[var(--accent)] text-[10px]">✦</span> Bed {patient.bed}
-            </span>
-            <span className="text-xs text-[var(--muted)]">•</span>
-            <span className="text-xs font-mono text-[var(--muted)]">MRN {patient.id}</span>
-            {patient.allergies.length > 0 && (
-              <span className="rounded-full bg-red-100 border border-red-200 px-2.5 py-0.5 text-[11px] font-semibold text-red-700">
-                ⚠ Allergies: {patient.allergies.join(', ')}
-              </span>
-            )}
-          </div>
-          <h1 className="text-2xl font-bold text-[var(--ink)]">{patient.name}</h1>
-          <p className="text-xs text-[var(--ink-soft)] mt-0.5">
-            {patient.age} years • {patient.gender} • Admitted {patient.admitDate} • Attending: {patient.attendingPhysician}
+          <h1 className="view-title">Clinical Telemetry Workstation</h1>
+          <p className="text-xs text-[var(--muted)] mt-0.5">
+            Continuous real-time physiological rhythm analysis & edge-AI arrhythmia surveillance
           </p>
         </div>
         <div className="text-right max-sm:text-left">
@@ -110,7 +102,13 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
 
       {/* 3. HERO: Physiological ECG Waveform */}
       <section className="mb-4">
-        <WaveformCanvas currentEvent={latestEvent} activeSnippet={activeSnippet} onClearSnapshot={onClearSnapshot} />
+        <WaveformCanvas 
+          currentEvent={latestEvent} 
+          activeSnippet={activeSnippet} 
+          onClearSnapshot={onClearSnapshot}
+          sweepSpeed={sweepSpeed}
+          gain={gain}
+        />
       </section>
 
       {/* 4. Vital Signs (Prominent Physiological Numerals) */}
