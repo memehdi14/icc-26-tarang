@@ -236,6 +236,10 @@ export default function Page() {
       setBackendOnline(false);
       setBleConnected(false);
       setBootstrapError(error instanceof Error ? error.message : 'Unable to load clinical services');
+      // Auto-retry after 1.5s if backend is still starting up
+      setTimeout(() => {
+        loadBootstrap();
+      }, 1500);
     } finally {
       setBootstrapLoading(false);
     }

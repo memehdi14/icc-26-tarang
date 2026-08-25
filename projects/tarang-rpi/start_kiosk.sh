@@ -159,7 +159,7 @@ CHROME_FLAGS=(
     --no-sandbox
     --disable-gpu
     --user-data-dir=/tmp/chromium_kiosk_data
-    --app=http://localhost:3000
+    --app=http://127.0.0.1:3000
 )
 
 if command -v chromium-browser >/dev/null 2>&1; then

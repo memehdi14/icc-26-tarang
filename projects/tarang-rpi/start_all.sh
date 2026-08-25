@@ -73,26 +73,45 @@ if [[ "$backend_ready" -ne 1 ]]; then
     exit 1
 fi
 
-echo "[2/3] Starting frontend on port 3000..."
+echo "[2/4] Starting frontend on port 3000..."
 cd "$FRONTEND_DIR"
 if [[ "${TARANG_FRONTEND_MODE:-production}" == "development" ]]; then
     npm run dev &
+    FRONTEND_PID="$!"
+    PIDS+=("$FRONTEND_PID")
 else
-    if [[ ! -d ".next" ]]; then
+    if [[ ! -f ".next/BUILD_ID" ]]; then
         echo "[INFO] Frontend production build missing; running npm run build..."
         npm run build
     fi
     npm run start &
+    FRONTEND_PID="$!"
+    PIDS+=("$FRONTEND_PID")
 fi
-PIDS+=("$!")
 
 echo "[INFO] Waiting for frontend to initialize on port 3000..."
-for _ in $(seq 1 30); do
-    if curl --silent --fail "http://localhost:3000" >/dev/null 2>&1; then
+frontend_ready=0
+for _ in $(seq 1 20); do
+    if curl --silent --fail "http://127.0.0.1:3000" >/dev/null 2>&1; then
+        frontend_ready=1
         break
     fi
     sleep 1
 done
+
+if [[ "$frontend_ready" -ne 1 ]]; then
+    echo "[WARN] Production server did not respond on port 3000; falling back to dev server..."
+    kill "$FRONTEND_PID" 2>/dev/null || true
+    npm run dev &
+    PIDS+=("$!")
+    for _ in $(seq 1 20); do
+        if curl --silent --fail "http://127.0.0.1:3000" >/dev/null 2>&1; then
+            frontend_ready=1
+            break
+        fi
+        sleep 1
+    done
+fi
 sleep 1
 
 echo "[3/4] Starting paired BLE gateway..."
@@ -107,25 +126,41 @@ if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && ! systemctl is-active --quiet clou
     PIDS+=("$!")
 fi
 
+# Auto-open Chromium browser on attached TV / display
+export DISPLAY="${DISPLAY:-:0}"
+echo "[4/4] Auto-opening Chromium dashboard on display..."
+CHROME_FLAGS=(
+    --noerrdialogs
+    --disable-infobars
+    --check-for-update-interval=31536000
+    --disable-session-crashed-bubble
+    --no-sandbox
+    --disable-gpu
+    --user-data-dir=/tmp/chromium_hub_data
+    --app=http://127.0.0.1:3000
+)
+
 if [[ "${TARANG_KIOSK:-0}" == "1" ]]; then
-    export DISPLAY="${DISPLAY:-:0}"
-    echo "[4/4] Launching fullscreen Chromium Kiosk on display..."
-    if command -v chromium-browser >/dev/null 2>&1; then
-        chromium-browser --kiosk --noerrdialogs --disable-infobars --check-for-update-interval=31536000 --app=http://localhost:3000 &
-        PIDS+=("$!")
-    elif command -v chromium >/dev/null 2>&1; then
-        chromium --kiosk --noerrdialogs --disable-infobars --app=http://localhost:3000 &
-        PIDS+=("$!")
-    fi
+    CHROME_FLAGS+=(--kiosk --hide-scrollbars)
+else
+    CHROME_FLAGS+=(--start-maximized)
+fi
+
+if command -v chromium-browser >/dev/null 2>&1; then
+    chromium-browser "${CHROME_FLAGS[@]}" &
+    PIDS+=("$!")
+elif command -v chromium >/dev/null 2>&1; then
+    chromium "${CHROME_FLAGS[@]}" &
+    PIDS+=("$!")
 fi
 
 echo
 echo "=========================================="
 echo "  TARANG CLINICAL HUB RUNNING"
-echo "  Dashboard : http://localhost:3000"
-echo "  API       : http://localhost:8000"
+echo "  Dashboard : http://127.0.0.1:3000"
+echo "  API       : http://127.0.0.1:8000"
 echo "  BLE       : Connected to Tarang pod"
-echo "  Kiosk     : Active on 5-inch Touchscreen"
+echo "  Display   : Auto-opened in Chromium"
 echo "=========================================="
 echo "Press Ctrl+C to stop all services."
 

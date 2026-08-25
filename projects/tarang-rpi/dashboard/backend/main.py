@@ -38,7 +38,7 @@ from routers import (
 # ── Seed default data on first run ───────────────────────────────────────────
 
 def seed_defaults():
-    """Populate neutral diagnostics and settings; clinical data is user-created."""
+    """Populate neutral diagnostics, settings, and a default active demo session."""
     default_device_mac = os.getenv("TARANG_BLE_ADDRESS", "00:00:00:00:00:00")
     db = SessionLocal()
     try:
@@ -59,6 +59,43 @@ def seed_defaults():
         # Non-clinical workstation defaults are safe to seed.
         if not db.query(SystemSetting).first():
             db.add(SystemSetting())
+
+        # Auto-seed default clinical demo patient if registry is empty
+        if not db.query(Patient).first():
+            demo_patient = Patient(
+                name="Eleanor Vance",
+                age=68,
+                gender="Female",
+                mrn="TRG-84920",
+                bed="ICU-04",
+                admit_date=datetime.now().strftime("%Y-%m-%d"),
+                attending_physician="Dr. Maya Lin, MD",
+                blood_type="A+",
+                allergies=["Penicillin", "Sulfa drugs"],
+                medical_history=["Paroxysmal AFib", "Hypertension", "CABG 2021"],
+            )
+            db.add(demo_patient)
+            db.flush()
+
+            if not db.query(Device).filter(Device.device_id == "tarang-efr32-demo").first():
+                db.add(Device(
+                    device_id="tarang-efr32-demo",
+                    name="EFR32MG26 Tarang Pod #1",
+                    mac_address=default_device_mac,
+                    firmware_version="v1.0.0-EFR32MG26",
+                    status="in_use",
+                    assigned_patient_id=demo_patient.id,
+                ))
+
+            if not db.query(MonitoringSession).filter(MonitoringSession.status == "active").first():
+                db.add(MonitoringSession(
+                    session_id="sess_demo_live_01",
+                    patient_id=demo_patient.id,
+                    device_id="tarang-efr32-demo",
+                    status="active",
+                    bed="ICU-04",
+                    notes="Live demonstration session - EFR32MG26 real-time ECG/PPG/IMU telemetry stream",
+                ))
 
         db.commit()
     finally:
