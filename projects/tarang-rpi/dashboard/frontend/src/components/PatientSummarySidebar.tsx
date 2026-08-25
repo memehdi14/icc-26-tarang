@@ -99,12 +99,23 @@ export const PatientSummarySidebar: React.FC<PatientSummarySidebarProps> = ({
           </h3>
           <span className="text-[10px] font-mono text-[var(--clinical-teal)] font-semibold">Tier 0-3</span>
         </div>
-        <div className="mt-3 rounded border border-[var(--line-soft)] bg-[var(--paper-2)] p-2.5">
-          <p className="text-[10px] text-[var(--muted)] uppercase tracking-wider">Detected rhythm</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-xs font-bold text-[var(--ink)]">
-            <CheckCircle2 size={13} className="text-[var(--clinical-teal)]" /> {decodeRhythm(telemetry.rhythm_flags)}
+        <div className={`mt-3 rounded border p-2.5 ${
+          telemetry.rhythm_flags !== 0
+            ? 'border-amber-200 bg-amber-50/70 text-amber-900'
+            : 'border-[var(--line-soft)] bg-[var(--paper-2)] text-[var(--ink)]'
+        }`}>
+          <p className="text-[10px] uppercase tracking-wider text-[var(--muted)]">Detected rhythm</p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs font-bold">
+            {telemetry.rhythm_flags !== 0 ? (
+              <AlertTriangle size={13} className="text-amber-600 shrink-0" />
+            ) : (
+              <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+            )}
+            <span>{decodeRhythm(telemetry.rhythm_flags)}</span>
           </p>
-          <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">Model confidence {confidence}</p>
+          <p className="mt-1 font-mono text-[10px] text-[var(--muted)]">
+            {telemetry.rhythm_flags === 1 ? 'RR Chaos Screening' : 'Model confidence'} {confidence}
+          </p>
         </div>
         <dl className="mt-3 divide-y divide-[var(--line-soft)] text-xs">
           <div className="flex justify-between py-1.5"><dt className="text-[var(--muted)]">PAC burden</dt><dd className="font-mono font-semibold">{telemetry.pac_burden_pct ?? 0}%</dd></div>

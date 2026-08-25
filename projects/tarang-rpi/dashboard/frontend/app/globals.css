@@ -571,7 +571,22 @@ body {
   }
 
   .patient-rail {
-    display: none !important;
+    position: fixed !important;
+    top: var(--header-height) !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 290px !important;
+    z-index: 60 !important;
+    background: #ffffff !important;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2) !important;
+    transition: transform 0.25s ease-in-out !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .patient-rail--collapsed {
+    transform: translateX(100%) !important;
+    pointer-events: none !important;
   }
 
   .view-frame {
