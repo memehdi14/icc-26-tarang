@@ -88,15 +88,32 @@ if [[ ! -f ".next/BUILD_ID" ]]; then
     npm run build
 fi
 npm run start &
-PIDS+=("$!")
+FRONTEND_PID="$!"
+PIDS+=("$FRONTEND_PID")
 
 echo "[INFO] Waiting for frontend to initialize on port 3000..."
-for _ in $(seq 1 30); do
-    if curl --silent --fail "http://localhost:3000" >/dev/null 2>&1; then
+frontend_ready=0
+for _ in $(seq 1 20); do
+    if curl --silent --fail "http://127.0.0.1:3000" >/dev/null 2>&1 || curl --silent --fail "http://localhost:3000" >/dev/null 2>&1; then
+        frontend_ready=1
         break
     fi
     sleep 1
 done
+
+if [[ "$frontend_ready" -ne 1 ]]; then
+    echo "[WARN] Production server did not respond on port 3000; falling back to dev server..."
+    kill "$FRONTEND_PID" 2>/dev/null || true
+    npm run dev &
+    PIDS+=("$!")
+    for _ in $(seq 1 20); do
+        if curl --silent --fail "http://127.0.0.1:3000" >/dev/null 2>&1 || curl --silent --fail "http://localhost:3000" >/dev/null 2>&1; then
+            frontend_ready=1
+            break
+        fi
+        sleep 1
+    done
+fi
 sleep 1
 
 echo "[3/4] Starting paired BLE gateway..."
