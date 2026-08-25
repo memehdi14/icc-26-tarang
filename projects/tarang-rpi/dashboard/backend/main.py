@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
 TAGS_METADATA = [
     {
         "name": "mode_a",
-        "description": "🫀 **ECG Anomaly & Waveform Ingestion** — Trigger 4.0s 1,000-sample ECG anomaly flows, query latest clinical events, and stream 1Hz vitals.",
+        "description": "🫀 **Real-Time ECG Waveform & Anomaly Ingestion** — Live Mode A clinical event streaming, beat annotations, and 1Hz vitals.",
     },
     {
         "name": "clinical_actions",
@@ -90,7 +90,7 @@ TAGS_METADATA = [
     },
     {
         "name": "telemetry",
-        "description": "📈 **Real-Time Telemetry & WebSocket** — Live ECG waveform stream (/ws/telemetry) and vitals subscription.",
+        "description": "📈 **Real-Time Telemetry & WebSocket** — Live continuous ECG waveform stream (/ws/telemetry) and vitals subscription.",
     },
     {
         "name": "integrations-v1",
@@ -116,21 +116,23 @@ TAGS_METADATA = [
 app = FastAPI(
     title="Tarang Clinical Workstation API",
     description="""
-### 🏥 Tarang Clinical Telemetry & External Trigger Gateway
+### 🏥 Tarang Clinical Telemetry Gateway (Real-Time Ingestion)
 
-Welcome to the **Tarang Clinical API**. This interface enables external testing harnesses, hospital EHR/CRM systems, and bedside simulation tools to interact with the Tarang workstation.
+Welcome to the **Tarang Clinical API**. This interface provides real-time access to the live Bluetooth Low Energy stream from the Tarang sensor patch, hospital EHR integration hooks, and bedside workstation telemetry.
 
 ---
 
-### 🚀 Key External Workflows:
-1. **Trigger External ECG Anomaly Flow**:
-   - `POST /api/events/simulate` — Ingests a mathematically authentic 4.0s (1,000 samples @ 250 Hz) Lead-I ECG anomaly (PVC, VT, AFib, PAC) and immediately pops it up on the workstation screen!
-2. **Trigger Emergency Physician Page**:
-   - `POST /api/clinical-actions/page-physician` — Dispatches an urgent clinical alert for a specific patient MRN.
-3. **Query Live Waveforms & Vitals**:
+### 🚀 Key Real-Time Workflows:
+1. **Live ECG Waveforms & Vitals**:
    - `GET /api/vitals/latest` — 1 Hz Heart Rate & SpO₂.
-   - `GET /api/events/latest` — Anomaly event stream with beat annotations.
-   - `GET /api/events/{id}/snippet` — Complete 1,000-sample waveform array for any event.
+   - `GET /api/events/latest` — Real-time anomaly event stream with beat annotations.
+   - `GET /api/events/{id}/snippet` — Complete 1,000-sample waveform array for any clinical event.
+2. **Emergency Physician Alerting**:
+   - `POST /api/clinical-actions/page-physician` — Dispatches an urgent clinical alert for a specific patient MRN.
+3. **Live Hardware Diagnostics**:
+   - `GET /api/diagnostics/latest` — Live BLE link RSSI, packet delivery counters, and battery status.
+4. **Real-Time WebSocket Stream**:
+   - `ws://<host>:8000/ws/telemetry` — Continuous 250 Hz sample broadcast directly to dashboard clients.
 """,
     version="1.0.0",
     lifespan=lifespan,
@@ -554,13 +556,13 @@ async def custom_swagger_ui_html():
     </div>
   </header>
 
-  <!-- Interactive Simulation Fast-Track Banner -->
+  <!-- Real-Time Telemetry Fast-Track Banner -->
   <div class="tarang-hero-container">
     <div class="tarang-hero-banner">
       <div class="tarang-hero-header">
         <div>
-          <h2>✦ Live Demonstration Fast-Track</h2>
-          <p>Test real-time ECG ingestion, simulated arrhythmia triggers, and emergency physician alerts:</p>
+          <h2>✦ Real-Time Live Telemetry Fast-Track</h2>
+          <p>Explore live Bluetooth ECG ingestion, real-time arrhythmia alerts, and physician paging:</p>
         </div>
       </div>
       <div class="tarang-cards-grid">
@@ -571,8 +573,8 @@ async def custom_swagger_ui_html():
             </svg>
           </div>
           <div class="tarang-card-body">
-            <h4>Inject 4.0s ECG Anomaly</h4>
-            <code>POST /api/events/simulate</code>
+            <h4>Live ECG Anomaly Ingestion</h4>
+            <code>POST /api/events</code>
           </div>
         </div>
 

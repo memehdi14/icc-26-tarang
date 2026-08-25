@@ -53,8 +53,8 @@ The backend runs on **FastAPI + Uvicorn** on port `8000`:
 - **WebSocket Telemetry Stream:** `ws://<RPI_IP>:8000/ws/telemetry`.
 
 ### 3.2 Core API Endpoints:
-- **Mode A ECG Anomaly Flow:**
-  - `POST /api/events/simulate` — Ingests 4.0s (1,000 samples @ 250 Hz) synthetic Lead-I arrhythmia (PVC, VT, AFib, PAC) for live demonstration.
+- **Mode A Real-Time ECG Flow:**
+  - `POST /api/events` — Ingests 4.0s (1,000 samples @ 250 Hz) Lead-I ECG arrhythmia events directly from BLE gateway.
   - `GET /api/events/latest` — Queries the most recent clinical event with beat annotations and confidence scores.
   - `GET /api/events/{id}/snippet` — Retrieves full 1,000-sample waveform array for a specific event snapshot.
 - **Clinical Actions & Alarms:**
