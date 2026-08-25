@@ -35,11 +35,39 @@ if DATABASE_URL.startswith("sqlite"):
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def _auto_migrate_columns(conn):
+    """Detect and auto-add any missing columns for existing SQLite tables."""
+    for table_name, table in Base.metadata.tables.items():
+        try:
+            res = conn.execute(text(f"PRAGMA table_info({table_name});"))
+            existing_cols = {row[1] for row in res.fetchall()}
+            if not existing_cols:
+                continue
+            for col in table.columns:
+                if col.name not in existing_cols:
+                    col_type = col.type.compile(engine.dialect)
+                    default_clause = ""
+                    if col.default is not None and hasattr(col.default, "arg") and col.default.arg is not None:
+                        val = col.default.arg
+                        if isinstance(val, (int, float)):
+                            default_clause = f" DEFAULT {val}"
+                        elif isinstance(val, str):
+                            default_clause = f" DEFAULT '{val}'"
+                    alter_query = f"ALTER TABLE {table_name} ADD COLUMN {col.name} {col_type}{default_clause};"
+                    print(f"[DB Auto-Migrate] {table_name}: {alter_query}")
+                    conn.execute(text(alter_query))
+            conn.commit()
+        except Exception as err:
+            print(f"[DB Auto-Migrate Warning] {table_name}: {err}")
+
+
 def init_db():
     """Create all tables if they don't exist and ensure schema migrations."""
     Base.metadata.create_all(bind=engine)
     try:
         with engine.connect() as conn:
+            _auto_migrate_columns(conn)
+
             # Mode A Indexes
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_vitals_device_ts ON vitals_samples (device_id, ts);"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_analytics_device_ts ON analytics_5min (device_id, ts);"))
