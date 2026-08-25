@@ -110,11 +110,9 @@ desktop.ini
 ehthumbs.db
 ~$*
 
-# Documentation & Internal Markdowns
-# Ignore all docs, blueprints, architecture, KBs, guides, reports, and extra markdowns
-docs/
-*.docx
-*.pdf
+# Internal scratch
+scratch/
+
 
 # Ignore internal ML markdowns and summary texts in projects
 projects/tarang-ml/*.md
