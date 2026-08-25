@@ -46,14 +46,31 @@ The BLE gateway is implemented using Python’s `bleak` asynchronous BLE library
 
 The backend runs on **FastAPI + Uvicorn** on port `8000`:
 
-### 3.1 Core Endpoints & Services:
-- **`/api/health`:** System diagnostics, memory status, active BLE connection health, and sensor battery level.
-- **`/api/patients`:** CRUD operations for patient admission, MRN, age, gender, and clinical history.
-- **`/api/sessions`:** Start, pause, resume, and archive telemetry recording sessions.
-- **`/api/devices`:** Bluetooth signal RSSI, firmware version, and battery percentage.
-- **`/ws/live-stream`:** High-throughput WebSocket broadcasting 250 Hz ECG samples, PPG plethysmograms, and real-time arrhythmia alerts to all connected dashboard clients.
+### 3.1 Interactive API Documentation & Schemas:
+- **Swagger UI (Interactive API Explorer):** `http://<RPI_IP>:8000/docs` (Custom-styled with Tarang clinical design tokens).
+- **ReDoc (Specification Reference):** `http://<RPI_IP>:8000/redoc`.
+- **OpenAPI Schema:** `http://<RPI_IP>:8000/openapi.json`.
+- **WebSocket Telemetry Stream:** `ws://<RPI_IP>:8000/ws/telemetry`.
 
-### 3.2 Persistent Storage (SQLite):
+### 3.2 Core API Endpoints:
+- **Mode A ECG Anomaly Flow:**
+  - `POST /api/events/simulate` — Ingests 4.0s (1,000 samples @ 250 Hz) synthetic Lead-I arrhythmia (PVC, VT, AFib, PAC) for live demonstration.
+  - `GET /api/events/latest` — Queries the most recent clinical event with beat annotations and confidence scores.
+  - `GET /api/events/{id}/snippet` — Retrieves full 1,000-sample waveform array for a specific event snapshot.
+- **Clinical Actions & Alarms:**
+  - `POST /api/clinical-actions/page-physician` — Dispatches emergency physician page and creates an auditable clinical log.
+- **Vitals & Telemetry:**
+  - `GET /api/vitals/latest` — 1 Hz Heart Rate & SpO2 live readings.
+  - `GET /api/telemetry/history` — Longitudinal 5-minute rolling buffer of ECG telemetry.
+- **Diagnostics & Health:**
+  - `GET /api/diagnostics/latest` — Link RSSI, battery %, BLE latency, and sensor hardware SQI.
+  - `POST /api/diagnostics/update` — BLE Gateway diagnostic sync hook.
+  - `GET /api/health` — Rapid system health, database connection, and gateway connectivity probe.
+- **Patient & Session Management:**
+  - `GET /api/patients` & `POST /api/patients` — Clinical patient records.
+  - `GET /api/sessions` & `POST /api/sessions` — Recording session controls.
+
+### 3.3 Persistent Storage (SQLite):
 - Stores raw telemetry chunks, detected arrhythmia event timestamps, classification labels, and confidence metrics for post-hoc clinical review.
 
 ---

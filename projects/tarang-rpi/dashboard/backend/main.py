@@ -403,7 +403,7 @@ async def custom_swagger_ui_html():
 <body>
   <!-- Tarang Branded Header -->
   <header class="tarang-docs-header">
-    <a href="http://10.167.232.123:3000" class="tarang-docs-brand">
+    <a id="brand-link" href="http://localhost:3000" class="tarang-docs-brand">
       <svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="border-radius: 6px; flex-shrink: 0;">
         <rect width="40" height="40" rx="8" fill="#008378"/>
         <path d="M8 20H14L17 12L23 28L26 20H32" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -414,7 +414,7 @@ async def custom_swagger_ui_html():
       </span>
     </a>
     <div class="tarang-docs-links">
-      <a href="http://10.167.232.123:3000" class="tarang-link-btn tarang-live-btn" target="_blank">
+      <a id="live-workstation-btn" href="http://localhost:3000" class="tarang-link-btn tarang-live-btn" target="_blank">
         ⚡ Open Live Workstation
       </a>
       <a href="/api/health" class="tarang-link-btn" target="_blank">
@@ -441,6 +441,17 @@ async def custom_swagger_ui_html():
   <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
     window.onload = () => {{
+      // Dynamically bind live workstation button to current host on port 3000
+      try {{
+        const host = window.location.hostname || 'localhost';
+        const port = window.location.protocol === 'https:' ? '' : ':3000';
+        const target = window.location.protocol + '//' + host + port;
+        const brandLink = document.getElementById('brand-link');
+        const liveBtn = document.getElementById('live-workstation-btn');
+        if (brandLink) brandLink.href = target;
+        if (liveBtn) liveBtn.href = target;
+      }} catch (e) {{}}
+
       window.ui = SwaggerUIBundle({{
         url: '/openapi.json',
         dom_id: '#swagger-ui',
@@ -473,7 +484,8 @@ def health():
         "service": "Tarang Clinical API",
         "version": "1.0.0",
         "docs": "/docs",
-        "workstationUi": "http://10.167.232.123:3000",
+        "redoc": "/redoc",
+        "openapi": "/openapi.json",
     }
 
 
