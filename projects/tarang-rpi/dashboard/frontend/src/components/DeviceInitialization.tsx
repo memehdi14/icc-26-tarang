@@ -75,9 +75,9 @@ interface RingParticle {
 const STAGES = [
   { title: 'Clinical services', detail: 'Database and monitoring session ready', icon: Database },
   { title: 'BLE channel', detail: 'Tarang GATT services connected', icon: Radio },
-  { title: 'Telemetry path', detail: 'First measured vitals received from wearable', icon: Activity },
-  { title: 'Inference runtime', detail: 'Edge DSP and AI runtime settling', icon: Cpu },
-  { title: 'Ready', detail: 'Clinical telemetry can begin', icon: ShieldCheck },
+  { title: 'Telemetry path', detail: 'Real-time telemetry stream synchronized', icon: Activity },
+  { title: 'DSP calibration', detail: '10s Pan-Tompkins baseline filter settling', icon: Cpu },
+  { title: 'Ready', detail: 'Clinical telemetry locked and calibrated', icon: ShieldCheck },
 ];
 
 /**
@@ -328,39 +328,88 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
   const targetStage = !backendOnline ? 0 : !bleConnected ? 1 : !telemetryReady ? 2 : 4;
   const [displayStage, setDisplayStage] = useState(0);
   const [finishing, setFinishing] = useState(false);
+  const [warmupSecondsLeft, setWarmupSecondsLeft] = useState(10);
+  const [warmupCompleted, setWarmupCompleted] = useState(false);
 
   const hrRef = useRef(telemetry.current_hr);
   useEffect(() => {
     hrRef.current = telemetry.current_hr;
   }, [telemetry.current_hr]);
 
+  // Smooth progress ratio calculation taking the 10s warm-up into account
+  const progressRatio = useMemo(() => {
+    if (displayStage < 3) {
+      return (displayStage / 4) * 0.45;
+    }
+    if (displayStage === 3) {
+      const warmupProgress = (10 - warmupSecondsLeft) / 10;
+      return 0.45 + (warmupProgress * 0.45);
+    }
+    return 1.0;
+  }, [displayStage, warmupSecondsLeft]);
+
   const progressRef = useRef(0);
-  const progressRatio = Math.min(1, Math.max(0, displayStage / 4));
   useEffect(() => {
     progressRef.current = progressRatio;
   }, [progressRatio]);
 
+  // Stage advancement (0 -> 1 -> 2 -> 3)
   useEffect(() => {
     if (targetStage < displayStage) {
       setDisplayStage(targetStage);
       setFinishing(false);
+      setWarmupCompleted(false);
+      setWarmupSecondsLeft(10);
       return;
     }
     if (displayStage >= targetStage) return;
-    const delay = displayStage === 3 ? 1600 : 750;
-    const timer = window.setTimeout(() => setDisplayStage((s) => Math.min(s + 1, targetStage)), delay);
-    return () => window.clearTimeout(timer);
-  }, [displayStage, targetStage]);
 
+    if (displayStage < 3) {
+      const delay = 800;
+      const timer = window.setTimeout(() => setDisplayStage((s) => s + 1), delay);
+      return () => window.clearTimeout(timer);
+    }
+
+    if (displayStage === 3 && warmupCompleted) {
+      const timer = window.setTimeout(() => setDisplayStage(4), 500);
+      return () => window.clearTimeout(timer);
+    }
+  }, [displayStage, targetStage, warmupCompleted]);
+
+  // 10-Second Warmup Countdown in Stage 3
   useEffect(() => {
-    if (displayStage !== 4 || targetStage !== 4) return;
+    if (displayStage !== 3) return;
+
+    const interval = window.setInterval(() => {
+      setWarmupSecondsLeft((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(interval);
+          setWarmupCompleted(true);
+          return 0;
+        }
+        // If telemetry has locked onto valid HR after at least 6s of baseline settling
+        if (prev <= 4 && hrRef.current && hrRef.current > 40 && hrRef.current < 200) {
+          window.clearInterval(interval);
+          setWarmupCompleted(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [displayStage]);
+
+  // Completion transition when Stage 4 is reached
+  useEffect(() => {
+    if (displayStage !== 4) return;
     const finishTimer = window.setTimeout(() => setFinishing(true), 900);
-    const completeTimer = window.setTimeout(onComplete, 1500);
+    const completeTimer = window.setTimeout(onComplete, 1600);
     return () => {
       window.clearTimeout(finishTimer);
       window.clearTimeout(completeTimer);
     };
-  }, [displayStage, targetStage, onComplete]);
+  }, [displayStage, onComplete]);
 
   // Single-mount 3D Voxel Anatomical Heart Engine (Light Theme)
   useEffect(() => {
@@ -710,7 +759,13 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
                     {st.title}
                   </span>
                 </div>
-                <p className="text-[10px] text-[var(--ink-soft)] leading-tight line-clamp-2">{st.detail}</p>
+                <p className="text-[10px] text-[var(--ink-soft)] leading-tight line-clamp-2">
+                  {i === 3 && isActive
+                    ? `Pan-Tompkins baseline filter settling (${warmupSecondsLeft}s remaining)...`
+                    : i === 3 && isDone
+                    ? '10s baseline calibration locked'
+                    : st.detail}
+                </p>
               </div>
             );
           })}
@@ -724,7 +779,9 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
           <span className="font-semibold text-[var(--ink)]">{bleConnected ? `LINKED: ${deviceName}` : 'AWAITING GATT BOND...'}</span>
         </div>
         <div>
-          {displayStage >= 4 ? (
+          {displayStage === 3 ? (
+            <span className="text-[var(--clinical-teal)] font-bold">CALIBRATING DSP BASELINE: {warmupSecondsLeft}s REMAINING</span>
+          ) : displayStage >= 4 ? (
             <span className="text-emerald-700 font-bold">INITIALIZATION COMPLETE • ENTERING WORKSTATION</span>
           ) : (
             <span>AUTOMATIC PROGRESSION IN PROGRESS</span>

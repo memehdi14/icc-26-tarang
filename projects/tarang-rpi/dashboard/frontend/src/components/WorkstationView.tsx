@@ -122,11 +122,13 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
           </div>
           <div className="my-1.5 flex items-baseline gap-1.5">
             <span className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-[var(--ink)]">
-              {vitals.heartRateBpm ?? '--'}
+              {vitals.heartRateBpm && vitals.heartRateBpm > 0 ? vitals.heartRateBpm : '--'}
             </span>
             <span className="font-mono text-xs text-[var(--muted)]">bpm</span>
           </div>
-          <p className="text-[10px] text-[var(--muted)] truncate">Fused ECG / optical pulse</p>
+          <p className="text-[10px] text-[var(--muted)] truncate">
+            {vitals.heartRateBpm && vitals.heartRateBpm > 0 ? 'Fused ECG / optical pulse' : 'Acquiring rhythm...'}
+          </p>
         </article>
 
         <article className="rounded-lg border border-[var(--line)] bg-white p-3.5 sm:p-4 shadow-xs">
@@ -136,11 +138,13 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
           </div>
           <div className="my-1.5 flex items-baseline gap-1.5">
             <span className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-[var(--ink)]">
-              {vitals.spo2Pct ?? '--'}
+              {vitals.spo2Pct && vitals.spo2Pct > 0 ? vitals.spo2Pct : '--'}
             </span>
             <span className="font-mono text-xs text-[var(--muted)]">%</span>
           </div>
-          <p className="text-[10px] text-[var(--muted)] truncate">Optical saturation</p>
+          <p className="text-[10px] text-[var(--muted)] truncate">
+            {vitals.spo2Pct && vitals.spo2Pct > 0 ? 'Optical saturation' : 'Acquiring pulse...'}
+          </p>
         </article>
 
         <article className="rounded-lg border border-[var(--line)] bg-white p-3.5 sm:p-4 shadow-xs">
