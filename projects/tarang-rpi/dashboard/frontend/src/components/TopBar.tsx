@@ -3,6 +3,8 @@
 import React from 'react';
 import {
   AlertTriangle,
+  Bell,
+  BellOff,
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
@@ -21,6 +23,8 @@ interface TopBarProps {
   patientRailCollapsed?: boolean;
   onToggleSidebar?: () => void;
   onTogglePatientRail?: () => void;
+  audioAlertsEnabled?: boolean;
+  onToggleAudioAlerts?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -35,6 +39,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   patientRailCollapsed,
   onToggleSidebar,
   onTogglePatientRail,
+  audioAlertsEnabled = false,
+  onToggleAudioAlerts,
 }) => (
   <header className="app-topbar !h-[54px] !px-4 flex items-center justify-between whitespace-nowrap bg-white border-b border-[var(--line)] shadow-xs">
     {/* Left: Brand + Bed + MRN in a single clean line */}
@@ -77,8 +83,19 @@ export const TopBar: React.FC<TopBarProps> = ({
       </span>
     </div>
 
-    {/* Right: Emergency Button + Toggle Patient Rail + Settings */}
+    {/* Right: Emergency Button + Audio Bell + Toggle Patient Rail + Settings */}
     <div className="flex items-center gap-2 whitespace-nowrap shrink-0">
+      {onToggleAudioAlerts && (
+        <button
+          className={`icon-button !w-8 !h-8 !border ${audioAlertsEnabled ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-slate-300 bg-slate-100 text-slate-500'}`}
+          onClick={onToggleAudioAlerts}
+          title={audioAlertsEnabled ? "Audio Alarm: ACTIVE (Click to Silence)" : "Audio Alarm: SILENCED (Click to Enable)"}
+          aria-label="Toggle alarm audio"
+        >
+          {audioAlertsEnabled ? <Bell size={15} /> : <BellOff size={15} />}
+        </button>
+      )}
+
       <button
         className="emergency-button !py-1.5 !px-3.5 !text-xs"
         onClick={onEmergency}

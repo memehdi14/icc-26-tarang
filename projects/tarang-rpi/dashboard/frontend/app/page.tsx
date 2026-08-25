@@ -166,6 +166,7 @@ export default function Page() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [patientRailCollapsed, setPatientRailCollapsed] = useState(true);
+  const lastChimeRef = useRef<number>(0);
 
   const loadMonitoringData = useCallback(async (session: MonitoringSession) => {
     const query = new URLSearchParams();
@@ -270,11 +271,14 @@ export default function Page() {
           if (raw.type === 'vitals_sample' && raw.data) {
             setVitals(raw.data);
             if (settings.audioAlertsEnabled && raw.data.heartRateBpm > 0) {
+              const now = Date.now();
               if (
-                raw.data.heartRateBpm < settings.hrLowThreshold ||
-                raw.data.heartRateBpm > settings.hrHighThreshold ||
-                (raw.data.spo2Pct && raw.data.spo2Pct < settings.spo2LowThreshold)
+                (raw.data.heartRateBpm < settings.hrLowThreshold ||
+                 raw.data.heartRateBpm > settings.hrHighThreshold ||
+                 (raw.data.spo2Pct && raw.data.spo2Pct < settings.spo2LowThreshold)) &&
+                now - lastChimeRef.current > 45000
               ) {
+                lastChimeRef.current = now;
                 playMedicalAlertChime();
               }
             }
@@ -285,7 +289,11 @@ export default function Page() {
             setGlitchTicker((current) => [raw.event, ...current.filter((item) => item.id !== raw.event.id)].slice(0, 30));
             if (raw.snippet) setActiveSnippet(raw.snippet);
             if (settings.audioAlertsEnabled) {
-              playMedicalAlertChime();
+              const now = Date.now();
+              if (now - lastChimeRef.current > 10000) {
+                lastChimeRef.current = now;
+                playMedicalAlertChime();
+              }
             }
           } else if (raw.type === 'events_cleared') {
             setLatestEvent(null);
@@ -533,6 +541,8 @@ export default function Page() {
         patientRailCollapsed={patientRailCollapsed}
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         onTogglePatientRail={() => setPatientRailCollapsed((v) => !v)}
+        audioAlertsEnabled={settings.audioAlertsEnabled}
+        onToggleAudioAlerts={() => saveSettings({ ...settings, audioAlertsEnabled: !settings.audioAlertsEnabled })}
       />
       <Sidebar
         activeTab={activeTab}
