@@ -120,12 +120,14 @@ if command -v xset >/dev/null 2>&1; then
     xset s noblank 2>/dev/null || true
 fi
 
-# Auto-calibrate display resolution for 4.5-inch LCD
+# Auto-calibrate display resolution for 800x480@60Hz LCD (Wayfire / Labwc / Wayland)
 if command -v wlr-randr >/dev/null 2>&1; then
-    wlr-randr --output HDMI-A-1 --mode 848x480 2>/dev/null || true
+    echo "[INFO] Setting display resolution to 800x480@60Hz on HDMI-A-1..."
+    wlr-randr --output HDMI-A-1 --custom-mode 800x480@60Hz 2>/dev/null || \
+    wlr-randr --output HDMI-A-1 --mode 800x480 2>/dev/null || true
 fi
 
-echo "[4/4] Launching fullscreen Touchscreen Kiosk (calibrated for 4.5-inch LCD)..."
+echo "[4/4] Launching fullscreen Touchscreen Kiosk (calibrated for 800x480 LCD)..."
 CHROME_FLAGS=(
     --kiosk
     --noerrdialogs
@@ -152,6 +154,14 @@ elif command -v chromium >/dev/null 2>&1; then
 else
     echo "[WARN] Chromium browser not installed. Install with: sudo apt-get install -y chromium-browser"
 fi
+
+# Re-apply mode after Chromium window creates to guarantee full 800x480 viewport fit
+(
+    sleep 2
+    if command -v wlr-randr >/dev/null 2>&1; then
+        wlr-randr --output HDMI-A-1 --custom-mode 800x480@60Hz 2>/dev/null || true
+    fi
+) &
 
 echo
 echo "=========================================="
