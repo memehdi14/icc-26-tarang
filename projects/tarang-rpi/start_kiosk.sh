@@ -40,7 +40,7 @@ pkill -f "next start" 2>/dev/null || true
 pkill -f "next-server" 2>/dev/null || true
 pkill -f "chromium" 2>/dev/null || true
 if command -v hciconfig >/dev/null 2>&1; then
-    sudo hciconfig hci0 reset 2>/dev/null || true
+    hciconfig hci0 reset 2>/dev/null || true
 fi
 sleep 1
 
