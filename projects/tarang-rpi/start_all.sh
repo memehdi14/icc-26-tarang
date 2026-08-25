@@ -137,7 +137,7 @@ CHROME_FLAGS=(
     --no-sandbox
     --disable-gpu
     --password-store=basic
-    --force-device-scale-factor="${TARANG_SCALE_FACTOR:-1.5}"
+    --force-device-scale-factor="${TARANG_SCALE_FACTOR:-2.0}"
     --user-data-dir=/tmp/chromium_hub_data
     --app=http://127.0.0.1:3000
 )
