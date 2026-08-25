@@ -129,7 +129,7 @@ uint16_t tarang_fuse_heart_rate(
 /***************************************************************************//**
  * @brief Send Mode A Service A Vitals notification (Heart Rate + SpO2 + Timestamp).
  ******************************************************************************/
-bool tarang_ble_send_vitals(uint16_t hr_bpm, uint8_t spo2_pct, uint32_t ts_ms);
+bool tarang_ble_send_vitals(uint16_t hr_bpm, uint8_t spo2_pct, uint32_t ts_ms, uint16_t motion_mg, int16_t corr_r_x1000);
 
 /***************************************************************************//**
  * @brief Send Mode A Service B 5-Min Analytics rollup notification.

@@ -89,6 +89,8 @@ function normalizePatient(raw: Record<string, unknown>): PatientInfo {
 const EMPTY_VITALS: VitalsSample = {
   heartRateBpm: null,
   spo2Pct: null,
+  correlationFactor: 0.0,
+  motionMg: 0,
   deviceId: 'tarang-efr32-demo',
   ts: null,
 };

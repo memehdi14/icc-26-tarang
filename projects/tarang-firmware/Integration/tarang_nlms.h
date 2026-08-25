@@ -48,6 +48,13 @@ typedef struct {
   uint8_t delay_index;
   bool active;
   tarang_nlms_bypass_reason_t bypass_reason;
+  float mean_motion_ema;
+  float mean_artifact_ema;
+  float cov_motion_ecg_ema;
+  float var_motion_ema;
+  float var_artifact_ema;
+  float correlation_r;
+  int16_t correlation_r_x1000;
 } tarang_nlms_state_t;
 
 void tarang_nlms_init(tarang_nlms_state_t *state);
@@ -61,6 +68,8 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
 
 const char *tarang_nlms_bypass_reason_string(
     tarang_nlms_bypass_reason_t reason);
+
+int16_t tarang_nlms_get_correlation_r_x1000(const tarang_nlms_state_t *state);
 
 #ifdef __cplusplus
 }

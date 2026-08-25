@@ -20,6 +20,7 @@ from ble_protocol import (  # noqa: E402
     decode_event_meta,
     decode_event_ticker,
     decode_heart_rate,
+    decode_motion_corr,
     decode_spo2,
 )
 
@@ -30,6 +31,9 @@ class BleProtocolTest(unittest.TestCase):
         self.assertEqual(decode_spo2(bytes([99])), 99)
         with self.assertRaises(ProtocolError):
             decode_spo2(bytes([101]))
+        motion, corr = decode_motion_corr(struct.pack("<Hh", 240, 750))
+        self.assertEqual(motion, 240)
+        self.assertAlmostEqual(corr, 0.75)
 
     def test_decodes_analytics_packet(self):
         packet = struct.pack("<BBHHBBB", 3, 2, 44, 38, 9, 15, 92)

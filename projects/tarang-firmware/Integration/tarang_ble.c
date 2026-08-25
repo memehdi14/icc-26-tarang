@@ -78,6 +78,10 @@
   #define gattdb_vitals_timestamp 27
 #endif
 
+#ifndef gattdb_vitals_motion_corr
+  #define gattdb_vitals_motion_corr 28
+#endif
+
 #ifndef gattdb_analytics_pvc_burden
   #define gattdb_analytics_pvc_burden 30
 #endif
@@ -140,6 +144,7 @@ static uint8_t tarang_ble_bonding_handle = SL_BT_INVALID_BONDING_HANDLE;
 /* CCCD subscription state flags */
 static bool sub_vitals_hr          = false;
 static bool sub_vitals_spo2        = false;
+static bool sub_vitals_motion_corr = false;
 static bool sub_analytics_pvc      = false;
 static bool sub_analytics_pac      = false;
 static bool sub_analytics_sdnn     = false;
@@ -318,6 +323,7 @@ static const char *tarang_ble_char_name(uint16_t characteristic)
   if (characteristic == gattdb_vitals_heart_rate) return "Vitals HR";
   if (characteristic == gattdb_vitals_spo2) return "Vitals SpO2";
   if (characteristic == gattdb_vitals_timestamp) return "Vitals Timestamp";
+  if (characteristic == gattdb_vitals_motion_corr) return "Vitals Motion/Corr";
   if (characteristic == gattdb_analytics_pvc_burden) return "Analytics PVC Burden";
   if (characteristic == gattdb_analytics_pac_burden) return "Analytics PAC Burden";
   if (characteristic == gattdb_analytics_sdnn) return "Analytics SDNN";
@@ -339,6 +345,7 @@ static uint8_t tarang_ble_get_active_sub_count(void)
   uint8_t count = 0;
   if (sub_vitals_hr) count++;
   if (sub_vitals_spo2) count++;
+  if (sub_vitals_motion_corr) count++;
   if (sub_analytics_pvc) count++;
   if (sub_analytics_pac) count++;
   if (sub_analytics_sdnn) count++;
@@ -528,7 +535,12 @@ bool tarang_ble_is_notifications_enabled(void)
 /******************************************************************************
  *                     SERVICE A: VITALS NOTIFICATION
  ******************************************************************************/
-bool tarang_ble_send_vitals(uint16_t hr_bpm, uint8_t spo2_pct, uint32_t ts_ms)
+bool tarang_ble_send_vitals(
+    uint16_t hr_bpm,
+    uint8_t spo2_pct,
+    uint32_t ts_ms,
+    uint16_t motion_mg,
+    int16_t corr_r_x1000)
 {
 #if defined(SL_CATALOG_BLUETOOTH_PRESENT)
   if (tarang_ble_conn_handle == SL_BT_INVALID_CONNECTION_HANDLE) {
@@ -552,6 +564,19 @@ bool tarang_ble_send_vitals(uint16_t hr_bpm, uint8_t spo2_pct, uint32_t ts_ms)
       0,
       sizeof(ts_ms),
       (const uint8_t *)&ts_ms);
+  if (sc != SL_STATUS_OK) ok = false;
+
+  uint8_t motion_corr_buf[4];
+  motion_corr_buf[0] = (uint8_t)(motion_mg & 0xFF);
+  motion_corr_buf[1] = (uint8_t)((motion_mg >> 8) & 0xFF);
+  motion_corr_buf[2] = (uint8_t)(corr_r_x1000 & 0xFF);
+  motion_corr_buf[3] = (uint8_t)((corr_r_x1000 >> 8) & 0xFF);
+
+  sc = sl_bt_gatt_server_write_attribute_value(
+      gattdb_vitals_motion_corr,
+      0,
+      sizeof(motion_corr_buf),
+      motion_corr_buf);
   if (sc != SL_STATUS_OK) ok = false;
 
   if (sub_vitals_hr) {
@@ -578,12 +603,24 @@ bool tarang_ble_send_vitals(uint16_t hr_bpm, uint8_t spo2_pct, uint32_t ts_ms)
     }
   }
 
-  printf("[BLE][VITALS] Published: HR=%u SpO2=%u TS=%lu subscribers=%u/%u\r\n",
-         hr_bpm, spo2_pct, (unsigned long)ts_ms,
-         sub_vitals_hr ? 1u : 0u, sub_vitals_spo2 ? 1u : 0u);
+  if (sub_vitals_motion_corr) {
+    sc = sl_bt_gatt_server_send_notification(
+        tarang_ble_conn_handle,
+        gattdb_vitals_motion_corr,
+        sizeof(motion_corr_buf),
+        motion_corr_buf);
+    if (sc != SL_STATUS_OK) {
+      printf("[BLE][VITALS] Motion/Corr notify failed: 0x%08lX\r\n", (unsigned long)sc);
+      ok = false;
+    }
+  }
+
+  printf("[BLE][VITALS] Published: HR=%u SpO2=%u Motion=%umg Corr_r=%d TS=%lu subscribers=%u/%u/%u\r\n",
+         hr_bpm, spo2_pct, motion_mg, (int)corr_r_x1000, (unsigned long)ts_ms,
+         sub_vitals_hr ? 1u : 0u, sub_vitals_spo2 ? 1u : 0u, sub_vitals_motion_corr ? 1u : 0u);
   return ok;
 #else
-  (void)hr_bpm; (void)spo2_pct; (void)ts_ms;
+  (void)hr_bpm; (void)spo2_pct; (void)ts_ms; (void)motion_mg; (void)corr_r_x1000;
   return false;
 #endif
 }
@@ -1052,12 +1089,17 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
       hr = pipeline->engine.current_hr;
     }
 #endif
-    tarang_ble_send_vitals(hr, spo2, now_ms);
+    uint16_t motion_mg = tarang_imu_get_motion_mg();
+    int16_t corr_r_x1000 = 0;
+    if (pipeline != NULL) {
+      corr_r_x1000 = tarang_nlms_get_correlation_r_x1000(&pipeline->nlms);
+    }
+    tarang_ble_send_vitals(hr, spo2, now_ms, motion_mg, corr_r_x1000);
     ble_total_vitals_sent++;
   }
 
-  /* ── 2. Periodic Analytics Rollup (every 30 seconds, first at ~15s) ── */
-  if (now_ms - last_analytics_send_ms >= 30000u || (last_analytics_send_ms == 0u && now_ms >= 15000u)) {
+  /* ── 2. Periodic Analytics Rollup (every 60 seconds / 1 minute) ── */
+  if (now_ms - last_analytics_send_ms >= 60000u || (last_analytics_send_ms == 0u && now_ms >= 15000u)) {
     last_analytics_send_ms = now_ms;
 
     tarang_ble_analytics_packet_t apkt;
@@ -1503,6 +1545,8 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
           sub_vitals_hr = enabled;
         } else if (characteristic == gattdb_vitals_spo2) {
           sub_vitals_spo2 = enabled;
+        } else if (characteristic == gattdb_vitals_motion_corr) {
+          sub_vitals_motion_corr = enabled;
         } else if (characteristic == gattdb_analytics_pvc_burden) {
           sub_analytics_pvc = enabled;
         } else if (characteristic == gattdb_analytics_pac_burden) {

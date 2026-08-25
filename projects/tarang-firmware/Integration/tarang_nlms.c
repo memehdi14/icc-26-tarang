@@ -1,6 +1,13 @@
 /***************************************************************************//**
  * @file tarang_nlms.c
  * @brief Streaming three-axis NLMS implementation for TARANG ECG.
+ *
+ * FIXES IMPLEMENTED:
+ * 1. Unified gravity time-constant (alpha = 1/32 = 0.03125f) matching IMU module.
+ * 2. Aligned motion gate (NLMS_MOTION_GATE_G = 0.0350f / 35 mg) with hysteresis.
+ * 3. Warmup sample count based on IMU sample rate (100 Hz = 1.0s).
+ * 4. QRS-guarded correction application (freeze subtraction during R-wave).
+ * 5. Real-time Pearson Correlation r(Motion, ECG Artifact) calculation.
  ******************************************************************************/
 
 #include "tarang_nlms.h"
@@ -10,18 +17,20 @@
 #include <string.h>
 
 #define NLMS_ACCEL_LSB_PER_G        16384.0f
-#define NLMS_GRAVITY_ALPHA          0.0100f
+#define NLMS_GRAVITY_ALPHA          0.03125f   /* Aligned with IMU 1/32 alpha */
 #define NLMS_STEP_SIZE              0.0100f
 #define NLMS_REGULARIZATION         0.0001f
-#define NLMS_MOTION_GATE_G          0.0150f
+#define NLMS_MOTION_GATE_G          0.0350f   /* 35 mg motion gate threshold */
+#define NLMS_MOTION_GATE_HYST_G     0.0280f   /* 28 mg release threshold */
 #define NLMS_QRS_DERIVATIVE_GUARD   350.0f
 #define NLMS_MAX_CORRECTION_COUNTS  700.0f
 #define NLMS_MAX_WEIGHT             2400.0f
 #define NLMS_CORRECTION_LPF_ALPHA   0.2300f
 #define NLMS_POWER_ALPHA            0.0050f
-#define NLMS_WARMUP_SAMPLES         TARANG_ECG_SAMPLE_RATE_HZ
+#define NLMS_WARMUP_SAMPLES         TARANG_IMU_SAMPLE_RATE_HZ  /* 100 samples = 1.0s @ 100Hz */
 #define NLMS_DEGRADATION_LIMIT      50u
 #define NLMS_COOLDOWN_SAMPLES       (2u * TARANG_ECG_SAMPLE_RATE_HZ)
+#define NLMS_CORR_ALPHA             0.0080f   /* ~1.2s rolling correlation window @ 250Hz */
 
 static float nlms_clampf(float value, float low, float high)
 {
@@ -60,6 +69,7 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
   if (state == NULL) return ecg_centered;
   state->samples_processed++;
 
+  /* Warmup: wait for 100 fresh IMU samples (1.0s @ 100Hz) to settle gravity */
   if (state->warmup_samples < NLMS_WARMUP_SAMPLES) {
     if (imu != NULL && imu_fresh) {
       float accel[3] = {(float)imu->ax, (float)imu->ay, (float)imu->az};
@@ -80,6 +90,7 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
     return ecg_centered;
   }
 
+  /* Gravity and dynamic acceleration reference tracking */
   if (imu != NULL && imu_fresh) {
     float accel[3] = {(float)imu->ax, (float)imu->ay, (float)imu->az};
     for (uint8_t axis = 0u; axis < TARANG_NLMS_REFERENCE_COUNT; axis++) {
@@ -90,6 +101,7 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
     }
   }
 
+  /* Compute dynamic motion magnitude */
   float motion_sq = 0.0f;
   for (uint8_t axis = 0u; axis < TARANG_NLMS_REFERENCE_COUNT; axis++) {
     float reference = imu_fresh ? state->current_reference[axis] : 0.0f;
@@ -102,7 +114,9 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
 
   if (state->cooldown_samples > 0u) state->cooldown_samples--;
 
-  bool motion_present = motion_g >= NLMS_MOTION_GATE_G;
+  /* Motion Gate with Hysteresis: engage at 35 mg, release at 28 mg */
+  bool motion_present = state->active ? (motion_g >= NLMS_MOTION_GATE_HYST_G)
+                                      : (motion_g >= NLMS_MOTION_GATE_G);
   bool can_apply = apply_cleaning && imu_fresh && motion_present
                    && state->cooldown_samples == 0u;
 
@@ -118,6 +132,7 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
     state->bypass_reason = TARANG_NLMS_BYPASS_NONE;
   }
 
+  /* FIR Artifact Estimation */
   float estimated_artifact = 0.0f;
   float reference_power = NLMS_REGULARIZATION;
   for (uint8_t axis = 0u; axis < TARANG_NLMS_REFERENCE_COUNT; axis++) {
@@ -132,6 +147,9 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
 
   float cleaned = ecg_centered;
   float correction = 0.0f;
+  float derivative = fabsf(ecg_centered - state->previous_ecg);
+  bool qrs_guard = derivative >= NLMS_QRS_DERIVATIVE_GUARD;
+
   if (can_apply) {
     state->correction_lpf += NLMS_CORRECTION_LPF_ALPHA
                              * (estimated_artifact - state->correction_lpf);
@@ -139,13 +157,18 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
                              -NLMS_MAX_CORRECTION_COUNTS,
                              NLMS_MAX_CORRECTION_COUNTS);
     if (correction != state->correction_lpf) state->saturation_count++;
-    cleaned = ecg_centered - correction;
+
+    /* FIX 4: During high-derivative QRS complex, hold correction to 0 to preserve R-peak */
+    if (!qrs_guard) {
+      cleaned = ecg_centered - correction;
+    } else {
+      cleaned = ecg_centered;  /* Unaltered R-wave for AI CNN */
+    }
     state->active_samples++;
 
-    float derivative = fabsf(ecg_centered - state->previous_ecg);
-    bool qrs_guard = derivative >= NLMS_QRS_DERIVATIVE_GUARD;
+    /* Weight adaptation only outside of QRS window */
     if (!qrs_guard && reference_power > NLMS_REGULARIZATION) {
-      float normalized_error = NLMS_STEP_SIZE * cleaned / reference_power;
+      float normalized_error = NLMS_STEP_SIZE * (ecg_centered - correction) / reference_power;
       for (uint8_t axis = 0u; axis < TARANG_NLMS_REFERENCE_COUNT; axis++) {
         for (uint8_t tap = 0u; tap < TARANG_NLMS_TAPS; tap++) {
           uint8_t index = (uint8_t)((state->delay_index + TARANG_NLMS_TAPS - tap)
@@ -163,6 +186,7 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
     state->correction_lpf = 0.0f;
   }
 
+  /* Power and degradation tracking */
   state->input_power_ema += NLMS_POWER_ALPHA
       * (ecg_centered * ecg_centered - state->input_power_ema);
   state->residual_power_ema += NLMS_POWER_ALPHA
@@ -197,6 +221,27 @@ float tarang_nlms_process_sample(tarang_nlms_state_t *state,
     state->suppression_pct_x10 = 0u;
   }
 
+  /* FIX 5: Real-time Pearson Correlation r(Motion, ECG Artifact) calculation */
+  float artifact_mag = fabsf(ecg_centered - cleaned);
+  state->mean_motion_ema += NLMS_CORR_ALPHA * (motion_mg - state->mean_motion_ema);
+  state->mean_artifact_ema += NLMS_CORR_ALPHA * (artifact_mag - state->mean_artifact_ema);
+
+  float d_motion = motion_mg - state->mean_motion_ema;
+  float d_artifact = artifact_mag - state->mean_artifact_ema;
+
+  state->cov_motion_ecg_ema += NLMS_CORR_ALPHA * (d_motion * d_artifact - state->cov_motion_ecg_ema);
+  state->var_motion_ema += NLMS_CORR_ALPHA * (d_motion * d_motion - state->var_motion_ema);
+  state->var_artifact_ema += NLMS_CORR_ALPHA * (d_artifact * d_artifact - state->var_artifact_ema);
+
+  float denom = sqrtf(state->var_motion_ema * state->var_artifact_ema);
+  if (denom > 1.0f) {
+    float r = state->cov_motion_ecg_ema / denom;
+    state->correlation_r = nlms_clampf(r, -1.0f, 1.0f);
+  } else {
+    state->correlation_r = 0.0f;
+  }
+  state->correlation_r_x1000 = (int16_t)(state->correlation_r * 1000.0f);
+
   state->active = can_apply;
   state->previous_ecg = ecg_centered;
   state->delay_index = (uint8_t)((state->delay_index + 1u)
@@ -216,4 +261,10 @@ const char *tarang_nlms_bypass_reason_string(
     case TARANG_NLMS_BYPASS_SAFETY_COOLDOWN: return "safety_cooldown";
     default: return "unknown";
   }
+}
+
+int16_t tarang_nlms_get_correlation_r_x1000(const tarang_nlms_state_t *state)
+{
+  if (state == NULL) return 0;
+  return state->correlation_r_x1000;
 }

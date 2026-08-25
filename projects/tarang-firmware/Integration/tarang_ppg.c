@@ -71,8 +71,11 @@
 
 #define PPG_METRIC_WINDOW_SAMPLES       400u  /* 4 seconds at 100 Hz */
 #define PPG_METRIC_UPDATE_SAMPLES       100u  /* Recompute once per second */
-#define PPG_FINGER_IR_MIN               200.0f /* Wearable dorsal palm/wrist reflectance baseline */
+#define PPG_REFRACTORY_SAMPLES          28u   /* 280ms refractory lock @ 100Hz */
+#define PPG_FINGER_IR_MIN               1000.0f /* Wearable dorsal palm/wrist reflectance baseline */
 #define PPG_SENSOR_DC_MAX               250000.0f
+#define PPG_AGC_DC_TARGET_MIN           100000.0f /* Closed-loop AGC lower bound */
+#define PPG_AGC_DC_TARGET_MAX           160000.0f /* Closed-loop AGC upper bound */
 #define PPG_MIN_AC_RATIO                0.0002f
 #define PPG_MOTION_REJECT_MG            500u
 #define PPG_MIN_PULSE_BPM               40u
@@ -118,6 +121,7 @@ static volatile uint16_t latest_motion_mg = 0u;
 static tarang_ppg_metrics_t latest_metrics;
 static float ppg_ir_ac_window[PPG_METRIC_WINDOW_SAMPLES];
 static uint32_t last_metric_sample_count = 0u;
+static uint8_t s_current_led_pa = 0x36u; /* ~11.0mA default */
 
 static volatile I2C_TransferReturn_TypeDef last_ppg_i2c_ret = i2cTransferDone;
 
@@ -190,70 +194,130 @@ static void ppg_update_metrics(void)
 
     float red_dc = (float)(red_sum / (double)PPG_METRIC_WINDOW_SAMPLES);
     float ir_dc = (float)(ir_sum / (double)PPG_METRIC_WINDOW_SAMPLES);
+
+    /* ── FIX 3: Closed-Loop Automatic Gain Control (AGC) for LED Current ── */
+    if (ir_dc > PPG_FINGER_IR_MIN && ir_dc < PPG_SENSOR_DC_MAX) {
+        if (ir_dc < PPG_AGC_DC_TARGET_MIN && s_current_led_pa < 0x7Eu) {
+            s_current_led_pa += 2u;
+            (void)max30102_write_reg(MAX30102_LED1_PA, s_current_led_pa);
+            (void)max30102_write_reg(MAX30102_LED2_PA, s_current_led_pa);
+        } else if (ir_dc > PPG_AGC_DC_TARGET_MAX && s_current_led_pa > 0x0Eu) {
+            s_current_led_pa -= 2u;
+            (void)max30102_write_reg(MAX30102_LED1_PA, s_current_led_pa);
+            (void)max30102_write_reg(MAX30102_LED2_PA, s_current_led_pa);
+        }
+    }
+
+    /* ── FIX 4: Cascaded Bandpass Filtering (0.5 - 5.0 Hz) @ 100 Hz ── */
+    const float hp_alpha = 0.9695f; /* ~0.5 Hz high-pass to remove baseline wander/breathing */
+    const float lp_alpha = 0.2400f; /* ~5.0 Hz low-pass to remove 50Hz mains/sensor noise */
+
+    float red_hp_prev = 0.0f, red_x_prev = 0.0f, red_lp = 0.0f;
+    float ir_hp_prev = 0.0f, ir_x_prev = 0.0f, ir_lp = 0.0f;
     double red_energy = 0.0;
     double ir_energy = 0.0;
 
     for (uint32_t i = 0; i < PPG_METRIC_WINDOW_SAMPLES; i++) {
-        float red_ac = (float)ppg_window_value(ppg_red_buffer, i) - red_dc;
-        float ir_ac = (float)ppg_window_value(ppg_ir_buffer, i) - ir_dc;
-        ppg_ir_ac_window[i] = ir_ac;
-        red_energy += (double)red_ac * red_ac;
-        ir_energy += (double)ir_ac * ir_ac;
+        float red_raw_ac = (float)ppg_window_value(ppg_red_buffer, i) - red_dc;
+        float ir_raw_ac  = (float)ppg_window_value(ppg_ir_buffer, i) - ir_dc;
+
+        /* High-pass filter */
+        float red_hp = hp_alpha * (red_hp_prev + red_raw_ac - red_x_prev);
+        red_hp_prev = red_hp;
+        red_x_prev = red_raw_ac;
+
+        float ir_hp = hp_alpha * (ir_hp_prev + ir_raw_ac - ir_x_prev);
+        ir_hp_prev = ir_hp;
+        ir_x_prev = ir_raw_ac;
+
+        /* Low-pass filter */
+        red_lp += lp_alpha * (red_hp - red_lp);
+        ir_lp += lp_alpha * (ir_hp - ir_lp);
+
+        ppg_ir_ac_window[i] = ir_lp;
+        red_energy += (double)red_lp * red_lp;
+        ir_energy += (double)ir_lp * ir_lp;
     }
 
-    float red_rms = sqrtf((float)(red_energy / PPG_METRIC_WINDOW_SAMPLES));
-    float ir_rms = sqrtf((float)(ir_energy / PPG_METRIC_WINDOW_SAMPLES));
+    float red_rms = sqrtf((float)(red_energy / (double)PPG_METRIC_WINDOW_SAMPLES));
+    float ir_rms  = sqrtf((float)(ir_energy / (double)PPG_METRIC_WINDOW_SAMPLES));
     float ir_ac_ratio = ir_dc > 1.0f ? ir_rms / ir_dc : 0.0f;
 
     memset(&latest_metrics, 0, sizeof(latest_metrics));
     latest_metrics.window_end_sample = ppg_sample_count;
-    /* Wearable skin contact gate: allows top of palm / dorsal hand reflection */
+
+    /* Wearable skin contact gate: allows dorsal wrist / hand reflectance */
     latest_metrics.finger_present =
         ir_dc >= PPG_FINGER_IR_MIN && ir_dc < PPG_SENSOR_DC_MAX
-        && red_dc >= 200.0f && red_dc < PPG_SENSOR_DC_MAX;
-    latest_metrics.motion_rejected = false; /* Unblocked for continuous wearable usage */
+        && red_dc >= 500.0f && red_dc < PPG_SENSOR_DC_MAX;
+    latest_metrics.motion_rejected = false;
 
     float pi_x100 = ir_ac_ratio * 10000.0f;
     if (pi_x100 > 65535.0f) pi_x100 = 65535.0f;
     latest_metrics.perfusion_index_x100 = (uint16_t)pi_x100;
 
-    uint32_t zero_crossings = 0u;
-    uint32_t peaks = 0u;
-    for (uint32_t i = 1; i < PPG_METRIC_WINDOW_SAMPLES; i++) {
-        if ((ppg_ir_ac_window[i - 1] < 0.0f && ppg_ir_ac_window[i] >= 0.0f)
-            || (ppg_ir_ac_window[i - 1] > 0.0f && ppg_ir_ac_window[i] <= 0.0f)) {
-            zero_crossings++;
-        }
-        if (i > 1 && i < (PPG_METRIC_WINDOW_SAMPLES - 1)) {
-            if (ppg_ir_ac_window[i] > ppg_ir_ac_window[i - 1]
-                && ppg_ir_ac_window[i] > ppg_ir_ac_window[i + 1]
-                && ppg_ir_ac_window[i] > (ir_rms * 0.3f)) {
-                peaks++;
+    /* ── FIX 1 & 2: IBI-Based Pulse Rate Calculation & 280ms Refractory Lock ── */
+    uint16_t peak_indices[32];
+    uint8_t n_peaks = 0u;
+    uint32_t last_peak_idx = 0u;
+    float peak_thresh = ir_rms * 0.35f;
+    if (peak_thresh < 8.0f) peak_thresh = 8.0f;
+
+    for (uint32_t i = 2u; i < (PPG_METRIC_WINDOW_SAMPLES - 2u); i++) {
+        if (ppg_ir_ac_window[i] > ppg_ir_ac_window[i - 1u]
+            && ppg_ir_ac_window[i] >= ppg_ir_ac_window[i + 1u]
+            && ppg_ir_ac_window[i] > peak_thresh) {
+
+            /* Enforce 280ms refractory lock (28 samples @ 100Hz) */
+            if (n_peaks == 0u || (i - last_peak_idx) >= PPG_REFRACTORY_SAMPLES) {
+                if (n_peaks < 32u) {
+                    peak_indices[n_peaks++] = (uint16_t)i;
+                    last_peak_idx = i;
+                }
             }
         }
     }
 
-    float estimated_bpm = ((float)peaks / 4.0f) * 60.0f;
+    float estimated_bpm = 0.0f;
+    if (n_peaks >= 2u) {
+        float total_ibi_ms = 0.0f;
+        uint8_t valid_ibi_count = 0u;
+
+        for (uint8_t k = 1u; k < n_peaks; k++) {
+            float ibi_ms = (float)(peak_indices[k] - peak_indices[k - 1u]) * 10.0f; /* 10ms per sample @ 100Hz */
+            if (ibi_ms >= 270.0f && ibi_ms <= 1500.0f) { /* 40 - 222 BPM physiological range */
+                total_ibi_ms += ibi_ms;
+                valid_ibi_count++;
+            }
+        }
+
+        if (valid_ibi_count > 0u) {
+            float mean_ibi_ms = total_ibi_ms / (float)valid_ibi_count;
+            estimated_bpm = 60000.0f / mean_ibi_ms;
+        }
+    }
+
     if (estimated_bpm < (float)PPG_MIN_PULSE_BPM || estimated_bpm > (float)PPG_MAX_PULSE_BPM) {
         estimated_bpm = 0.0f;
     }
-    latest_metrics.pulse_rate_bpm = (uint16_t)estimated_bpm;
+    latest_metrics.pulse_rate_bpm = (uint8_t)estimated_bpm;
 
-    float r_ratio = (red_dc > 1.0f && ir_rms > 0.0001f)
+    /* ── FIX 4 & 5: Filtered Ratio-of-Ratios (R) and Bounded SpO2 ── */
+    float r_ratio = (red_dc > 100.0f && ir_dc > 100.0f && ir_rms > 0.01f)
                     ? (red_rms / red_dc) / (ir_rms / ir_dc)
                     : 0.0f;
 
     float spo2 = 0.0f;
-    if (r_ratio > 0.3f && r_ratio < 2.5f) {
+    if (r_ratio >= 0.20f && r_ratio <= 2.20f && latest_metrics.finger_present) {
         spo2 = 110.0f - (25.0f * r_ratio);
         if (spo2 > 100.0f) spo2 = 100.0f;
-        if (spo2 < 70.0f) spo2 = 70.0f;
+        if (spo2 < 70.0f)  spo2 = 70.0f;
     }
     latest_metrics.spo2_pct = (uint8_t)spo2;
 
     float sqi = 0.0f;
     if (latest_metrics.finger_present) {
-        if (ir_ac_ratio >= PPG_MIN_AC_RATIO && peaks >= 3u && peaks <= 16u) {
+        if (ir_ac_ratio >= PPG_MIN_AC_RATIO && n_peaks >= 3u && n_peaks <= 16u) {
             sqi = 220.0f;
         } else if (ir_ac_ratio >= PPG_MIN_AC_RATIO) {
             sqi = 140.0f;
@@ -263,18 +327,19 @@ static void ppg_update_metrics(void)
 
     /* Valid if skin is detected and SpO2 calculation produces viable physiological output */
     latest_metrics.valid = latest_metrics.finger_present
-                           && latest_metrics.spo2_pct >= 70u;
+                           && latest_metrics.spo2_pct >= 70u
+                           && latest_metrics.pulse_rate_bpm >= (uint8_t)PPG_MIN_PULSE_BPM;
 
 #if TARANG_DEBUG_VERBOSE
-    printf("[PPG][METRIC] valid=%u finger=%u motion=%u SpO2=%u pulse=%u PIx100=%u SQI=%u R_x1000=%lu\r\n",
+    printf("[PPG][METRIC] valid=%u finger=%u SpO2=%u pulse=%u PIx100=%u SQI=%u R_x1000=%lu LED_PA=0x%02X\r\n",
            latest_metrics.valid ? 1u : 0u,
            latest_metrics.finger_present ? 1u : 0u,
-           latest_metrics.motion_rejected ? 1u : 0u,
            latest_metrics.spo2_pct,
            latest_metrics.pulse_rate_bpm,
            latest_metrics.perfusion_index_x100,
            latest_metrics.signal_quality,
-           (unsigned long)(r_ratio * 1000.0f));
+           (unsigned long)(r_ratio * 1000.0f),
+           s_current_led_pa);
 #endif
 }
 
@@ -326,7 +391,10 @@ static void max30102_clear_bus(void)
     sda_state = GPIO_PinInGet(gpioPortC, 7);
     printf("[PPG] After clear: SCL=%d SDA=%d\r\n", scl_state, sda_state);
     ppg_delay_ms(10);
-    printf("[PPG] I2C bus clear done (no peripheral re-init)\r\n");
+
+    /* Hand the pins back to the hardware I2C peripheral routing */
+    sl_i2cspm_init_instances();
+    printf("[PPG] I2C bus clear done (peripheral re-initialized)\r\n");
 }
 
 static bool max30102_configure_sensor(void)
@@ -343,8 +411,8 @@ static bool max30102_configure_sensor(void)
     /* 1. FIFO_CONFIG (0x08): 0x1F -> sample_avg=1, FIFO_ROLLOVER_EN=1 (bit 4), A_FULL=15 */
     ok &= max30102_write_reg(MAX30102_FIFO_CONFIG_REG, 0x1Fu);
 
-    /* 2. INT_ENABLE1 (0x02): 0x80 -> Enable ONLY A_FULL_EN (bit 7) for 17-sample FIFO batching */
-    ok &= max30102_write_reg(MAX30102_INT_ENABLE1, 0x80u);
+    /* 2. INT_ENABLE1 (0x02): 0x40 -> Enable PPG_RDY_EN (bit 6) for reliable per-sample interrupts */
+    ok &= max30102_write_reg(MAX30102_INT_ENABLE1, MAX30102_INT_ENABLE1_PPG_RDY);
     ok &= max30102_write_reg(MAX30102_INT_ENABLE2, 0x00u);
 
     /* 3. MODE_CONFIG (0x09): 0x03 -> SpO2 mode (Red + IR sampling) */
@@ -353,9 +421,13 @@ static bool max30102_configure_sensor(void)
     /* 4. SPO2_CONFIG (0x0A): 0x27 -> ADC range 4096nA, 100 SPS, 411us pulse width */
     ok &= max30102_write_reg(MAX30102_SPO2_CONFIG, 0x27u);
 
-    /* 5. LED Current (0x0C, 0x0D): 0x36 (~11.0mA) for reflective dorsal palm/wrist sensing */
+    /* 5. LED Current (0x0C, 0x0D): 0x36 (~11.0mA) */
     ok &= max30102_write_reg(MAX30102_LED1_PA, 0x36u);
     ok &= max30102_write_reg(MAX30102_LED2_PA, 0x36u);
+
+    /* 6. Multi-LED Mode Slots: Slot 1 = RED (0x01), Slot 2 = IR (0x02) */
+    ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL1, 0x21u);
+    ok &= max30102_write_reg(MAX30102_MULTI_LED_CTRL2, 0x00u);
 
     return ok;
 }
@@ -448,11 +520,14 @@ void tarang_ppg_init(void)
 
     printf("[PPG] Initializing MAX30102 on sl_i2cspm_mikroe (I2C1)...\r\n");
 
-    GPIO_PinModeSet(MAX30102_INT_PORT, MAX30102_INT_PIN, gpioModeInputPullFilter, 1);
-
-    max30102_clear_bus();
+    GPIO_PinModeSet(MAX30102_INT_PORT, MAX30102_INT_PIN, gpioModeInputPull, 1);
 
     bool id_ok = max30102_read_reg(0xFFu, &part_id);
+    if (!id_ok) {
+        /* Retry after bus clear if slave held bus */
+        max30102_clear_bus();
+        id_ok = max30102_read_reg(0xFFu, &part_id);
+    }
     (void)max30102_read_reg(0xFEu, &rev_id);
 
     if (id_ok && part_id == 0x15u) {
@@ -500,7 +575,7 @@ void tarang_ppg_process(void)
 
     CORE_DECLARE_IRQ_STATE;
     CORE_ENTER_ATOMIC();
-    if (ppg_data_ready) {
+    if (ppg_data_ready || (GPIO_PinInGet(MAX30102_INT_PORT, MAX30102_INT_PIN) == 0u)) {
         ppg_data_ready = false;
         service_sensor = true;
     }

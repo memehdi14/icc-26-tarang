@@ -36,6 +36,14 @@ extern "C" {
 /*******************************************************************************
  * Pipeline State
  ******************************************************************************/
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*******************************************************************************
+ * Pipeline State
+ ******************************************************************************/
 /* Max pending beats queued for deferred AI processing */
 #define TARANG_MAX_PENDING_BEATS  4
 #define TARANG_EVENT_SNIPPET_SAMPLES \
@@ -67,6 +75,7 @@ typedef struct {
   uint16_t sdnn_ms;
   uint16_t rmssd_ms;
   uint8_t  prr50_pct;
+  int16_t  correlation_r_x1000;
 } tarang_pipeline_beat_telemetry_t;
 
 typedef struct {
@@ -81,12 +90,17 @@ typedef struct {
   uint8_t  confidence;
 } tarang_pipeline_event_annotation_t;
 
+
 typedef struct {
   /* DSP state (entire streaming Pan-Tompkins chain) */
   tarang_dsp_state_t       dsp;
 
   /* Causally aligned IMU-referenced motion cancellation. */
   tarang_nlms_state_t      nlms;
+
+  /* EMA Baseline tracker for raw ADC (Issues 1.1, 1.2, 1.3: fc=0.15Hz @ 250Hz -> alpha=0.00377) */
+  float                    ecg_baseline_ema;
+  bool                     ecg_baseline_initialized;
 
   /* Clinical engine instance */
   tarang_clinical_engine_t engine;

@@ -93,11 +93,13 @@ try:
         SnippetReassembler,
         VITALS_HR_UUID,
         VITALS_SPO2_UUID,
+        VITALS_MOTION_CORR_UUID,
         decode_analytics_characteristic,
         decode_annotations,
         decode_event_meta,
         decode_event_ticker,
         decode_heart_rate,
+        decode_motion_corr,
         decode_spo2,
     )
 except ImportError:
@@ -492,6 +494,7 @@ class TarangDebugSession:
         subs: list[tuple[str, str, Callable]] = [
             ("HR",       VITALS_HR_UUID,        self.on_heart_rate),
             ("SpO2",     VITALS_SPO2_UUID,      self.on_spo2),
+            ("MotCorr",  VITALS_MOTION_CORR_UUID, lambda s, d: None),
             ("Rhythm",   EVENT_RHYTHM_UUID,     self.on_rhythm),
             ("Meta",     EVENT_META_UUID,       self.on_event_meta),
             ("ECG",      EVENT_ECG_CHUNK_UUID,  self.on_ecg_chunk),

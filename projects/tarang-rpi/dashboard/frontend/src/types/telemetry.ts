@@ -7,6 +7,8 @@ export interface VitalsSample {
   ts?: string | null;
   heartRateBpm?: number | null;
   spo2Pct?: number | null;
+  correlationFactor?: number | null;
+  motionMg?: number | null;
 }
 
 export interface Analytics5Min {

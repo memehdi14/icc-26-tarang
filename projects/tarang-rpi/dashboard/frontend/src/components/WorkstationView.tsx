@@ -114,7 +114,7 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
       </section>
 
       {/* 4. Vital Signs (Prominent Physiological Numerals) */}
-      <section className="grid grid-cols-3 gap-3 sm:gap-4 max-sm:grid-cols-1" aria-label="Current vital signs">
+      <section className="grid grid-cols-4 gap-3 sm:gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1" aria-label="Current vital signs">
         <article className="rounded-lg border border-[var(--line)] bg-white p-3.5 sm:p-4 shadow-xs">
           <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
             <span>Heart rate</span>
@@ -154,7 +154,33 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
             </span>
             <span className="font-mono text-xs text-[var(--muted)]">%</span>
           </div>
-          <p className="text-[10px] text-[var(--muted)] truncate">5-minute rolling window</p>
+          <p className="text-[10px] text-[var(--muted)] truncate">1-minute rolling window</p>
+        </article>
+
+        <article className="rounded-lg border border-[var(--line)] bg-white p-3.5 sm:p-4 shadow-xs">
+          <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
+            <span className="flex items-center gap-1.5">
+              <span>Motion correlation (r)</span>
+              {(vitals.motionMg ?? 0) > 150 && (
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
+                  Motion Active
+                </span>
+              )}
+            </span>
+            <span className="font-mono text-[10px]">Ref &lt; 0.20</span>
+          </div>
+          <div className="my-1.5 flex items-baseline gap-1.5">
+            <span className={`font-mono text-3xl sm:text-4xl font-bold tracking-tight ${(vitals.correlationFactor ?? 0) > 0.35 ? 'text-amber-600' : 'text-[var(--ink)]'}`}>
+              {vitals.correlationFactor !== undefined && vitals.correlationFactor !== null
+                ? (vitals.correlationFactor >= 0 ? `+${vitals.correlationFactor.toFixed(2)}` : vitals.correlationFactor.toFixed(2))
+                : '+0.00'}
+            </span>
+            <span className="font-mono text-xs text-[var(--muted)]">r</span>
+          </div>
+          <p className="text-[10px] text-[var(--muted)] truncate flex items-center justify-between">
+            <span>Pearson r(Motion, ECG)</span>
+            <span className="font-mono text-[10px] text-[var(--ink)] font-medium">{vitals.motionMg ?? 0} mg</span>
+          </p>
         </article>
       </section>
 

@@ -341,6 +341,10 @@ void tarang_pipeline_init(tarang_pipeline_t *pipeline)
   /* Initialize Clinical Event Engine */
   tarang_clinical_engine_init(&pipeline->engine);
 
+  /* Initialize EMA baseline tracker (Issues 1.1, 1.2) */
+  pipeline->ecg_baseline_ema = 2048.0f;
+  pipeline->ecg_baseline_initialized = false;
+
   /* Initialize TFLite Micro — load both CNN models */
   bool ai_ok = tarang_ai_init();
 
@@ -546,10 +550,11 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
   telemetry->sdnn_ms = pipeline->engine.sdnn_ms;
   telemetry->rmssd_ms = pipeline->engine.rmssd_ms;
   telemetry->prr50_pct = pipeline->engine.prr50_pct;
+  telemetry->correlation_r_x1000 = tarang_nlms_get_correlation_r_x1000(&pipeline->nlms);
   pipeline->beat_telemetry_pending = true;
 
 #if TARANG_VALIDATION_STREAM_ACTIVE
-  printf("@A,%lu,%lu,%u,%u,%u,%d,%d,%d,%u,%u,%u,%u,%u,%u,%u\r\n",
+  printf("@A,%lu,%lu,%u,%u,%u,%d,%d,%d,%u,%u,%u,%u,%u,%u,%u,%d\r\n",
          (unsigned long)telemetry->timestamp_ms,
          (unsigned long)telemetry->r_peak_sample_idx,
          telemetry->rr_interval_ms,
@@ -564,7 +569,8 @@ void tarang_pipeline_on_rpeak(tarang_pipeline_t *pipeline,
          telemetry->current_hr,
          telemetry->sdnn_ms,
          telemetry->rmssd_ms,
-         telemetry->prr50_pct);
+         telemetry->prr50_pct,
+         telemetry->correlation_r_x1000);
 #endif
 
   store_annotation(pipeline,
@@ -598,7 +604,15 @@ void tarang_pipeline_process_ecg_sample(tarang_pipeline_t *pipeline,
   if (!have_aligned && have_causal) aligned_imu = causal_imu;
 
   uint64_t nlms_start_us = tarang_now_us();
-  float centered = (float)(raw_adc & 0x0FFFu) - 2048.0f;
+  float raw_f = (float)(raw_adc & 0x0FFFu);
+  if (!pipeline->ecg_baseline_initialized) {
+    pipeline->ecg_baseline_ema = raw_f;
+    pipeline->ecg_baseline_initialized = true;
+  } else {
+    /* Issue 1.2: alpha = 1 - exp(-2*pi*fc/fs) for fc=0.15Hz, fs=250Hz -> 0.00376269f */
+    pipeline->ecg_baseline_ema += 0.00376269f * (raw_f - pipeline->ecg_baseline_ema);
+  }
+  float centered = raw_f - pipeline->ecg_baseline_ema;
   float cleaned = tarang_nlms_process_sample(
       &pipeline->nlms,
       centered,

@@ -34,6 +34,7 @@ UUID_SERVICE_VITALS       = "544e937a-82f3-4395-b62b-b72bdea94c75"
 UUID_CHAR_VITALS_HR       = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"
 UUID_CHAR_VITALS_SPO2     = "b4cf8877-ba1a-414c-a99d-de85a13fd66b"
 UUID_CHAR_VITALS_TS       = "b4cf8877-ba1a-414c-a99d-de85a13fd66c"
+UUID_CHAR_VITALS_MOTION_CORR = "b4cf8877-ba1a-414c-a99d-de85a13fd66d"
 
 UUID_SERVICE_ANALYTICS    = "655f937a-82f3-4395-b62b-b72bdea94c75"
 UUID_CHAR_ANALYTICS_PVC   = "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
@@ -181,6 +182,13 @@ async def run_session(device, target_name: str) -> None:
                 t_str = time.strftime("%H:%M:%S")
                 print(f"[{t_str}] [VITALS] 🫁  SpO2:       {spo2:3d} %")
 
+        def on_vitals_motion_corr(_sender, data: bytearray):
+            if len(data) >= 4:
+                motion_mg, corr_r_x1000 = struct.unpack("<Hh", data[:4])
+                corr_r = corr_r_x1000 / 1000.0
+                t_str = time.strftime("%H:%M:%S")
+                print(f"[{t_str}] [VITALS] 🏃  Motion: {motion_mg:4d} mg | Pearson r: {corr_r:+.3f}")
+
         def print_analytics():
             t_str = time.strftime("%H:%M:%S")
             print(
@@ -274,6 +282,7 @@ async def run_session(device, target_name: str) -> None:
         subs = [
             (UUID_CHAR_VITALS_HR, on_vitals_hr, "Vitals HR"),
             (UUID_CHAR_VITALS_SPO2, on_vitals_spo2, "Vitals SpO2"),
+            (UUID_CHAR_VITALS_MOTION_CORR, on_vitals_motion_corr, "Vitals Motion & Corr"),
             (UUID_CHAR_ANALYTICS_PVC, on_pvc, "Analytics PVC"),
             (UUID_CHAR_ANALYTICS_PAC, on_pac, "Analytics PAC"),
             (UUID_CHAR_ANALYTICS_SDNN, on_sdnn, "Analytics SDNN"),

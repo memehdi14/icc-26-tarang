@@ -232,9 +232,9 @@ void app_init(void)
            (unsigned)GPIO_PinInGet(gpioPortC, 7));
   }
 
-  /* NOTE: sl_i2cspm_init_instances() is already called by autogen
-   * sl_driver_init() in sl_event_handler.c. No re-init needed. */
-  printf("[INIT] I2C bus ready (autogen init).\r\n");
+  /* Re-initialize I2CSPM peripheral routing after manual pin manipulation */
+  sl_i2cspm_init_instances();
+  printf("[INIT] I2C bus ready (sl_i2cspm_init_instances).\r\n");
   delay_ms(50);
 
   /* ── I2C Bus Scan — probe known sensor addresses ───────────────────── */

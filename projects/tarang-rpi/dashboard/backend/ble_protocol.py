@@ -11,6 +11,7 @@ VITALS_SERVICE_UUID: Final = "544e937a-82f3-4395-b62b-b72bdea94c75"
 VITALS_HR_UUID: Final = "b4cf8877-ba1a-414c-a99d-de85a13fd66a"
 VITALS_SPO2_UUID: Final = "b4cf8877-ba1a-414c-a99d-de85a13fd66b"
 VITALS_TIMESTAMP_UUID: Final = "b4cf8877-ba1a-414c-a99d-de85a13fd66c"
+VITALS_MOTION_CORR_UUID: Final = "b4cf8877-ba1a-414c-a99d-de85a13fd66d"
 
 ANALYTICS_SERVICE_UUID: Final = "655f937a-82f3-4395-b62b-b72bdea94c75"
 ANALYTICS_PVC_UUID: Final = "c5da9988-ca2b-425d-b00e-ef96b24ee77b"
@@ -49,6 +50,7 @@ REQUIRED_SUBSCRIPTION_UUIDS: Final = frozenset(
     {
         VITALS_HR_UUID,
         VITALS_SPO2_UUID,
+        VITALS_MOTION_CORR_UUID,
         EVENT_META_UUID,
         EVENT_ECG_CHUNK_UUID,
         EVENT_ANNOTATIONS_UUID,
@@ -138,6 +140,13 @@ def decode_spo2(data: bytes | bytearray) -> int:
     if value > 100:
         raise ProtocolError(f"SpO2 value {value} is outside 0..100")
     return value
+
+
+def decode_motion_corr(data: bytes | bytearray) -> tuple[int, float]:
+    """Decode Motion and Correlation characteristic ([0]: motion_mg u16, [1]: corr_r_x1000 i16)."""
+    _require_size(data, 4, "motion-corr")
+    motion_mg, corr_r_x1000 = struct.unpack_from("<Hh", data)
+    return motion_mg, corr_r_x1000 / 1000.0
 
 
 def decode_analytics(data: bytes | bytearray) -> dict[str, float]:

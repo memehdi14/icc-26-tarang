@@ -31,12 +31,14 @@ from ble_protocol import (
     SnippetReassembler,
     VITALS_HR_UUID,
     VITALS_SPO2_UUID,
+    VITALS_MOTION_CORR_UUID,
     decode_analytics,
     decode_analytics_characteristic,
     decode_annotations,
     decode_event_meta,
     decode_event_ticker,
     decode_heart_rate,
+    decode_motion_corr,
     decode_spo2,
 )
 
@@ -309,6 +311,8 @@ class GatewaySession:
         self.session_id = session_id
         self.last_hr: int | None = None
         self.last_spo2: int | None = None
+        self.last_motion_mg: int | None = None
+        self.last_correlation_factor: float | None = None
         self._loop = asyncio.get_running_loop()
         self._vitals_timer: asyncio.TimerHandle | None = None
         self._analytics_timer: asyncio.TimerHandle | None = None
@@ -352,6 +356,12 @@ class GatewaySession:
             self.last_spo2 = value
             self._schedule_vitals()
 
+    def on_motion_corr(self, _sender: Any, data: bytearray) -> None:
+        value = self._decode("motion-corr", decode_motion_corr, data)
+        if value is not None:
+            self.last_motion_mg, self.last_correlation_factor = value
+            self._schedule_vitals()
+
     def _schedule_vitals(self) -> None:
         if self._vitals_timer is not None:
             self._vitals_timer.cancel()
@@ -362,11 +372,14 @@ class GatewaySession:
         payload: dict[str, Any] = self._base_payload()
         payload["heart_rate_bpm"] = self.last_hr if (self.last_hr is not None and self.last_hr > 0) else None
         payload["spo2_pct"] = self.last_spo2 if (self.last_spo2 is not None and self.last_spo2 > 0) else None
+        payload["motion_mg"] = self.last_motion_mg if self.last_motion_mg is not None else 0
+        payload["correlation_factor"] = self.last_correlation_factor if self.last_correlation_factor is not None else 0.0
         self.publisher.enqueue("/api/vitals", payload, "vitals")
 
         hr_str = f"{self.last_hr} BPM" if (self.last_hr is not None and self.last_hr > 0) else "Searching (0)"
         spo2_str = f"{self.last_spo2}%" if (self.last_spo2 is not None and self.last_spo2 > 0) else "No finger (0%)"
-        LOG.info("[BLE][VITALS 2.5s] Periodic Packet Received -> HR: %s | SpO2: %s", hr_str, spo2_str)
+        corr_str = f"{self.last_correlation_factor:+.2f}" if self.last_correlation_factor is not None else "+0.00"
+        LOG.info("[BLE][VITALS 2.5s] Periodic Packet Received -> HR: %s | SpO2: %s | Corr(r): %s (%dmg)", hr_str, spo2_str, corr_str, self.last_motion_mg or 0)
 
     def on_analytics(self, _sender: Any, data: bytearray) -> None:
         """Compatibility callback for the retired nine-byte rollup."""
@@ -550,9 +563,10 @@ class GatewaySession:
         self._event.posted = True
 
     async def subscribe(self, client: BleakClient) -> None:
-        subscriptions: list[tuple[str, Callable]] = [
+        subscriptions = [
             (VITALS_HR_UUID, self.on_heart_rate),
             (VITALS_SPO2_UUID, self.on_spo2),
+            (VITALS_MOTION_CORR_UUID, self.on_motion_corr),
             (EVENT_RHYTHM_UUID, self.on_rhythm),
             (EVENT_META_UUID, self.on_event_meta),
             (EVENT_ECG_CHUNK_UUID, self.on_ecg_chunk),

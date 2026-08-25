@@ -45,7 +45,7 @@ class Session:
             "ecg": 9,
             "ppg": 4,
             "imu": 9,
-            "beat": 15,
+            "beat": 16,
             "metrics": 9,
             "diagnostics": 17,
         }
@@ -185,19 +185,13 @@ def parse_telemetry_line(line: str, session: Session) -> bool:
         parsed = _numbers(values, 9)
         if parsed is None:
             return False
-        if session.protocol == "validation-v1":
-            session.imu.append([
-                parsed[1], parsed[0], parsed[2], parsed[3], parsed[4],
-                parsed[5], parsed[6], parsed[7], parsed[8],
-            ])
-        else:
-            session.protocol = "legacy"
-            session.imu.append([
-                parsed[0], parsed[1], parsed[3], parsed[4], parsed[5],
-                parsed[6], parsed[7], parsed[8], 0.0,
-            ])
+        # Device time (ms), sample index, ax, ay, az, gx, gy, gz, motion_mg
+        session.imu.append([
+            parsed[1], parsed[0], parsed[2], parsed[3], parsed[4],
+            parsed[5], parsed[6], parsed[7], parsed[8],
+        ])
     elif record_type == "@A":
-        parsed = _numbers(values, 15)
+        parsed = _numbers(values, 16) or _numbers(values, 15)
         if parsed is None:
             return False
         session.protocol = "validation-v1"

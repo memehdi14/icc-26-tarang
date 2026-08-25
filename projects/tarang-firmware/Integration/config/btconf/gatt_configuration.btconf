@@ -74,6 +74,16 @@
         <read authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
+
+    <!--Motion and Correlation-->
+    <characteristic const="false" id="vitals_motion_corr" name="Motion and Correlation" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66d">
+      <informativeText>Dynamic motion magnitude (mg) and Pearson correlation r x 1000</informativeText>
+      <value length="4" type="hex" variable_length="false">00000000</value>
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false"/>
+        <notify authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
   </service>
 
   <!--Analytics Service-->

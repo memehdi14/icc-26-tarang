@@ -39,6 +39,8 @@ class VitalsSample(Base):
     ts = Column(DateTime, default=func.now(), nullable=False, index=True)
     heart_rate_bpm = Column(SmallInteger, nullable=True)
     spo2_pct = Column(SmallInteger, nullable=True)
+    motion_mg = Column(SmallInteger, nullable=True, default=0)
+    correlation_r = Column(Float, nullable=True, default=0.0)
 
     __table_args__ = (
         Index("ix_vitals_device_ts", "device_id", "ts"),
@@ -52,6 +54,8 @@ class VitalsSample(Base):
             "ts": self.ts.isoformat() if self.ts else None,
             "heartRateBpm": self.heart_rate_bpm,
             "spo2Pct": self.spo2_pct,
+            "motionMg": self.motion_mg,
+            "correlationFactor": self.correlation_r,
         }
 
 

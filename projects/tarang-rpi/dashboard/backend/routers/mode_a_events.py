@@ -115,6 +115,8 @@ class VitalsIngestItem(BaseModel):
     session_id: Optional[str] = None
     heart_rate_bpm: Optional[int] = Field(default=None, ge=0, le=300)
     spo2_pct: Optional[int] = Field(default=None, ge=0, le=100)
+    motion_mg: Optional[int] = Field(default=0, ge=0, le=65535)
+    correlation_factor: Optional[float] = Field(default=0.0, ge=-1.0, le=1.0)
     ts: Optional[datetime] = None
 
 
@@ -172,6 +174,8 @@ async def ingest_vitals(
             session_id=item.session_id,
             heart_rate_bpm=item.heart_rate_bpm,
             spo2_pct=item.spo2_pct,
+            motion_mg=item.motion_mg or 0,
+            correlation_r=item.correlation_factor if item.correlation_factor is not None else 0.0,
             ts=item.ts or datetime.now(timezone.utc),
         )
         db.add(sample)

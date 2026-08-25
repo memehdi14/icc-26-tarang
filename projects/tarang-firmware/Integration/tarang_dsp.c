@@ -261,12 +261,12 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
   bool peak_detected = (th->prev_mwi_idx >= 0) &&
                         (mwi_val < th->prev_mwi - hysteresis);
 
-  /* ISSUE-1 FIX: Hard 300ms refractory backstop — reject ANY peak <300ms
+  /* ISSUE-1 FIX: Hard 360ms refractory backstop — reject ANY peak <360ms
    * after last confirmed R-peak, BEFORE threshold/slope checks run.
    * This is the primary defense against T-wave double-triggers.
-   * 300ms at 250Hz = 75 samples. At 200 BPM (fastest physiologic rate),
-   * RR interval is still 300ms, so this never rejects a true beat. */
-  #define HARD_REFRACTORY_MS 300
+   * 360ms at 250Hz = 90 samples. At 165 BPM, RR interval is 364ms,
+   * so this reliably eliminates tall T-waves without dropping true beats. */
+  #define HARD_REFRACTORY_MS 360
   #define HARD_REFRACTORY_SAMPLES ((HARD_REFRACTORY_MS * TARANG_ECG_SAMPLE_RATE_HZ) / 1000)
   if (peak_detected && th->last_R_idx >= 0) {
     int dt = th->prev_mwi_idx - th->last_R_idx;
@@ -333,15 +333,14 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
     /* Primary threshold check on PEAK value */
     if (accepted < 0 && peak_val > th->TH1 &&
         th->refractory_remaining == 0) {
-      /* ISSUE-1 FIX: Re-tuned T-wave rejection — tighter slope ratio (0.3×)
-       * and wider window (40-120 samples = 160-480ms) to catch T-waves
-       * that occur later in the cycle (common at slower HR). */
+      /* Re-tuned T-wave rejection — slope ratio cutoff (0.45×)
+       * and wider window (40-125 samples = 160-500ms) to catch tall T-waves. */
       bool twave_ok = true;
       if (th->last_R_slope > 0.0f &&
-          slope_est < 0.3f * th->last_R_slope) {
+          slope_est < 0.45f * th->last_R_slope) {
         if (th->last_R_idx >= 0) {
           int dt = peak_idx - th->last_R_idx;
-          if (dt >= 40 && dt <= 120) twave_ok = false;
+          if (dt >= 40 && dt <= 125) twave_ok = false;
         }
       }
 
