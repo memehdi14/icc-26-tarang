@@ -136,6 +136,7 @@ CHROME_FLAGS=(
     --disable-session-crashed-bubble
     --no-sandbox
     --disable-gpu
+    --password-store=basic
     --user-data-dir=/tmp/chromium_hub_data
     --app=http://127.0.0.1:3000
 )

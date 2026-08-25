@@ -15,7 +15,7 @@ Comment=Start Tarang Fullscreen Clinical Kiosk
 Exec=$SCRIPT_DIR/start_kiosk.sh
 Icon=$ICON_PATH
 Path=$SCRIPT_DIR
-Terminal=false
+Terminal=true
 Categories=Healthcare;Medical;
 StartupNotify=true
 EOF
