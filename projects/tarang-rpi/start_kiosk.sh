@@ -138,7 +138,7 @@ CHROME_FLAGS=(
     --overscroll-history-navigation=0
     --touch-events=enabled
     --hide-scrollbars
-    --force-device-scale-factor=0.68
+    --force-device-scale-factor="${TARANG_SCALE_FACTOR:-1.0}"
     --no-sandbox
     --disable-gpu
     --user-data-dir=/tmp/chromium_kiosk_data
