@@ -12,10 +12,10 @@ cat <<EOF > "$DESKTOP_DIR/Tarang_Kiosk.desktop"
 Type=Application
 Name=Tarang Clinical Hub
 Comment=Start Tarang Fullscreen Clinical Kiosk
-Exec=/bin/bash -c "cd '$SCRIPT_DIR' && ./start_kiosk.sh"
+Exec=$SCRIPT_DIR/start_kiosk.sh
 Icon=$ICON_PATH
 Path=$SCRIPT_DIR
-Terminal=true
+Terminal=false
 Categories=Healthcare;Medical;
 StartupNotify=true
 EOF
