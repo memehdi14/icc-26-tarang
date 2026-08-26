@@ -51,12 +51,18 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# Pre-cleanup: terminate any lingering processes from previous runs
-echo "[0/3] Clearing any previous instances on ports 8000 & 3000..."
+# Pre-cleanup: terminate any lingering processes and clear Bluetooth cache
+echo "[0/3] Clearing previous instances and resetting Bluetooth link..."
 pkill -f "uvicorn main:app" 2>/dev/null || true
 pkill -f "ble_gateway.py" 2>/dev/null || true
 pkill -f "next start" 2>/dev/null || true
 pkill -f "next-server" 2>/dev/null || true
+if command -v bluetoothctl >/dev/null 2>&1; then
+    bluetoothctl remove "${TARANG_BLE_ADDRESS:-64:02:8F:64:26:14}" 2>/dev/null || true
+fi
+if command -v hciconfig >/dev/null 2>&1; then
+    hciconfig hci0 reset 2>/dev/null || true
+fi
 sleep 1
 
 export PYTHONUNBUFFERED=1
