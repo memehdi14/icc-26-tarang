@@ -62,8 +62,9 @@ def seed_defaults():
         if not db.query(SystemSetting).first():
             db.add(SystemSetting())
 
-        # Auto-seed default clinical demo patient if registry is empty
-        if not db.query(Patient).first():
+        # Ensure default demo patient exists
+        demo_patient = db.query(Patient).first()
+        if not demo_patient:
             demo_patient = Patient(
                 name="Eleanor Vance",
                 age=68,
@@ -79,25 +80,34 @@ def seed_defaults():
             db.add(demo_patient)
             db.flush()
 
-            if not db.query(Device).filter(Device.device_id == "tarang-efr32-demo").first():
-                db.add(Device(
-                    device_id="tarang-efr32-demo",
-                    name="EFR32MG26 Tarang Pod #1",
-                    mac_address=default_device_mac,
-                    firmware_version="v1.0.0-EFR32MG26",
-                    status="in_use",
-                    assigned_patient_id=demo_patient.id,
-                ))
+        # Ensure default device exists
+        demo_device = db.query(Device).filter(Device.device_id == "tarang-efr32-demo").first()
+        if not demo_device:
+            demo_device = Device(
+                device_id="tarang-efr32-demo",
+                name="EFR32MG26 Tarang Pod #1",
+                mac_address=default_device_mac,
+                firmware_version="v1.0.0-EFR32MG26",
+                status="in_use",
+                assigned_patient_id=demo_patient.id,
+            )
+            db.add(demo_device)
+            db.flush()
 
-            if not db.query(MonitoringSession).filter(MonitoringSession.status == "active").first():
-                db.add(MonitoringSession(
-                    session_id="sess_demo_live_01",
-                    patient_id=demo_patient.id,
-                    device_id="tarang-efr32-demo",
-                    status="active",
-                    bed="ICU-04",
-                    notes="Live demonstration session - EFR32MG26 real-time ECG/PPG/IMU telemetry stream",
-                ))
+        # ALWAYS archive previous active sessions and create a brand new active session on startup
+        for old_session in db.query(MonitoringSession).filter(MonitoringSession.status == "active").all():
+            old_session.status = "stopped"
+            old_session.ended_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        new_session_id = f"sess_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        db.add(MonitoringSession(
+            session_id=new_session_id,
+            patient_id=demo_patient.id,
+            device_id="tarang-efr32-demo",
+            status="active",
+            bed=demo_patient.bed or "ICU-04",
+            notes="Live demonstration session - EFR32MG26 real-time ECG/PPG/IMU telemetry stream",
+        ))
 
         db.commit()
     finally:

@@ -699,6 +699,7 @@ class BleGateway:
             return None
         finally:
             await scanner.stop()
+            await asyncio.sleep(0.35)
 
     async def run_forever(self) -> None:
         reconnect_delay = self.config.reconnect_delay_s
@@ -721,7 +722,7 @@ class BleGateway:
 
             try:
                 async with BleakClient(
-                    device,
+                    device.address,
                     timeout=self.config.connect_timeout_s,
                 ) as client:
                     if self.config.pair:
