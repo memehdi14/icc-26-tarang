@@ -23,6 +23,12 @@ if [[ ! -x "$PYTHON" ]]; then
     exit 1
 fi
 
+# Auto-install scalar-fastapi if missing in venv
+if ! "$PYTHON" -c "import scalar_fastapi" >/dev/null 2>&1; then
+    echo "[INFO] Ensuring scalar-fastapi is installed in venv..."
+    "$PYTHON" -m pip install scalar-fastapi -q || true
+fi
+
 if ! command -v curl >/dev/null 2>&1; then
     echo "[ERROR] curl is required for startup health checks."
     exit 1
