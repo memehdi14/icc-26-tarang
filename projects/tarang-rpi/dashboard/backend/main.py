@@ -62,22 +62,28 @@ def seed_defaults():
         if not db.query(SystemSetting).first():
             db.add(SystemSetting())
 
-        # Ensure default demo patient exists
+        # Ensure default demo patient exists and is named Himanshu Patel
         demo_patient = db.query(Patient).first()
         if not demo_patient:
             demo_patient = Patient(
-                name="Eleanor Vance",
-                age=68,
-                gender="Female",
+                name="Himanshu Patel",
+                age=45,
+                gender="Male",
                 mrn="TRG-84920",
                 bed="ICU-04",
                 admit_date=datetime.now().strftime("%Y-%m-%d"),
                 attending_physician="Dr. Maya Lin, MD",
-                blood_type="A+",
-                allergies=["Penicillin", "Sulfa drugs"],
-                medical_history=["Paroxysmal AFib", "Hypertension", "CABG 2021"],
+                blood_type="B+",
+                allergies=["None known"],
+                medical_history=["Post-CABG telemetry", "Hypertension"],
             )
             db.add(demo_patient)
+            db.flush()
+        else:
+            demo_patient.name = "Himanshu Patel"
+            demo_patient.gender = "Male"
+            demo_patient.blood_type = "B+"
+            demo_patient.medical_history = ["Post-CABG telemetry", "Hypertension"]
             db.flush()
 
         # Ensure default device exists
