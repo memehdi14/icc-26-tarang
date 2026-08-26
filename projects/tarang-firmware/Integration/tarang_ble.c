@@ -1299,10 +1299,10 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
           sl_bt_advertiser_general_discoverable);
       if (!tarang_ble_status_ok("generate advertising data", sc)) break;
 
-      /* 100ms advertising interval: 160 * 0.625ms = 100ms */
+      /* Fast 30ms advertising interval for near-instant central discovery: 48 * 0.625ms = 30ms */
       sc = sl_bt_advertiser_set_timing(
           tarang_advertising_set_handle,
-          160, 160, 0, 0);
+          48, 48, 0, 0);
       if (!tarang_ble_status_ok("set advertising timing", sc)) break;
 
       sc = sl_bt_legacy_advertiser_start(
@@ -1310,7 +1310,7 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
           sl_bt_legacy_advertiser_connectable);
       if (!tarang_ble_status_ok("start connectable advertising", sc)) break;
 
-      printf("[BLE] Connectable advertising started (AdvSet=0x%02X, interval=100ms).\r\n",
+      printf("[BLE] Connectable advertising started (AdvSet=0x%02X, fast-interval=30ms).\r\n",
              tarang_advertising_set_handle);
       break;
     }
@@ -1519,14 +1519,14 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
 
       sc = sl_bt_advertiser_set_timing(
           tarang_advertising_set_handle,
-          160, 160, 0, 0);
+          48, 48, 0, 0);
       if (!tarang_ble_status_ok("restore advertising timing", sc)) break;
 
       sc = sl_bt_legacy_advertiser_start(
           tarang_advertising_set_handle,
           sl_bt_legacy_advertiser_connectable);
       tarang_ble_status_ok("restart connectable advertising", sc);
-      printf("[BLE] Resumed advertising (AdvSet=0x%02X). Waiting for Central/RPi to reconnect.\r\n",
+      printf("[BLE] Resumed fast advertising (AdvSet=0x%02X, 30ms). Waiting for Central/RPi to reconnect.\r\n",
              tarang_advertising_set_handle);
       break;
     }

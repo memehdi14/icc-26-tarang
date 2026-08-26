@@ -674,12 +674,22 @@ class BleGateway:
             )
 
     async def start_discovery(self) -> Any | None:
-        """Find TARANG pod by address or advertised name prefix."""
-        loop = asyncio.get_running_loop()
-        found: asyncio.Future[Any] = loop.create_future()
+        """Find TARANG pod by direct address lookup or advertised name prefix."""
         address = self.config.ble_address.upper() if self.config.ble_address else None
         prefix = self.config.name_prefix.upper() if self.config.name_prefix else None
 
+        # Fast-track: Direct MAC resolution (sub-500ms on BlueZ)
+        if address:
+            try:
+                LOG.info("Fast-probing TARANG pod by address (%s)...", address)
+                dev = await BleakScanner.find_device_by_address(address, timeout=3.5)
+                if dev:
+                    return dev
+            except Exception as e:
+                LOG.debug("Address lookup skipped: %s", e)
+
+        loop = asyncio.get_running_loop()
+        found: asyncio.Future[Any] = loop.create_future()
         LOG.info("Scanning for TARANG pod (target=%s, prefix=%s)...", address, prefix)
 
         def on_advertisement(device: Any, advertisement_data: Any) -> None:
@@ -706,7 +716,7 @@ class BleGateway:
             if device is None:
                 LOG.warning("Tarang device not found; retrying in %.1fs", reconnect_delay)
                 await asyncio.sleep(reconnect_delay)
-                reconnect_delay = min(30.0, reconnect_delay * 1.5)
+                reconnect_delay = min(10.0, reconnect_delay * 1.2)
                 continue
 
             session = GatewaySession(
