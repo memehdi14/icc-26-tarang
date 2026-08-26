@@ -134,8 +134,14 @@ if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && ! systemctl is-active --quiet clou
     PIDS+=("$!")
 fi
 
-# Step 4: Fullscreen Chromium Kiosk on display
+# Step 4: Fullscreen Chromium Kiosk on physical display (works over SSH too)
 export DISPLAY="${DISPLAY:-:0}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [[ -e "$XDG_RUNTIME_DIR/wayland-1" ]]; then
+    export WAYLAND_DISPLAY="wayland-1"
+elif [[ -e "$XDG_RUNTIME_DIR/wayland-0" ]]; then
+    export WAYLAND_DISPLAY="wayland-0"
+fi
 # Prevent screen from sleeping / blanking
 if command -v xset >/dev/null 2>&1; then
     xset s off 2>/dev/null || true

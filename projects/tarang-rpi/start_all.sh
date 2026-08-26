@@ -138,8 +138,14 @@ if [[ -n "${CLOUDFLARE_TUNNEL_TOKEN:-}" ]] && ! systemctl is-active --quiet clou
     PIDS+=("$!")
 fi
 
-# Auto-open Chromium browser on attached TV / display
+# Auto-open Chromium browser on attached physical display (works over SSH too)
 export DISPLAY="${DISPLAY:-:0}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+if [[ -e "$XDG_RUNTIME_DIR/wayland-1" ]]; then
+    export WAYLAND_DISPLAY="wayland-1"
+elif [[ -e "$XDG_RUNTIME_DIR/wayland-0" ]]; then
+    export WAYLAND_DISPLAY="wayland-0"
+fi
 echo "[4/4] Auto-opening Chromium dashboard on display..."
 CHROME_FLAGS=(
     --noerrdialogs
