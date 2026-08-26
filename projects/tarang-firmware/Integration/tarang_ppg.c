@@ -567,6 +567,11 @@ void tarang_ppg_init(void)
  ******************************************************************************/
 void tarang_ppg_process(void)
 {
+    if (!max30102_found)
+    {
+        return;
+    }
+
     uint8_t fifo_data[6];
     uint32_t drained = 0u;
     bool status_has_data = false;

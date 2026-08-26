@@ -561,6 +561,11 @@ static void tarang_imu_recover_bus(void)
  ******************************************************************************/
 void tarang_imu_process(void)
 {
+  if (!mpu_found)
+  {
+    return;
+  }
+
   uint8_t raw[14];
   uint8_t int_status = 0;
 
