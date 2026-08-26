@@ -570,7 +570,10 @@ export default function Page() {
             activeSnippet={activeSnippet}
             glitchTicker={glitchTicker}
             patient={activePatient}
-            onClearSnapshot={() => setActiveSnippet(null)}
+            onClearSnapshot={() => {
+              setActiveSnippet(null);
+              setLatestEvent(null);
+            }}
             onSelectEvent={selectEvent}
             loadingEventId={loadingEventId}
             sweepSpeed={settings.sweepSpeed}

@@ -86,19 +86,21 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
         </div>
       </header>
 
-      {/* 2. Rhythm Status Alert Banner */}
-      <section className={`mb-4 flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 ${rhythmTone}`} aria-live="polite">
-        <div className="flex items-center gap-2.5">
-          <RhythmIcon size={18} className="shrink-0" />
-          <div>
-            <h2 className="text-xs sm:text-sm font-bold tracking-tight">{rhythm.label}</h2>
-            <p className="text-[11px] opacity-90">{rhythm.detail}</p>
+      {/* 2. Rhythm Status Alert Banner — Shown when an event is selected or active alert */}
+      {latestEvent && (
+        <section className={`mb-4 flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 ${rhythmTone}`} aria-live="polite">
+          <div className="flex items-center gap-2.5">
+            <RhythmIcon size={18} className="shrink-0" />
+            <div>
+              <h2 className="text-xs sm:text-sm font-bold tracking-tight">{rhythm.label}</h2>
+              <p className="text-[11px] opacity-90">{rhythm.detail}</p>
+            </div>
           </div>
-        </div>
-        <span className="font-mono text-[10px] font-semibold hidden md:block opacity-75">
-          {latestEvent ? `Event #${latestEvent.id ?? 'live'}` : 'Monitoring active'}
-        </span>
-      </section>
+          <span className="font-mono text-[10px] font-semibold hidden md:block opacity-75">
+            Event #{latestEvent.id ?? 'live'}
+          </span>
+        </section>
+      )}
 
       {/* 3. HERO: Physiological ECG Waveform */}
       <section className="mb-4">
