@@ -21,7 +21,7 @@ from database.connection import get_db
 from database.models import VitalsSample, Analytics5Min, ClinicalEvent, EcgSnippet, BeatAnnotation
 from routers.telemetry import manager
 
-router = APIRouter(tags=["mode_a"])
+router = APIRouter(tags=["telemetry"])
 
 
 def _pdf_escape(value: object) -> str:
@@ -155,8 +155,8 @@ class ClinicalEventIngest(BaseModel):
 
 # ── Vitals Endpoints ──────────────────────────────────────────────────────────
 
-@router.post("/api/vitals", status_code=status.HTTP_201_CREATED)
-@router.post("/vitals", status_code=status.HTTP_201_CREATED)
+@router.post("/api/vitals", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/vitals", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def ingest_vitals(
     payload: Union[VitalsIngestItem, List[VitalsIngestItem]],
     db: Session = Depends(get_db)
@@ -194,7 +194,7 @@ async def ingest_vitals(
 
 
 @router.get("/api/vitals/latest")
-@router.get("/vitals/latest")
+@router.get("/vitals/latest", include_in_schema=False)
 def get_latest_vitals(
     device_id: Optional[str] = None,
     session_id: Optional[str] = None,
@@ -218,7 +218,7 @@ def get_latest_vitals(
 
 
 @router.get("/api/vitals/range")
-@router.get("/vitals/range")
+@router.get("/vitals/range", include_in_schema=False)
 def get_vitals_range(
     minutes: int = Query(default=15, ge=1, le=1440),
     device_id: Optional[str] = None,
@@ -238,8 +238,8 @@ def get_vitals_range(
 
 # ── Analytics Endpoints (5-Min Rollups) ────────────────────────────────────────
 
-@router.post("/api/analytics", status_code=status.HTTP_201_CREATED)
-@router.post("/analytics", status_code=status.HTTP_201_CREATED)
+@router.post("/api/analytics", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/analytics", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def ingest_analytics(payload: AnalyticsIngest, db: Session = Depends(get_db)):
     """5-min analytics rollup write (Burden, HRV, Edge AI Health)."""
     analytics = Analytics5Min(
@@ -264,7 +264,7 @@ async def ingest_analytics(payload: AnalyticsIngest, db: Session = Depends(get_d
 
 
 @router.get("/api/analytics/latest")
-@router.get("/analytics/latest")
+@router.get("/analytics/latest", include_in_schema=False)
 def get_latest_analytics(
     device_id: Optional[str] = None,
     session_id: Optional[str] = None,
@@ -293,7 +293,7 @@ def get_latest_analytics(
 
 
 @router.get("/api/analytics/history")
-@router.get("/analytics/history")
+@router.get("/analytics/history", include_in_schema=False)
 def get_analytics_history(
     hours: int = Query(default=24, ge=1, le=168),
     device_id: Optional[str] = None,
@@ -313,8 +313,8 @@ def get_analytics_history(
 
 # ── Clinical Events & 4s Snippet Endpoints ────────────────────────────────────
 
-@router.post("/api/events", status_code=status.HTTP_201_CREATED)
-@router.post("/events", status_code=status.HTTP_201_CREATED)
+@router.post("/api/events", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/events", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def ingest_clinical_event(payload: ClinicalEventIngest, db: Session = Depends(get_db)):
     """
     New clinical event + linked 4s ECG snippet + beat annotations in a single atomic transaction.
@@ -372,7 +372,7 @@ async def ingest_clinical_event(payload: ClinicalEventIngest, db: Session = Depe
 
 
 @router.get("/api/events/latest")
-@router.get("/events/latest")
+@router.get("/events/latest", include_in_schema=False)
 def get_latest_clinical_events(
     limit: int = Query(default=10, ge=1, le=100),
     device_id: Optional[str] = None,
@@ -390,7 +390,7 @@ def get_latest_clinical_events(
 
 
 @router.get("/api/events/{event_id}/snippet")
-@router.get("/events/{event_id}/snippet")
+@router.get("/events/{event_id}/snippet", include_in_schema=False)
 def get_event_snippet(event_id: int, db: Session = Depends(get_db)):
     """Return the 4s ECG snippet and AI beat annotations for a specific clinical event."""
     snippet = db.query(EcgSnippet).filter(EcgSnippet.event_id == event_id).first()
@@ -400,7 +400,7 @@ def get_event_snippet(event_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/api/events/{event_id}/pdf")
-@router.get("/events/{event_id}/pdf")
+@router.get("/events/{event_id}/pdf", include_in_schema=False)
 def export_event_pdf(event_id: int, db: Session = Depends(get_db)):
     event = db.query(ClinicalEvent).filter(ClinicalEvent.id == event_id).first()
     if not event:
@@ -418,8 +418,8 @@ def export_event_pdf(event_id: int, db: Session = Depends(get_db)):
 
 # ── Event Reset / Cleanup Endpoint ───────────────────────────────────────────
 
-@router.delete("/api/events")
-@router.delete("/events")
+@router.delete("/api/events", include_in_schema=False)
+@router.delete("/events", include_in_schema=False)
 async def clear_events(db: Session = Depends(get_db)):
     """Clear all past clinical events, waveforms, and beat annotations from the database."""
     db.query(BeatAnnotation).delete()

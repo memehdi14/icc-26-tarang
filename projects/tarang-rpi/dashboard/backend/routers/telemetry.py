@@ -95,7 +95,7 @@ def get_telemetry_history(
     return [e.to_dict() for e in events]
 
 
-@router.post("/ingest")
+@router.post("/ingest", include_in_schema=False)
 async def ingest_telemetry(packet: TelemetryIngest, db: Session = Depends(get_db)):
     """
     BLE Gateway posts decoded 16-byte packets here.

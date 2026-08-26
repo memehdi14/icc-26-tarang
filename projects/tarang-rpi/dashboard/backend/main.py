@@ -132,36 +132,28 @@ async def lifespan(app: FastAPI):
     print("[TARANG] Backend shutting down.")
 
 
-# ── OpenAPI Metadata & Tags ──────────────────────────────────────────────────
+# ── OpenAPI Metadata & Tags (External Interface Only) ───────────────────────
 
 TAGS_METADATA = [
     {
-        "name": "mode_a",
-        "description": "Ingestion endpoints for real-time Mode A telemetry including ECG waveforms, rhythm classification, and beat annotations.",
+        "name": "integrations-v1",
+        "description": "Hospital CRM and EHR integration interfaces for patient synchronization, observation exports, and telemetry archives.",
     },
     {
         "name": "clinical_actions",
-        "description": "Emergency alerting and physician dispatch logging for acute clinical events.",
+        "description": "Emergency physician alerting, urgent cardiology consult dispatch, and auditable action logs.",
     },
     {
         "name": "telemetry",
-        "description": "Continuous vital signs polling and WebSocket telemetry stream broadcast.",
-    },
-    {
-        "name": "integrations-v1",
-        "description": "EHR and hospital CRM integration interfaces for patient admission and observation exports.",
-    },
-    {
-        "name": "diagnostics",
-        "description": "Hardware link metrics, BLE signal strength, packet delivery rates, and device battery telemetry.",
+        "description": "Live vital signs polling, arrhythmia anomaly events, 4-second raw ECG waveform snippets, and PDF export.",
     },
     {
         "name": "patients",
-        "description": "Patient directory management, ward assignments, and admission profiles.",
+        "description": "Clinical patient registry, ward bed assignments, and medical history profiles.",
     },
     {
-        "name": "health",
-        "description": "Service health probes and database connectivity verification.",
+        "name": "diagnostics",
+        "description": "Hardware link metrics, BLE signal quality, packet delivery rates, and device battery telemetry.",
     },
 ]
 
@@ -170,7 +162,7 @@ TAGS_METADATA = [
 
 app = FastAPI(
     title="Tarang Clinical Workstation API",
-    description="REST and WebSocket API specification for the Tarang clinical telemetry hub, handling sensor stream ingestion, real-time arrhythmia detection, and workstation synchronization.",
+    description="External REST and WebSocket API specification for the Tarang clinical telemetry hub, handling sensor stream ingestion, real-time arrhythmia detection, and workstation synchronization.",
     version="1.0.0",
     lifespan=lifespan,
     openapi_tags=TAGS_METADATA,
@@ -194,16 +186,19 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 
-app.include_router(mode_a_events.router)
+# External public interfaces (documented in /docs)
+app.include_router(integrations.router)
 app.include_router(clinical_actions.router)
+app.include_router(mode_a_events.router)
 app.include_router(telemetry.router)
 app.include_router(patients.router)
 app.include_router(diagnostics.router)
-app.include_router(settings_router.router)
-app.include_router(health_router.router)
-app.include_router(devices.router)
-app.include_router(sessions.router)
-app.include_router(integrations.router)
+
+# Internal workstation-only endpoints (hidden from public API docs)
+app.include_router(settings_router.router, include_in_schema=False)
+app.include_router(health_router.router, include_in_schema=False)
+app.include_router(devices.router, include_in_schema=False)
+app.include_router(sessions.router, include_in_schema=False)
 
 # Mount WebSocket endpoint at /ws/telemetry (separate from REST prefix)
 app.add_api_websocket_route("/ws/telemetry", telemetry.websocket_telemetry)

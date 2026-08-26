@@ -39,7 +39,7 @@ def get_latest_diagnostics(db: Session = Depends(get_db)):
     return diag.to_dict()
 
 
-@router.post("/update")
+@router.post("/update", include_in_schema=False)
 async def update_diagnostics(data: DiagnosticsUpdate, db: Session = Depends(get_db)):
     """
     BLE Gateway posts device state here after each connection or packet burst.
