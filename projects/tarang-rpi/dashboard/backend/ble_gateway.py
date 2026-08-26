@@ -680,7 +680,6 @@ class BleGateway:
         address = self.config.ble_address.upper() if self.config.ble_address else None
         prefix = self.config.name_prefix.upper() if self.config.name_prefix else None
 
-        _purge_bluez_cache(address)
         LOG.info("Scanning for TARANG pod (target=%s, prefix=%s)...", address, prefix)
 
         def on_advertisement(device: Any, advertisement_data: Any) -> None:
@@ -699,7 +698,6 @@ class BleGateway:
             return None
         finally:
             await scanner.stop()
-            await asyncio.sleep(0.35)
 
     async def run_forever(self) -> None:
         reconnect_delay = self.config.reconnect_delay_s
@@ -722,7 +720,7 @@ class BleGateway:
 
             try:
                 async with BleakClient(
-                    device.address,
+                    device,
                     timeout=self.config.connect_timeout_s,
                 ) as client:
                     if self.config.pair:
