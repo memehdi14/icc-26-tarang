@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sidebar } from '../src/components/Sidebar';
 import { WorkstationView } from '../src/components/WorkstationView';
 import { PatientSummarySidebar } from '../src/components/PatientSummarySidebar';
