@@ -161,6 +161,11 @@ static uint32_t tarang_bond_epoch = 0u;
  * already-encrypted link should NOT trigger a full bond table purge. */
 static bool tarang_connection_was_secured = false;
 
+/* Tracks whether the current connection has sufficient encryption to access
+ * Service C (Clinical Events: rhythm status, event meta, ECG chunks, annotations).
+ * Authorized only when link security mode >= mode1_level2 and key_size >= 16. */
+static bool tarang_service_c_authorized = false;
+
 /* CCCD subscription state flags */
 static bool sub_vitals_hr          = false;
 static bool sub_vitals_spo2        = false;
@@ -427,7 +432,8 @@ static uint16_t event_payload_limit(void)
 static void event_transfer_send_next(void)
 {
   if (!event_transfer.active
-      || tarang_ble_conn_handle == SL_BT_INVALID_CONNECTION_HANDLE) {
+      || tarang_ble_conn_handle == SL_BT_INVALID_CONNECTION_HANDLE
+      || !tarang_service_c_authorized) {
     return;
   }
 
@@ -725,6 +731,20 @@ static bool trigger_event(
     return false;
   }
   if (!tarang_ble_mtu_ready_for_burst()) {
+    return false;
+  }
+
+  /* Service C encryption gate — defense-in-depth against downgrade/renegotiation.
+   * The GATT permissions enforce encryption at CCCD subscribe time, but this
+   * guards the notification path itself in case security state changes after
+   * subscription was established. */
+  if (!tarang_service_c_authorized) {
+    static uint32_t last_svc_c_gate_log_ms = 0;
+    uint32_t now = tarang_now_ms();
+    if (now - last_svc_c_gate_log_ms >= 5000u) {
+      last_svc_c_gate_log_ms = now;
+      printf("[BLE][EVENT] Service C not authorized — clinical event withheld\r\n");
+    }
     return false;
   }
 
@@ -1283,6 +1303,9 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
 
       sc = sl_bt_sm_store_bonding_configuration(8, 2);
       tarang_ble_status_ok("configure persistent bonding store (8 slots, LRU)", sc);
+
+      sc = sl_bt_sm_set_minimum_key_size(16);
+      tarang_ble_status_ok("enforce 128-bit minimum key size (16 bytes)", sc);
   #else
       /* Unbonded fallback: SM present but bonding explicitly disabled.
        * flags=0x00 + bondable_mode(0) ensures the stack is genuinely
@@ -1455,6 +1478,27 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
              bonded->security_mode);
       tarang_ble_bonding_handle = bonded->bonding;
       tarang_connection_was_secured = true;
+
+      /* Verify actual encryption strength before authorizing Service C */
+      {
+        uint8_t security_mode = 0;
+        uint8_t key_size = 0;
+        uint8_t sec_bonding_handle = 0;
+        sl_status_t sec_sc = sl_bt_connection_get_security_status(
+            bonded->connection, &security_mode, &key_size, &sec_bonding_handle);
+
+        if (sec_sc == SL_STATUS_OK
+            && security_mode >= sl_bt_connection_mode1_level2
+            && key_size >= 16) {
+          tarang_service_c_authorized = true;
+          printf("[BLE][SM] Connection encrypted: mode=%u key_size=%u — Service C enabled\r\n",
+                 security_mode, key_size);
+        } else {
+          tarang_service_c_authorized = false;
+          printf("[BLE][SM][WARN] Bonded but security check failed (sc=0x%04X mode=%u key_size=%u) — "
+                 "Service C withheld\r\n", (unsigned)sec_sc, security_mode, key_size);
+        }
+      }
       break;
     }
 
@@ -1572,6 +1616,7 @@ void tarang_ble_on_event(sl_bt_msg_t *evt)
       tarang_ble_conn_handle = SL_BT_INVALID_CONNECTION_HANDLE;
       tarang_ble_bonding_handle = SL_BT_INVALID_BONDING_HANDLE;
       tarang_connection_was_secured = false;
+      tarang_service_c_authorized = false;
       memset(&event_transfer, 0, sizeof(event_transfer));
       last_event_completion_ms = 0u;
       connection_opened_ms = 0u;

@@ -39,6 +39,7 @@ from ble_protocol import (
     ProtocolError,
     REQUIRED_SERVICE_UUIDS,
     REQUIRED_SUBSCRIPTION_UUIDS,
+    SERVICE_C_UUIDS,
     SnippetReassembler,
     VITALS_BOND_EPOCH_UUID,
     VITALS_HR_UUID,
@@ -596,27 +597,60 @@ class GatewaySession:
 
         LOG.info("Activating %d GATT notifications on TARANG pod...", len(subscriptions))
         active: set[str] = set()
+        service_c_failures: set[str] = set()
+
         for uuid, handler in subscriptions:
+            is_service_c = uuid in SERVICE_C_UUIDS
             for attempt in range(2):
                 try:
-                    await asyncio.wait_for(client.start_notify(uuid, handler), timeout=2.0)
+                    await asyncio.wait_for(client.start_notify(uuid, handler), timeout=2.5)
                     active.add(uuid)
                     LOG.info("Subscribed to %s", uuid)
                     await asyncio.sleep(0.15)  # Pacing delay (150ms / ~4 CIs) to prevent stack buffer exhaustion
                     break
                 except Exception as exc:
-                    if attempt == 0:
-                        await asyncio.sleep(0.2)
-                    else:
-                        LOG.warning("Subscription note for %s: %s", uuid, exc)
+                    exc_str = str(exc)
+                    is_security_err = any(
+                        term in exc_str.lower()
+                        for term in ("insufficient", "authentication", "encryption", "not permitted")
+                    )
+                    if is_service_c and is_security_err and attempt == 0:
+                        LOG.warning(
+                            "Service C characteristic %s rejected (%s) — attempting pairing...",
+                            uuid,
+                            exc_str,
+                        )
+                        try:
+                            await client.pair()
+                            await asyncio.sleep(0.5)
+                            continue
+                        except Exception as pair_err:
+                            LOG.warning("Pairing attempt during subscribe failed: %s", pair_err)
 
-        missing_required = REQUIRED_SUBSCRIPTION_UUIDS - active
+                    if attempt == 0:
+                        await asyncio.sleep(0.25)
+                    else:
+                        if is_service_c:
+                            service_c_failures.add(uuid)
+                            LOG.warning("Service C subscription withheld for %s: %s", uuid, exc)
+                        else:
+                            LOG.error("Failed to subscribe to vital/analytics characteristic %s: %s", uuid, exc)
+
+        missing_required = (REQUIRED_SUBSCRIPTION_UUIDS - SERVICE_C_UUIDS) - active
         if missing_required:
             LOG.warning(
-                "Some GATT subscriptions could not be activated: %s",
+                "Core telemetry GATT subscriptions could not be activated: %s",
                 ", ".join(sorted(missing_required)),
             )
-        LOG.info("All %d Mode A GATT subscriptions active — streaming live telemetry", len(active))
+
+        if service_c_failures:
+            LOG.warning(
+                "Service C (Clinical Events) encryption not active (%d withheld: %s); vitals streaming in fallback mode",
+                len(service_c_failures),
+                ", ".join(sorted(service_c_failures)),
+            )
+        else:
+            LOG.info("All %d Mode A GATT subscriptions active (including encrypted Service C)", len(active))
 
     def publish_diagnostics(self, connected: bool) -> None:
         metrics = self.publisher.metrics
@@ -676,10 +710,51 @@ def _purge_bluez_cache(address: str | None) -> None:
         pass
 
 
+class BluezAgentProcess:
+    """Headless BlueZ pairing agent running via bluetoothctl.
+
+    Registers as default-agent with NoInputNoOutput capability so that
+    Just-Works pairing / bonding requests from the EFR32 are auto-confirmed
+    instantly instead of stalling for 30s awaiting interactive approval.
+    """
+
+    def __init__(self) -> None:
+        self._proc: subprocess.Popen[str] | None = None
+
+    def start(self) -> None:
+        try:
+            self._proc = subprocess.Popen(
+                ["bluetoothctl"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            if self._proc.stdin:
+                self._proc.stdin.write("power on\nagent NoInputNoOutput\ndefault-agent\n")
+                self._proc.stdin.flush()
+                LOG.info("BlueZ headless agent registered (NoInputNoOutput)")
+        except Exception as exc:
+            LOG.debug("Could not start BlueZ agent: %s", exc)
+
+    def stop(self) -> None:
+        if self._proc:
+            try:
+                if self._proc.stdin:
+                    self._proc.stdin.write("exit\n")
+                    self._proc.stdin.flush()
+                self._proc.terminate()
+                self._proc.wait(timeout=1.0)
+            except Exception:
+                pass
+            self._proc = None
+
+
 class BleGateway:
     def __init__(self, config: GatewayConfig, publisher: BackendPublisher) -> None:
         self.config = config
         self.publisher = publisher
+        self._agent = BluezAgentProcess()
         # Bond registry: {MAC_UPPER: last_seen_epoch}
         # Persists in memory across reconnects within one gateway process.
         self._bond_registry: dict[str, int] = {}
@@ -691,37 +766,27 @@ class BleGateway:
     # ── Bond-Aware Helpers ────────────────────────────────────────────────
 
     async def _is_device_bonded(self, client: BleakClient) -> bool:
-        """Check if BlueZ considers this device paired (has stored bond keys)."""
-        try:
-            # bleak >= 0.20 exposes .paired on the BlueZ backend
-            if hasattr(client, "paired"):
-                return bool(client.paired)
-            # Fallback: try the D-Bus property directly
-            if hasattr(client, "_backend") and hasattr(client._backend, "_device_path"):
-                from dbus_fast.aio import MessageBus
-                from dbus_fast import Message, MessageType
-                bus = await MessageBus(bus_type=client._backend._bus._bus_type).connect()
-                try:
-                    reply = await bus.call(
-                        Message(
-                            destination="org.bluez",
-                            path=client._backend._device_path,
-                            interface="org.freedesktop.DBus.Properties",
-                            member="Get",
-                            signature="ss",
-                            body=["org.bluez.Device1", "Paired"],
-                        )
-                    )
-                    if reply.message_type == MessageType.METHOD_RETURN:
-                        return bool(reply.body[0].value)
-                finally:
-                    bus.disconnect()
-        except Exception as exc:
-            LOG.debug("_is_device_bonded D-Bus check failed: %s", exc)
-
-        # Last resort: check our own registry
         mac = str(client.address).upper()
-        return mac in self._bond_registry
+        try:
+            # bluetoothctl info is the ground truth for BlueZ device pairing
+            res = subprocess.run(
+                ["bluetoothctl", "info", mac],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+            )
+            if "Paired: yes" in res.stdout:
+                return True
+            if "Paired: no" in res.stdout:
+                return False
+        except Exception as exc:
+            LOG.debug("_is_device_bonded bluetoothctl check note: %s", exc)
+
+        # Fallback: check bleak .paired attribute if available
+        if hasattr(client, "paired") and client.paired is not None:
+            return bool(client.paired)
+
+        return False
 
     async def _read_bond_epoch(self, client: BleakClient) -> int:
         """Read the plaintext bond epoch characteristic (uint32 LE)."""
@@ -790,58 +855,69 @@ class BleGateway:
             await scanner.stop()
 
     async def run_forever(self) -> None:
-        reconnect_delay = self.config.reconnect_delay_s
-        while True:
-            device = await self.start_discovery()
-            if device is None:
-                LOG.warning("Tarang device not found; retrying in %.1fs", reconnect_delay)
-                await asyncio.sleep(reconnect_delay)
-                reconnect_delay = min(30.0, reconnect_delay * 1.5)
-                continue
+        self._agent.start()
+        try:
+            reconnect_delay = self.config.reconnect_delay_s
+            while True:
+                device = await self.start_discovery()
+                if device is None:
+                    LOG.warning("Tarang device not found; retrying in %.1fs", reconnect_delay)
+                    await asyncio.sleep(reconnect_delay)
+                    reconnect_delay = min(30.0, reconnect_delay * 1.5)
+                    continue
 
-            session = GatewaySession(
-                self.config, self.publisher, device, self.config.session_id
-            )
-            LOG.info(
-                "Connecting to %s (%s)...",
-                device.name or "TARANG",
-                device.address,
-            )
+                session = GatewaySession(
+                    self.config, self.publisher, device, self.config.session_id
+                )
+                LOG.info(
+                    "Connecting to %s (%s)...",
+                    device.name or "TARANG",
+                    device.address,
+                )
 
-            try:
-                async with BleakClient(
-                    device,
-                    timeout=self.config.connect_timeout_s,
-                ) as client:
-                    # ── Bond-Aware Pairing ──────────────────────────
-                    if self.config.pair:
-                        await self._preflight_bond_check(client, device.address)
-                        already_bonded = await self._is_device_bonded(client)
+                try:
+                    async with BleakClient(
+                        device,
+                        timeout=self.config.connect_timeout_s,
+                    ) as client:
+                        # ── Bond-Aware Pairing ──────────────────────────
+                        if self.config.pair:
+                            await self._preflight_bond_check(client, device.address)
+                            already_bonded = await self._is_device_bonded(client)
 
-                        if already_bonded:
-                            # Do NOT call pair() again. Encryption resumes
-                            # automatically off the stored LTK the moment a
-                            # bonded-permission attribute is touched.
-                            LOG.info(
-                                "Device already bonded (epoch=%d) — resuming "
-                                "encrypted link without re-pairing",
-                                self._bond_registry.get(device.address.upper(), 0),
-                            )
-                        else:
-                            LOG.info("No existing bond — initiating first-time pairing")
-                            try:
-                                await client.pair()
-                                LOG.info("BLE pairing complete (Bonded & Encrypted)")
-                                # Record the epoch for this MAC
-                                epoch = await self._read_bond_epoch(client)
-                                self._bond_registry[device.address.upper()] = epoch
-                            except Exception as pair_exc:
-                                exc_msg = str(pair_exc)
-                                if "AlreadyExists" in exc_msg or "already" in exc_msg.lower():
-                                    LOG.info("Device already paired in BlueZ: %s", exc_msg)
-                                else:
-                                    LOG.warning("Pairing request note: %s", exc_msg)
-                        await asyncio.sleep(0.3)
+                            if already_bonded:
+                                # Do NOT call pair() again. Encryption resumes
+                                # automatically off the stored LTK the moment a
+                                # bonded-permission attribute is touched.
+                                LOG.info(
+                                    "Device already bonded (epoch=%d) — resuming "
+                                    "encrypted link without re-pairing",
+                                    self._bond_registry.get(device.address.upper(), 0),
+                                )
+                            else:
+                                LOG.info("No existing bond — initiating first-time pairing")
+                                try:
+                                    await client.pair()
+                                    LOG.info("BLE pairing complete (Bonded & Encrypted)")
+                                    try:
+                                        subprocess.run(
+                                            ["bluetoothctl", "trust", device.address],
+                                            stdout=subprocess.DEVNULL,
+                                            stderr=subprocess.DEVNULL,
+                                            timeout=2.0,
+                                        )
+                                    except Exception:
+                                        pass
+                                    # Record the epoch for this MAC
+                                    epoch = await self._read_bond_epoch(client)
+                                    self._bond_registry[device.address.upper()] = epoch
+                                except Exception as pair_exc:
+                                    exc_msg = str(pair_exc)
+                                    if "AlreadyExists" in exc_msg or "already" in exc_msg.lower():
+                                        LOG.info("Device already paired in BlueZ: %s", exc_msg)
+                                    else:
+                                        LOG.warning("Pairing request note: %s", exc_msg)
+                            await asyncio.sleep(0.3)
 
                     service_uuids = {service.uuid.lower() for service in client.services}
                     missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
@@ -886,6 +962,8 @@ class BleGateway:
             jitter = random.uniform(0.0, 0.75)
             LOG.info("Reconnecting in %.1fs", reconnect_delay + jitter)
             await asyncio.sleep(reconnect_delay + jitter)
+        finally:
+            self._agent.stop()
 
 
 async def async_main() -> None:

@@ -164,7 +164,7 @@
     <characteristic const="false" id="event_rhythm_status" name="Rhythm Status" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88a">
       <value length="1" type="hex" variable_length="false">00</value>
       <properties>
-        <notify authenticated="false" bonded="false" encrypted="false"/>
+        <notify authenticated="false" bonded="true" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -172,7 +172,7 @@
     <characteristic const="false" id="event_meta" name="Event Meta" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88b">
       <value length="8" type="hex" variable_length="false">0000000000000000</value>
       <properties>
-        <notify authenticated="false" bonded="false" encrypted="false"/>
+        <notify authenticated="false" bonded="true" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -180,8 +180,8 @@
     <characteristic const="false" id="event_ecg_chunk" name="ECG Snippet Chunk" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88c">
       <value length="244" type="hex" variable_length="true">00</value>
       <properties>
-        <read authenticated="false" bonded="false" encrypted="false"/>
-        <notify authenticated="false" bonded="false" encrypted="false"/>
+        <read authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="true" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -197,8 +197,8 @@
     <characteristic const="false" id="event_beat_annotations" name="Beat Annotations" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88e">
       <value length="244" type="hex" variable_length="true">00</value>
       <properties>
-        <read authenticated="false" bonded="false" encrypted="false"/>
-        <notify authenticated="false" bonded="false" encrypted="false"/>
+        <read authenticated="false" bonded="true" encrypted="true"/>
+        <notify authenticated="false" bonded="true" encrypted="true"/>
       </properties>
     </characteristic>
 
@@ -206,7 +206,7 @@
     <characteristic const="false" id="event_glitch_ticker" name="Glitch Ticker Event" sourceId="" uuid="d6ebaa99-da3c-536e-c11f-f0a7c35ff88f">
       <value length="6" type="hex" variable_length="false">000000000000</value>
       <properties>
-        <notify authenticated="false" bonded="false" encrypted="false"/>
+        <notify authenticated="false" bonded="true" encrypted="true"/>
       </properties>
     </characteristic>
   </service>
