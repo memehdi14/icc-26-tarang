@@ -16,6 +16,16 @@ from typing import Any, Callable
 import httpx
 import struct as _struct
 from bleak import BleakClient, BleakScanner
+from dotenv import load_dotenv
+
+# Auto-load tarang.env from project root or current directory
+for env_candidate in [
+    os.path.join(os.path.dirname(__file__), "..", "..", "tarang.env"),
+    os.path.join(os.getcwd(), "tarang.env"),
+]:
+    if os.path.isfile(env_candidate):
+        load_dotenv(env_candidate)
+        break
 
 from ble_protocol import (
     ANALYTICS_CHARACTERISTIC_UUIDS,
