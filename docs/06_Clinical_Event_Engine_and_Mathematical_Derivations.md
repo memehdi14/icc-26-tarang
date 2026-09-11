@@ -209,9 +209,3 @@ $$\text{Perfusion Index (PI)} = \frac{AC_{\text{IR}}}{DC_{\text{IR}}} \times 100
 
 ## 7. PhysioNet Benchmark Validation Summary
 
-| Clinical Target | Benchmark Database | Sensitivity | Specificity | Overall Accuracy |
-| :--- | :--- | :--- | :--- | :--- |
-| **Ventricular Ectopy (`V`, VT, Bigeminy)** | MIT-BIH Arrhythmia (`MITDB`) | $97.4\%$ | $98.8\%$ | $98.2\%$ |
-| **Supraventricular Ectopy (`S`, PAC)** | MIT-BIH Supraventricular (`SVDB`) | $92.1\%$ | $96.5\%$ | $95.4\%$ |
-| **Atrial Fibrillation (RR Chaos)** | MIT-BIH Atrial Fibrillation (`AFDB`) | $95.8\%$ | $97.2\%$ | $96.6\%$ |
-| **Motion Artifact Robustness** | PhysioNet CinC 2017 Challenge | $94.2\%$ | $96.0\%$ | $95.1\%$ |

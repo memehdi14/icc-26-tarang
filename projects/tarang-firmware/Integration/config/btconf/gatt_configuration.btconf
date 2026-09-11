@@ -84,6 +84,15 @@
         <notify authenticated="false" bonded="false" encrypted="false"/>
       </properties>
     </characteristic>
+
+    <!--Bond Epoch-->
+    <characteristic const="false" id="vitals_bond_epoch" name="Bond Epoch" sourceId="" uuid="b4cf8877-ba1a-414c-a99d-de85a13fd66e">
+      <informativeText>Bond epoch counter — incremented on NVM3 wipe or bond purge. Plaintext read, no security required. Gateway reads this before trusting a cached LTK.</informativeText>
+      <value length="4" type="hex" variable_length="false">00000000</value>
+      <properties>
+        <read authenticated="false" bonded="false" encrypted="false"/>
+      </properties>
+    </characteristic>
   </service>
 
   <!--Analytics Service-->

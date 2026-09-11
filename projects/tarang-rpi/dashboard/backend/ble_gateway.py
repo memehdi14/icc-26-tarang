@@ -14,6 +14,7 @@ import time
 from typing import Any, Callable
 
 import httpx
+import struct as _struct
 from bleak import BleakClient, BleakScanner
 
 from ble_protocol import (
@@ -29,6 +30,7 @@ from ble_protocol import (
     REQUIRED_SERVICE_UUIDS,
     REQUIRED_SUBSCRIPTION_UUIDS,
     SnippetReassembler,
+    VITALS_BOND_EPOCH_UUID,
     VITALS_HR_UUID,
     VITALS_SPO2_UUID,
     VITALS_MOTION_CORR_UUID,
@@ -668,28 +670,96 @@ class BleGateway:
     def __init__(self, config: GatewayConfig, publisher: BackendPublisher) -> None:
         self.config = config
         self.publisher = publisher
+        # Bond registry: {MAC_UPPER: last_seen_epoch}
+        # Persists in memory across reconnects within one gateway process.
+        self._bond_registry: dict[str, int] = {}
         if config.session_id is None:
             LOG.warning(
                 "TARANG_SESSION_ID is unset; active sessions will be resolved from the backend"
             )
 
+    # ── Bond-Aware Helpers ────────────────────────────────────────────────
+
+    async def _is_device_bonded(self, client: BleakClient) -> bool:
+        """Check if BlueZ considers this device paired (has stored bond keys)."""
+        try:
+            # bleak >= 0.20 exposes .paired on the BlueZ backend
+            if hasattr(client, "paired"):
+                return bool(client.paired)
+            # Fallback: try the D-Bus property directly
+            if hasattr(client, "_backend") and hasattr(client._backend, "_device_path"):
+                from dbus_fast.aio import MessageBus
+                from dbus_fast import Message, MessageType
+                bus = await MessageBus(bus_type=client._backend._bus._bus_type).connect()
+                try:
+                    reply = await bus.call(
+                        Message(
+                            destination="org.bluez",
+                            path=client._backend._device_path,
+                            interface="org.freedesktop.DBus.Properties",
+                            member="Get",
+                            signature="ss",
+                            body=["org.bluez.Device1", "Paired"],
+                        )
+                    )
+                    if reply.message_type == MessageType.METHOD_RETURN:
+                        return bool(reply.body[0].value)
+                finally:
+                    bus.disconnect()
+        except Exception as exc:
+            LOG.debug("_is_device_bonded D-Bus check failed: %s", exc)
+
+        # Last resort: check our own registry
+        mac = str(client.address).upper()
+        return mac in self._bond_registry
+
+    async def _read_bond_epoch(self, client: BleakClient) -> int:
+        """Read the plaintext bond epoch characteristic (uint32 LE)."""
+        try:
+            data = await client.read_gatt_char(VITALS_BOND_EPOCH_UUID)
+            if len(data) >= 4:
+                return _struct.unpack_from("<I", data, 0)[0]
+        except Exception as exc:
+            LOG.debug("Could not read bond epoch: %s", exc)
+        return 0
+
+    async def _preflight_bond_check(
+        self, client: BleakClient, mac: str
+    ) -> None:
+        """Detect stale bond before the Central tries an LTK that no longer exists.
+
+        Reads the pod's plaintext bond_epoch GATT characteristic and compares
+        it to the last epoch we saw for this MAC.  If the pod was reflashed
+        (epoch changed), we purge the BlueZ bond so the next pair() call
+        starts a clean SMP handshake instead of failing with PIN_OR_KEY_MISSING.
+        """
+        mac_upper = mac.upper()
+        pod_epoch = await self._read_bond_epoch(client)
+        known_epoch = self._bond_registry.get(mac_upper)
+
+        if known_epoch is not None and pod_epoch != known_epoch:
+            LOG.warning(
+                "Pod epoch changed (%d -> %d) — cached bond is stale, purging",
+                known_epoch, pod_epoch,
+            )
+            try:
+                await client.unpair()
+            except Exception:
+                # unpair() on BlueZ calls RemoveDevice internally
+                _purge_bluez_cache(mac_upper)
+            # Give BlueZ time to process the removal
+            await asyncio.sleep(1.0)
+            self._bond_registry.pop(mac_upper, None)
+
+        self._bond_registry[mac_upper] = pod_epoch
+
     async def start_discovery(self) -> Any | None:
-        """Find TARANG pod by direct address lookup or advertised name prefix."""
+        """Find TARANG pod by address or advertised name prefix."""
+        loop = asyncio.get_running_loop()
+        found: asyncio.Future[Any] = loop.create_future()
         address = self.config.ble_address.upper() if self.config.ble_address else None
         prefix = self.config.name_prefix.upper() if self.config.name_prefix else None
 
-        # Fast-track: Direct MAC resolution (sub-500ms on BlueZ)
-        if address:
-            try:
-                LOG.info("Fast-probing TARANG pod by address (%s)...", address)
-                dev = await BleakScanner.find_device_by_address(address, timeout=3.5)
-                if dev:
-                    return dev
-            except Exception as e:
-                LOG.debug("Address lookup skipped: %s", e)
-
-        loop = asyncio.get_running_loop()
-        found: asyncio.Future[Any] = loop.create_future()
         LOG.info("Scanning for TARANG pod (target=%s, prefix=%s)...", address, prefix)
 
         def on_advertisement(device: Any, advertisement_data: Any) -> None:
@@ -716,7 +786,7 @@ class BleGateway:
             if device is None:
                 LOG.warning("Tarang device not found; retrying in %.1fs", reconnect_delay)
                 await asyncio.sleep(reconnect_delay)
-                reconnect_delay = min(10.0, reconnect_delay * 1.2)
+                reconnect_delay = min(30.0, reconnect_delay * 1.5)
                 continue
 
             session = GatewaySession(
@@ -733,18 +803,35 @@ class BleGateway:
                     device,
                     timeout=self.config.connect_timeout_s,
                 ) as client:
+                    # ── Bond-Aware Pairing ──────────────────────────
                     if self.config.pair:
-                        try:
-                            LOG.info("Requesting bond on the connected link")
-                            await client.pair()
-                            LOG.info("BLE pairing complete (Bonded & Encrypted)")
-                        except Exception as pair_exc:
-                            exc_msg = str(pair_exc)
-                            if "AlreadyExists" in exc_msg or "already" in exc_msg.lower():
-                                LOG.info("Device already paired in BlueZ: %s", exc_msg)
-                            else:
-                                LOG.warning("Pairing request note: %s", exc_msg)
-                        await asyncio.sleep(0.5)
+                        await self._preflight_bond_check(client, device.address)
+                        already_bonded = await self._is_device_bonded(client)
+
+                        if already_bonded:
+                            # Do NOT call pair() again. Encryption resumes
+                            # automatically off the stored LTK the moment a
+                            # bonded-permission attribute is touched.
+                            LOG.info(
+                                "Device already bonded (epoch=%d) — resuming "
+                                "encrypted link without re-pairing",
+                                self._bond_registry.get(device.address.upper(), 0),
+                            )
+                        else:
+                            LOG.info("No existing bond — initiating first-time pairing")
+                            try:
+                                await client.pair()
+                                LOG.info("BLE pairing complete (Bonded & Encrypted)")
+                                # Record the epoch for this MAC
+                                epoch = await self._read_bond_epoch(client)
+                                self._bond_registry[device.address.upper()] = epoch
+                            except Exception as pair_exc:
+                                exc_msg = str(pair_exc)
+                                if "AlreadyExists" in exc_msg or "already" in exc_msg.lower():
+                                    LOG.info("Device already paired in BlueZ: %s", exc_msg)
+                                else:
+                                    LOG.warning("Pairing request note: %s", exc_msg)
+                        await asyncio.sleep(0.3)
 
                     service_uuids = {service.uuid.lower() for service in client.services}
                     missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
