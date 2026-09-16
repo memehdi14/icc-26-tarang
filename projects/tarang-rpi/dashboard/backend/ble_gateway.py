@@ -919,49 +919,51 @@ class BleGateway:
                                         LOG.warning("Pairing request note: %s", exc_msg)
                             await asyncio.sleep(0.3)
 
-                    service_uuids = {service.uuid.lower() for service in client.services}
-                    missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
-                    if missing_services:
-                        raise RuntimeError(
-                            "Tarang GATT services missing: "
-                            + ", ".join(sorted(missing_services))
-                        )
-
-                    await self.publisher.synchronize_device(
-                        session.device_id,
-                        device.name or "Tarang Wearable",
-                        session.address,
-                    )
-                    if self.config.session_id is None:
-                        session.session_id = (
-                            await self.publisher.resolve_active_session(
-                                session.device_id
+                        # ── GATT Service Verification (inside BleakClient context) ──
+                        service_uuids = {service.uuid.lower() for service in client.services}
+                        missing_services = REQUIRED_SERVICE_UUIDS - service_uuids
+                        if missing_services:
+                            raise RuntimeError(
+                                "Tarang GATT services missing: "
+                                + ", ".join(sorted(missing_services))
                             )
+
+                        await self.publisher.synchronize_device(
+                            session.device_id,
+                            device.name or "Tarang Wearable",
+                            session.address,
                         )
+                        if self.config.session_id is None:
+                            session.session_id = (
+                                await self.publisher.resolve_active_session(
+                                    session.device_id
+                                )
+                            )
 
-                    LOG.info(
-                        "Connected and GATT verified (MTU=%s, session=%s)",
-                        client.mtu_size,
-                        session.session_id or "unassigned",
-                    )
-                    reconnect_delay = self.config.reconnect_delay_s
-                    await session.subscribe(client)
-                    session.publish_diagnostics(True)
-                    session.start_diagnostics()
-                    while client.is_connected:
-                        await asyncio.sleep(1.0)
-                    LOG.warning("BLE link disconnected by peer/controller. Reconnecting...")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                LOG.error("BLE session failed: %s", exc, exc_info=True)
-            finally:
-                await session.close()
-                session.publish_diagnostics(False)
+                        LOG.info(
+                            "Connected and GATT verified (MTU=%s, session=%s)",
+                            client.mtu_size,
+                            session.session_id or "unassigned",
+                        )
+                        reconnect_delay = self.config.reconnect_delay_s
+                        await session.subscribe(client)
+                        session.publish_diagnostics(True)
+                        session.start_diagnostics()
+                        # ── Keep-alive: poll until BleakClient reports disconnect ──
+                        while client.is_connected:
+                            await asyncio.sleep(1.0)
+                        LOG.warning("BLE link disconnected by peer/controller. Reconnecting...")
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    LOG.error("BLE session failed: %s", exc, exc_info=True)
+                finally:
+                    await session.close()
+                    session.publish_diagnostics(False)
 
-            jitter = random.uniform(0.0, 0.75)
-            LOG.info("Reconnecting in %.1fs", reconnect_delay + jitter)
-            await asyncio.sleep(reconnect_delay + jitter)
+                jitter = random.uniform(0.0, 0.75)
+                LOG.info("Reconnecting in %.1fs", reconnect_delay + jitter)
+                await asyncio.sleep(reconnect_delay + jitter)
         finally:
             self._agent.stop()
 
