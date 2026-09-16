@@ -38,16 +38,16 @@ if ! command -v curl >/dev/null 2>&1; then
     exit 1
 fi
 
-# Pre-cleanup: terminate any lingering processes from previous runs
+# Pre-cleanup: terminate any lingering processes and reset Bluetooth cleanly
 echo "[0/4] Terminating previous instances and resetting bluetooth..."
 pkill -f "uvicorn main:app" 2>/dev/null || true
 pkill -f "ble_gateway.py" 2>/dev/null || true
 pkill -f "next start" 2>/dev/null || true
 pkill -f "next-server" 2>/dev/null || true
 pkill -f "chromium" 2>/dev/null || true
-if command -v hciconfig >/dev/null 2>&1; then
-    hciconfig hci0 reset 2>/dev/null || true
-fi
+# Full BlueZ reset: hciconfig + remove stale device + rediscovery scan
+# Prevents BleakClient 35s connect timeout from stale BlueZ device objects
+bash "$SCRIPT_DIR/reset_bluetooth.sh" || true
 sleep 1
 
 PIDS=()
