@@ -1126,15 +1126,19 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
     }
   }
 
-  /* ── 1. Periodic Vitals Sync (every 2-3 seconds) ──────────────────── */
-  if (now_ms - last_vitals_send_ms >= 2500u) {
+  /* ── 1. Periodic Vitals Sync (every 2.5s or immediate on finger state change) ──── */
+  static bool s_last_sent_finger_present = false;
+  tarang_ppg_metrics_t ppg_metrics = {0};
+#if TARANG_ENABLE_PPG
+  (void)tarang_ppg_get_metrics(&ppg_metrics);
+#endif
+  bool finger_transition = (ppg_metrics.finger_present != s_last_sent_finger_present);
+
+  if ((now_ms - last_vitals_send_ms >= 2500u) || finger_transition) {
     last_vitals_send_ms = now_ms;
+    s_last_sent_finger_present = ppg_metrics.finger_present;
     uint16_t hr = 0u;
     uint8_t spo2 = 0u;
-    tarang_ppg_metrics_t ppg_metrics = {0};
-#if TARANG_ENABLE_PPG
-    (void)tarang_ppg_get_metrics(&ppg_metrics);
-#endif
     tarang_hr_source_t hr_source = TARANG_HR_SOURCE_NONE;
 #if TARANG_ENABLE_PPG
     if (tarang_ppg_is_found()) {

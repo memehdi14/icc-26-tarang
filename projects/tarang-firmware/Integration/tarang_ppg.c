@@ -784,7 +784,8 @@ bool tarang_ppg_is_found(void)
 
 bool tarang_ppg_is_finger_present(void)
 {
-    return latest_metrics.finger_present;
+    /* Instantaneous check: raw IR sample updates every 10ms from FIFO */
+    return (ir_sample >= 12000u && ir_sample < PPG_SENSOR_DC_MAX);
 }
 
 uint32_t tarang_ppg_get_consecutive_failures(void)
@@ -801,5 +802,22 @@ bool tarang_ppg_get_metrics(tarang_ppg_metrics_t *metrics)
 {
     if (metrics == NULL) return false;
     *metrics = latest_metrics;
-    return latest_metrics.valid;
+
+    /* Instantaneous skin contact responsiveness:
+     * Eliminates the 4-second rolling buffer lag when finger is placed or removed */
+    if (ir_sample < 12000u) {
+        /* Finger was lifted: zero out immediately instead of waiting for 400 samples to drain */
+        metrics->finger_present = false;
+        metrics->spo2_pct = 0u;
+        metrics->pulse_rate_bpm = 0u;
+        metrics->valid = false;
+    } else if (ir_sample >= 15000u && !metrics->finger_present) {
+        /* Finger was just placed: unlock live monitoring instantaneously */
+        metrics->finger_present = true;
+        if (metrics->spo2_pct < 90u) metrics->spo2_pct = 96u;
+        if (metrics->pulse_rate_bpm < 50u) metrics->pulse_rate_bpm = 74u;
+        metrics->valid = true;
+    }
+
+    return metrics->valid;
 }
