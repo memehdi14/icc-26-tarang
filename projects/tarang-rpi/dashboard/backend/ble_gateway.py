@@ -344,11 +344,11 @@ class GatewaySession:
         self._analytics_values: dict[str, float] = {
             "pvc_burden_pct": 0.0,
             "pac_burden_pct": 0.0,
-            "sdnn": 44.0,
-            "rmssd": 38.0,
-            "prr50": 12.0,
-            "ai_duty_cycle_pct": 1.2,
-            "em2_sleep_pct": 98.8,
+            "sdnn": 0.0,
+            "rmssd": 0.0,
+            "prr50": 0.0,
+            "ai_duty_cycle_pct": 0.8,
+            "em2_sleep_pct": 99.0,
         }
         self._diagnostics_task: asyncio.Task[None] | None = None
         self._event = ClinicalEventBuffer()
