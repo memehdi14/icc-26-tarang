@@ -137,6 +137,13 @@ The `projects/tarang-ml` codebase contains 40+ Jupyter experiments documenting t
 | **Float32 Unquantized** | Yes | **REJECTED** | Requires $> 160\text{ KB}$ Flash per model and relies on software floating-point emulation or FPU cycles, doubling inference energy draw. |
 | **Quantization-Aware Training (QAT)** | Yes | **REJECTED** | Added substantial training hyperparameter complexity with no statistically significant accuracy gain over representative PTQ calibration. |
 
+### 5.5 Runtime AI Safeguards: Why the AI Circuit Breaker is Set to Monitor-Only (`TARANG_ENABLE_AI_CIRCUIT_BREAKER = 0`)
+
+| Policy Mode | Behavior at >20% Suspicious Rate | Patient Safety Impact | Engineering Decision |
+| :--- | :--- | :--- | :--- |
+| **Active Bypass (`1`)** | Shuts down CNN inference; force-labels all subsequent beats as Normal ($N$). | **CRITICAL RISK:** During runs of Ventricular Tachycardia (VT) or rapid PVC bursts, the beat rate easily exceeds the 20% threshold. The circuit breaker would trip and mask the lethal arrhythmia as normal sinus rhythm! | **REJECTED** |
+| **Monitor-Only (`0`)** *(Chosen)* | Evaluates and logs the suspicious beat rate window, but continues running Tier-1 & Tier-2 CNN inference for all qualifying beats. | **SAFE & RESILIENT:** High abnormal burden continues to be analyzed by the neural network, guaranteeing that genuine life-threatening ventricular ectopy is captured and alerted. | **ADOPTED** |
+
 ---
 
 ## 6. Performance Metrics & Embedded Benchmarks

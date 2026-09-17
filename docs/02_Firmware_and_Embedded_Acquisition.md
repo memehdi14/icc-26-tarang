@@ -91,8 +91,17 @@ Low  (1)  HousekeepingTask     1024 bytes   Periodic 1000 ms (Battery/Temp)
    - Extracts 180-sample beat morphology centered on the detected R-peak.
    - Runs TFLite Micro Int8 inference via optimized CMSIS-NN kernels.
 
-4. **`BleTransmitTask`:**
-   - Serializes filtered waveforms and AI diagnosis into GATT notification packets and pushes to the Silicon Labs Bluetooth stack.
+4. **`BleTransmitTask` & Security Architecture:**
+   - Serializes filtered waveforms and AI diagnosis into GATT notification packets.
+   - Configures the Silicon Labs Security Manager (`sl_bt_sm_configure(0x0A, no_io)`) with flag `0x02` (encryption requires bonding) and `0x08` (confirm bonding events).
+   - Enforces a **16-byte (128-bit) minimum encryption key size** (`sl_bt_sm_set_minimum_key_size(16)`).
+   - Manages an 8-slot LRU bonding store (`sl_bt_sm_store_bonding_configuration(8, 2)`).
+   - Employs an **NVM3 Bond Epoch counter** (`TARANG_NVM3_KEY_BOND_EPOCH`): increments upon flash re-initialization so central gateways immediately invalidate stale Long Term Keys (LTKs) without deadlock.
+   - Dual-gate authorization: Service C clinical events are gated by `tarang_service_c_authorized`, verifying link encryption mode $\ge \text{Mode 1 Level 2}$ prior to releasing diagnostic arrhythmia traces.
+
+5. **`PpgDriver` (MAX30102):**
+   - Implements closed-loop Automatic Gain Control (AGC) dynamically tuning LED drive currents (LED1_PA / LED2_PA) between $0x0E$ and $0x7E$ to maintain target IR DC within optimal ADC dynamic range ($[40000, 180000]$).
+   - Reflectance pulse oximetry calibration: $\text{SpO}_2\% = 104.0 - 17.0 \times R$, specifically tailored to wrist/dorsal hand optical path lengths.
 
 ---
 

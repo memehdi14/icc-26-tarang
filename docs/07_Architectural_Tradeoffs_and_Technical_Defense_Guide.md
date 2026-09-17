@@ -148,6 +148,35 @@ graph TD
 
 ---
 
+### 5.3 Why Selective GATT Field Encryption (AES-128-CCM on Service C) vs. Blanket Full-Link Encryption?
+
+| Security Dimension | Selective GATT Field Encryption *(Tarang Chosen)* | Blanket Full-Link Encryption *(Alternative)* | Clinical & Engineering Rationale |
+| :--- | :--- | :--- | :--- |
+| **Emergency Triage Availability** | **Zero-Latency:** Service A vitals (HR, SpO2) stream sub-second upon physical connection without waiting for cryptographic negotiation or user PIN entry. | **Blocked:** Monitor displays "Connecting / Authenticating..." while pairing keys are exchanged; delays emergency vital sign visibility. | In acute clinical settings, immediate pulse and oxygenation telemetry cannot be blocked behind an SMP handshake. |
+| **PHI / Diagnostic Confidentiality** | **Strictly Protected:** Service C (Lead-I ECG snippets, arrhythmia classifications, beat annotations) enforces **AES-128-CCM** with `bonded="true" encrypted="true"` and firmware gating. | All packets encrypted equally, including generic device info and battery status. | High-risk diagnostic waveforms (Protected Health Information under HIPAA/GDPR) are mathematically shielded over the air, while generic telemetry remains nimble. |
+| **Resilience to Stale Bonds** | **High Availability Fallback:** If pod is reflashed or central loses LTK, gateway falls back to unbonded vitals streaming while pod alerts the central via `vitals_bond_epoch` to re-pair. | **Fatal Disconnect Loop:** GATT stack rejects all connection traffic with `0x1005 (Insufficient Authentication)`, causing complete bedside monitoring blackout. | Avoids device bricking / reconnection deadlocks during high-stakes demonstrations and clinical rotations. |
+| **Radio Power & MIC Overhead** | Only burst diagnostic waveforms incur AES-CCM Message Integrity Check (MIC) and crypto payload expansion; 1 Hz vitals remain lightweight. | Continuous MIC packet expansion on every 1 Hz keepalive packet increases active TX window and battery consumption. | Extends wearable patch runtime by conserving Cortex-M33 crypto accelerator duty cycles. |
+
+---
+
+### 5.4 Why Monitor-Only AI Circuit Breaker (`TARANG_ENABLE_AI_CIRCUIT_BREAKER = 0`)?
+- **The Pitfall of Active Bypassing:** An active circuit breaker that force-disables CNN inference when suspicious beats exceed 20% would trip during sustained Ventricular Tachycardia (VT) or rapid PVC runs—precisely when abnormal beats dominate! This would convert life-threatening VT runs into silent Normal ($N$) classifications.
+- **Tarang Solution:** The circuit breaker operates in **Monitor-Only** mode: it logs suspicious beat density to telemetry, but allows Tier-1 Gate and Tier-2 SV-Head inference to evaluate all qualifying beats.
+
+---
+
+### 5.5 Why Dorsal Wrist Reflectance Calibration ($104 - 17R$) vs. Fingertip Transmission ($110 - 25R$)?
+- **Optical Physics:** Fingertip pulse oximeters measure light *transmitted* through 8–12 mm of vascular tissue, yielding higher Red/IR modulation depth ($R \approx 0.6–1.0$). 
+- **Reflectance Geometry:** Wrist/dorsal sensors measure backscattered light reflected from shallow subdermal capillary beds (1–2 mm depth), producing lower $R$ values. Applying the transmission formula ($110 - 25R$) causes normal SpO2 to read 103%–108%, clamped falsely to 100%. The recalibrated empirical curve ($104 - 17R$) accurately centers healthy room-air blood oxygen saturation at 96%–99%.
+
+---
+
+### 5.6 Why Kiosk Autoplay Flag (`--autoplay-policy=no-user-gesture-required`)?
+- **Browser Security Policy vs. Medical Alarms:** Modern Chromium blocks `AudioContext.resume()` until a physical click/touch gesture occurs to stop annoying webpage auto-sound.
+- **Clinical Reality:** In a dedicated medical kiosk running unattended 24/7, an emergency arrhythmia event (VT, Asystole) must sound immediately via the Web Audio API without waiting for a nurse or patient to touch the glass first. Passing `--autoplay-policy=no-user-gesture-required` in `start_kiosk.sh` guarantees zero-latency audible alarming.
+
+---
+
 ## 6. Clinical Hub & Software Stack Selection
 
 ### 6.1 Backend: Why FastAPI + WebSockets + SQLite vs. Alternatives?

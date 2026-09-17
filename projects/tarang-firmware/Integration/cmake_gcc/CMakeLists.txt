@@ -26,6 +26,14 @@ add_executable(Integration
 
 target_include_directories(Integration PUBLIC
     # Add additional include paths here
+
+    # Workaround: These paths are declared in Integration.cmake (auto-generated
+    # by SLC) for the slc OBJECT library but are silently dropped from actual
+    # compiler invocations by Ninja Multi-Config. sl_common.h lives in
+    # platform_core/platform/common/inc -- without it sl_btctrl_init.c fails.
+    "${SDK_PATH}/platform_core/platform/common/inc"
+    "${SDK_PATH}/platform_core/platform/Device/SiliconLabs/EFR32MG26/Include"
+    "${SDK_PATH}/bgapi_protocol/protocol/inc"
 )
 
 target_compile_definitions(Integration PUBLIC

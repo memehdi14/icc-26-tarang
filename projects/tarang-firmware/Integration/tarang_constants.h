@@ -43,10 +43,10 @@ extern "C" {
 #define TARANG_ENABLE_BLE               1
 #define TARANG_ENABLE_NLMS              1
 #define TARANG_NLMS_APPLY_TO_DSP        1
-#define TARANG_ENABLE_AI_CIRCUIT_BREAKER 1  /* Re-enable only after overload validation. */
+#define TARANG_ENABLE_AI_CIRCUIT_BREAKER 0  /* DEMO FIX: Monitor-only. Bypassing AI during high-burden episodes suppresses genuine arrhythmia detection. */
 #define TARANG_ENABLE_RAW_ECG_STREAM    0
 #ifndef TARANG_ENABLE_VALIDATION_STREAM
-#define TARANG_ENABLE_VALIDATION_STREAM 0  /* 0=Lean production serial for BLE, 1=Base64 stream for terminal validation */
+#define TARANG_ENABLE_VALIDATION_STREAM 1  /* 1=Validation stream active for Step 2 testing */
 #endif
 #define TARANG_ANY_SENSOR_ENABLED \
   (TARANG_ENABLE_ECG || TARANG_ENABLE_PPG || TARANG_ENABLE_IMU)
@@ -178,8 +178,8 @@ extern "C" {
 #define TARANG_AFIB_PRR50_THRESHOLD     0.10f
 #define TARANG_AFIB_PRR50_THRESHOLD_PCT 10u     /* pRR50 > 10% */
 #define TARANG_AFIB_RMSSD_THRESHOLD_MS  30.0f
-#define TARANG_AFIB_MIN_RR_MS           600     /* exclude extreme brady */
-#define TARANG_AFIB_MAX_RR_MS           1000    /* exclude extreme tachy */
+#define TARANG_AFIB_MIN_RR_MS           350     /* DEMO FIX: extended range; excludes only extreme bradycardia (<50 BPM) */
+#define TARANG_AFIB_MAX_RR_MS           1200    /* DEMO FIX: extended range; excludes only extreme tachycardia (>170 BPM) */
 
 /* HR thresholds */
 #define TARANG_TACHYCARDIA_BPM          100

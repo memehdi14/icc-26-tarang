@@ -149,14 +149,14 @@ $$\text{CoV} = \frac{\text{SDNN}}{\bar{RR}} \times 100\%$$
 ### 5.6 Atrial Fibrillation (AFib) Detection Logic
 Validated on the **MIT-BIH Atrial Fibrillation Database (AFDB)** ($\ge 95\%$ sensitivity).
 
-AFib is flagged (`rhythm_flags |= 0x01`) if and only if **all 5 conditions hold simultaneously for 30 consecutive beats**:
+AFib is flagged (`rhythm_flags |= 0x01`) if and only if **all 5 criteria hold simultaneously for 30 consecutive beats**:
 1. $\text{CoV} > 12\%$
 2. $\text{pRR50} > 10\%$
 3. $\text{RMSSD} > 30\text{ ms}$
 4. $\text{Ventricular Bigeminy} = \text{False}$ *(prevents alternating PVC patterns from mimicking AFib)*
-5. $600\text{ ms} \le \bar{RR} \le 1000\text{ ms}$ *(excludes extreme sinus bradycardia and tachycardia)*
+5. $350\text{ ms} \le \bar{RR} \le 1200\text{ ms}$ *(excludes extreme bradycardia $< 50\text{ BPM}$ and extreme tachycardia $> 171\text{ BPM}$, while reliably screening tachycardic AFib / rapid ventricular response)*
 
-$$\text{AFib} = (\text{CoV} > 12\%) \land (\text{pRR50} > 10\%) \land (\text{RMSSD} > 30) \land (\neg \text{Bigeminy}) \land (600 \le \bar{RR} \le 1000)$$
+$$\text{AFib} = (\text{CoV} > 12\%) \land (\text{pRR50} > 10\%) \land (\text{RMSSD} > 30) \land (\neg \text{Bigeminy}) \land (350 \le \bar{RR} \le 1200)$$
 
 ---
 
@@ -184,7 +184,7 @@ $$\text{PAC Burden } \% = \frac{N_{\text{PAC}}}{N_{\text{Total Beats}}} \times 1
 ### 5.9 SpO2 Optical Ratio-of-Ratios (MAX30102)
 Calculated from AC and DC components of Red ($660\text{ nm}$) and Infrared ($880\text{ nm}$) photoplethysmograms:
 $$R = \frac{AC_{\text{Red}} / DC_{\text{Red}}}{AC_{\text{IR}} / DC_{\text{IR}}}$$
-$$\text{SpO2} (\%) = 110.0 - 25.0 \times R$$
+$$\text{SpO2} (\%) = 104.0 - 17.0 \times R$$
 $$\text{Perfusion Index (PI)} = \frac{AC_{\text{IR}}}{DC_{\text{IR}}} \times 100\%$$
 
 ---

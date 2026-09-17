@@ -237,8 +237,12 @@ class VCOMTelemetryStream:
                 off = 9 + i * 13
                 raw = int.from_bytes(payload[off:off+2], "little")
                 clean = int.from_bytes(payload[off+2:off+4], "little")
-                bp = int.from_bytes(payload[off+4:off+6], "little", signed=True) * 1000.0
-                z = int.from_bytes(payload[off+6:off+8], "little", signed=True) / 100.0
+                # Scales must mirror tarang_pipeline.c emit_validation_ecg_sample():
+                # bandpassed is encoded at scale=1.0, zscored at scale=1000.0.
+                # These were previously swapped/wrong (*1000.0 and /100.0),
+                # inflating decoded z-scores by 10x and bandpass by 1000x.
+                bp = int.from_bytes(payload[off+4:off+6], "little", signed=True) / 1.0
+                z = int.from_bytes(payload[off+6:off+8], "little", signed=True) / 1000.0
                 mwi = int.from_bytes(payload[off+8:off+10], "little")
                 th = int.from_bytes(payload[off+10:off+12], "little")
                 valid = bool(payload[off+12])

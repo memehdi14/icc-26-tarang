@@ -130,7 +130,17 @@ static float rolling_norm_step(dsp_rolling_norm_t *rn, float x)
   double std = sqrt(var);
   if (std < 1e-8) std = 1e-8;
 
-  return (float)((x - mu) / std);
+  float z = (float)((x - mu) / std);
+  /* BUG FIX: a long flat/railed run (disconnected lead, saturated input)
+   * drives the variance estimate toward zero; the very next real sample
+   * then produces a z-score of roughly sqrt(window_size) (~86 for the 30s
+   * window here) regardless of how small the actual amplitude change is.
+   * That fake spike propagates into the displayed waveform, the CNN's
+   * 130-sample beat window, and R-peak recentering. Bound it — genuine
+   * QRS complexes never approach this magnitude after bandpassing. */
+  if (z > 12.0f) z = 12.0f;
+  if (z < -12.0f) z = -12.0f;
+  return z;
 }
 
 /*******************************************************************************
@@ -246,10 +256,17 @@ static void accept_peak(dsp_adaptive_thresh_t *th, int peak_idx,
  * Port of adaptive_threshold_step() from Python reference (Phase 2 refactor).
  ******************************************************************************/
 static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
-                                 float mwi_val, float slope_est)
+                                 float mwi_val, float slope_est,
+                                 float *accepted_peak_val_out,
+                                 float *spki_before_out)
 {
   int accepted = -1;
   int idx = th->current_idx;
+  /* Snapshot SPKI before this call mutates it, so the caller can compute a
+   * real detection-confidence ratio (accepted peak vs. the pre-existing
+   * running baseline) instead of comparing SPKI to itself. */
+  float spki_before = th->SPKI;
+  if (spki_before_out) *spki_before_out = spki_before;
 
   /* Decrement refractory */
   if (th->refractory_remaining > 0) th->refractory_remaining--;
@@ -326,6 +343,7 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
       }
       if (th->candidates[best_i].val > th->TH2) {
         accepted = th->candidates[best_i].idx;
+        if (accepted_peak_val_out) *accepted_peak_val_out = th->candidates[best_i].val;
         accept_peak(th, accepted, th->candidates[best_i].val, slope_est);
       }
     }
@@ -346,6 +364,7 @@ static int adaptive_thresh_step(dsp_adaptive_thresh_t *th,
 
       if (twave_ok) {
         accepted = peak_idx;
+        if (accepted_peak_val_out) *accepted_peak_val_out = peak_val;
         accept_peak(th, peak_idx, peak_val, slope_est);
       } else {
         /* T-wave: update noise */
@@ -488,10 +507,18 @@ static bool extract_beat(tarang_dsp_state_t *state, int refined_peak,
   if (det_conf > 1.0f) det_conf = 1.0f;
   beat->signal_quality = (uint8_t)(det_conf * 255.0f);
 
-  /* Low quality during startup (first 30s) */
-  if (refined_peak < DSP_NORM_WINDOW) {
-    if (beat->signal_quality > 128) beat->signal_quality = 128;
+  /* Step 2 Diagnostic Probe: measure real z-score peak magnitude and SQI */
+  float peak_abs_z = 0.0f;
+  for (int i = 0; i < TARANG_BEAT_WINDOW_SIZE; i++) {
+    float v = fabsf(beat->waveform[i]);
+    if (v > peak_abs_z) peak_abs_z = v;
   }
+  printf("[ZCHECK] peak_abs_z=%.2f sqi=%u\r\n", peak_abs_z, beat->signal_quality);
+
+  /* DEMO FIX: Removed 30s startup SQI clamp. The DSP warm-up guard
+   * (warmup_samples = 8 beats) already prevents garbage detections.
+   * Clamping SQI to 128 here caused a 30-second clinical blackout
+   * where TARANG_SQI_MIN (128) was met only at the exact boundary. */
 
   beat->r_peak_sample_idx = (uint32_t)refined_peak;
   beat->valid = true;
@@ -670,7 +697,10 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
 
   /* ── Step 9: Adaptive threshold — R-peak detection ──────────────── */
   float slope_est = fabsf(y_deriv);
-  int accepted_idx = adaptive_thresh_step(&state->thresh, y_mwi, slope_est);
+  float accepted_peak_val = 0.0f;
+  float spki_before_accept = 0.0f;
+  int accepted_idx = adaptive_thresh_step(&state->thresh, y_mwi, slope_est,
+                                           &accepted_peak_val, &spki_before_accept);
   state->debug_sample.threshold_th1 = state->thresh.TH1;
 
   /* ── Step 10-12: If peak detected, add to pending ───────────────── */
@@ -680,8 +710,15 @@ bool tarang_dsp_process_sample(tarang_dsp_state_t *state,
     for (int i = 0; i < DSP_MAX_PENDING; i++) {
       if (!state->pending[i].active) {
         state->pending[i].mwi_peak_idx = accepted_idx;
-        state->pending[i].mwi_peak_val = state->thresh.SPKI; /* approximation */
-        state->pending[i].spki_at_detection = state->thresh.SPKI;
+        /* BUG FIX: both fields used to be set to state->thresh.SPKI, making
+         * det_conf = mwi_peak_val/spki_at_det tautologically 1.0 for every
+         * beat, so signal_quality was always 255 regardless of real
+         * detection confidence and the TARANG_SQI_MIN gate never filtered
+         * anything. Use the actual accepted peak vs. the pre-acceptance
+         * SPKI baseline instead. */
+        state->pending[i].mwi_peak_val = accepted_peak_val;
+        state->pending[i].spki_at_detection =
+            (spki_before_accept > 0.0f) ? spki_before_accept : accepted_peak_val;
         state->pending[i].active = true;
         slot_found = true;
         break;

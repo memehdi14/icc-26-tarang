@@ -67,36 +67,36 @@ Telemetry packets are streamed via **Bluetooth Low Energy (BLE 5.2)** to a **Ras
 
 ---
 
-## 3. BLE Telemetry Protocol & Framing
+## 3. BLE Telemetry Protocol & Security Architecture
 
-The sensor node exposes a proprietary GATT Service (`128-bit UUID`) with dedicated characteristics for high-frequency waveforms, beat events, and diagnostic alerts:
+The sensor node exposes three dedicated 128-bit primary GATT services with selective encryption:
 
-### 3.1 Packet Formats
+### 3.1 GATT Services & Packet Formats
 
-1. **ECG Raw Waveform Notification Packet (16–20 Bytes):**
-   - `[0..1]`: Packet Sequence Number (`uint16_t`)
-   - `[2..3]`: Millisecond Hardware Timestamp (`uint16_t`)
-   - `[4..15]`: 6x 16-bit Filtered ECG Raw ADC Samples (24-bit aligned)
-   - `[16]`: Lead-Off & Electrode Contact Status (`uint8_t`)
-   - `[17..19]`: Motion Activity Index & Battery Status
+1. **Service A: Vitals Service (`544e937a-82f3-4395-b62b-b72bdea94c75`) [Unencrypted / Open Fallback]**
+   - **Heart Rate (`b4cf...66a`):** Instantaneous HR (`uint16_t` BPM x 10) — 1 Hz notify.
+   - **SpO2 (`b4cf...66b`):** Reflectance-calibrated SpO2 (`uint8_t` %, derived via $104 - 17R$).
+   - **Timestamp (`b4cf...66c`):** Millisecond hardware counter (`uint32_t`).
+   - **Motion and Correlation (`b4cf...66d`):** IMU dynamic acceleration magnitude (mg) and Pearson correlation $r \times 1000$ (`int16_t`).
+   - **Bond Epoch (`b4cf...66e`):** NVM3 epoch counter read before trusting cached LTKs to prevent stale bond deadlocks.
 
-2. **PPG & SpO2 Notification Packet (12 Bytes):**
-   - `[0..1]`: PPG Sequence ID
-   - `[2..5]`: AC/DC Red Channel Magnitude (`uint32_t`)
-   - `[6..9]`: AC/DC IR Channel Magnitude (`uint32_t`)
-   - `[10]`: Calculated SpO2 Percentage (`uint8_t`, e.g., 98%)
-   - `[11]`: Perfusion Index (PI) indicator
+2. **Service B: Analytics Service (`655f937a-82f3-4395-b62b-b72bdea94c75`) [Periodic Rollups]**
+   - 5-minute periodic notification rollups: PVC Burden (`uint8_t` %), PAC Burden (`uint8_t` %), SDNN (`uint16_t` ms), RMSSD (`uint16_t` ms), pRR50 (`uint8_t` %), AI Duty Cycle (%), and EM2 Sleep (%).
 
-3. **Beat & Arrhythmia Event Packet (8 Bytes - Triggered on R-Peak):**
-   - `[0..1]`: R-Peak Sample Index / Timestamp
-   - `[2..3]`: Instantaneous R-R Interval (ms)
-   - `[4]`: Instantaneous Heart Rate (BPM)
-   - `[5]`: Classification Label:
-     - `0x00`: Normal Sinus Beat ($N$)
-     - `0x01`: Supraventricular Ectopic Beat ($S$)
-     - `0x02`: Ventricular Ectopic Beat ($V$)
-     - `0xFF`: Noise / Motion Artifact Gated
-   - `[6..7]`: Classifier Softmax Probability / Confidence (`uint16_t`)
+3. **Service C: Clinical Event Service (`7660937a-82f3-4395-b62b-b72bdea94c75`) [AES-128-CCM Bonded & Encrypted]**
+   - **Rhythm Status (`d6eb...88a`):** Bitfield flags (AFib, VT, Sinus Tach, Bigeminy, Trigeminy, Couplet, Triplet) — `bonded="true" encrypted="true"`.
+   - **Event Meta (`d6eb...88b`):** Event ID, anomaly classification code, confidence score ($0–255$), hardware timestamp (`uint64_t`).
+   - **ECG Snippet Chunks (`d6eb...88c`):** On-demand 2.5-second (500 samples @ 250 Hz) high-resolution diagnostic Lead-I ECG strip pushed in sequential 240-byte DLE frames.
+   - **Beat Annotations (`d6eb...88d`):** Per-beat timing fiducials, classes ($N$, $S$, $V$), and confidence values.
+   - **Event Ticker (`d6eb...88e`):** Real-time anomaly notification ticker for bedside UI priority interrupts.
+
+### 3.2 Security Architecture: Why Selective Field-Level Encryption?
+- **Link Security:** BLE Security Mode 1, Level 2 (Unauthenticated pairing with encryption) or Level 3 (Authenticated), enforcing **AES-128-CCM** using the EFR32MG26 hardware cryptographic accelerator with a mandatory **16-byte (128-bit) minimum key size**.
+- **Dual-Layer Enforcement:** Service C characteristics require both GATT attribute permissions (`bonded="true" encrypted="true"`) and firmware-level gate authorization (`tarang_service_c_authorized`) which verifies `security_mode >= Level 2` and `key_size >= 16`.
+- **Selective Encryption Rationale:**
+  - *Zero-Latency Triage:* Service A vitals (HR, SpO2) stream immediately upon connection without waiting for pairing handshakes.
+  - *PHI Protection:* High-risk diagnostic ECG waveforms and rhythm events (Protected Health Information) are encrypted to meet HIPAA/GDPR standards.
+  - *High Availability:* If bond keys become stale after pod reflash, vitals continue streaming in fallback mode while re-pairing is negotiated.
 
 ---
 

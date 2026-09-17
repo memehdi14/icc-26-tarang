@@ -37,6 +37,7 @@ The BLE gateway is implemented using Python’s `bleak` asynchronous BLE library
 
 ### 2.1 Key Operational Features:
 - **Auto-Discovery & Pairing:** Scans for advertising packets matching the Tarang device name or GATT service UUID (`128-bit UUID`).
+- **Bonded Security & Fallback Subscription:** Negotiates BLE pairing and requests notifications on Service C (Clinical Events). If bonding or link encryption is delayed or fails (e.g. stale bond after pod reflash), the gateway gracefully falls back to unbonded streaming of Service A vitals (HR, SpO2), guaranteeing clinical continuity.
 - **Resilient Reconnection Engine:** Implements an exponential backoff auto-reconnection loop. If Bluetooth connection drops (e.g. patient walks out of range), the gateway retains current session state and automatically resumes ingestion upon re-entry.
 - **Binary Packet Deserialization:** Unpacks binary telemetry frames using Python `struct.unpack`, validating packet sequence IDs to detect any missing packets before pushing to the backend queue.
 
@@ -75,14 +76,15 @@ The backend runs on **FastAPI + Uvicorn** on port `8000`:
 
 ---
 
-## 4. Next.js 14 Bedside Clinical Dashboard
+## 4. Next.js 14 Bedside Clinical Dashboard & Kiosk Deployment
 
 Located in `projects/tarang-rpi/dashboard/frontend`:
 
 ### 4.1 UI Design System & Aesthetics:
 - **Dark Mode Clinical Theme:** Deep slate background (`#0B0F17`) with high-contrast physiological waveforms (Emerald Green for ECG, Crimson Red for PPG Plethysmogram, Gold/Amber for Arrhythmia warnings).
 - **60 FPS HTML5 Canvas Rendering:** Directly renders rolling ECG strip sweeps on HTML5 `<canvas>`, bypassing React DOM re-render overhead for buttery-smooth waveform motion.
-- **Audio Alarm Engine:** Web Audio API sound generator emitting standardized IEC 60601-1-8 medical alarm tones upon detection of Ventricular Ectopic ($V$) bursts or Lead-Off events.
+- **Audio Alarm Engine & Autoplay Bypass:** Web Audio API sound generator emitting standardized IEC 60601-1-8 medical alarm tones upon detection of Ventricular Ectopy ($V$) or Lead-Off events.
+  - *Kiosk Autoplay Policy:* Launched via `start_kiosk.sh` with `--autoplay-policy=no-user-gesture-required` so critical audio alarms play immediately upon system power-up without requiring an initial touch interaction.
 
 ---
 

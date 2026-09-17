@@ -106,17 +106,22 @@ Tarang uses an embedded implementation of the clinical gold-standard Pan-Tompkin
 | **Neural Peak Detector (1D-CNN)** | Yes | **REJECTED** | Running continuous deep learning inference on every single sample drains battery rapidly and risks catastrophic failure on out-of-distribution baseline wander. |
 | **Continuous Wavelet Transform (CWT)**| Yes | **REJECTED** | Complex float arithmetic exceeds the real-time budget when running concurrently with BLE and sensor I2C communication. |
 
+### 5.4 Signal Quality Index (SQI) & Boot Warmup Initialization
+- **Elimination of 30-Second Blackout:** Previous iterations clamped `signal_quality` to $\le 128$ for the first 30 seconds ($7500$ samples @ 250 Hz). Because the downstream clinical event engine strictly requires $\text{SQI} \ge 128$ (`TARANG_SQI_MIN`) to qualify incoming beats, this created a complete 30-second post-boot telemetry blackout.
+- **Current Architecture:** The Pan-Tompkins pipeline utilizes a deterministic 8-beat warmup window ($2000$ samples $\approx 8\text{ s}$ via `warmup_samples`). Once $SPKI$ and $NPKI$ thresholds stabilize, beats are emitted with true calculated confidence ($MWI / SPKI$), enabling immediate clinical telemetry within 8 seconds of device power-on without artificial degradation.
+
 ---
 
 ## 6. PPG SpO2 Extraction & Pulse Oximetry
 
 The MAX30102 sensor samples Red ($660 \text{ nm}$) and Infrared ($880 \text{ nm}$) photoplethysmography at 100 Hz:
 
-1. **AC/DC Component Separation:** Uses low-pass exponential moving averaging (EMA, $\alpha = 0.01$) to extract constant tissue absorption ($DC$), and high-pass subtraction to isolate pulsating arterial blood volume ($AC$).
+1. **AC/DC Component Separation:** Uses cascaded bandpass filtering (0.5 – 5.0 Hz IIR) and closed-loop LED AGC to stabilize baseline absorption ($DC$) and isolate pulsatile arterial peaks ($AC$).
 2. **Ratio-of-Ratios ($R$):**
    $$R = \frac{AC_{Red} / DC_{Red}}{AC_{IR} / DC_{IR}}$$
-3. **Empirical Calibration Curve:**
-   $$\text{SpO}_2\% = 110.0 - 25.0 \times R$$
+3. **Reflectance Empirical Calibration Curve:**
+   $$\text{SpO}_2\% = 104.0 - 17.0 \times R$$
+   *(Note: The conventional fingertip transmission formula $110 - 25R$ was recalibrated to $104 - 17R$ for dorsal wrist reflectance optics, preventing systematic 3–8% overestimation).*
 4. **Perfusion Index (PI):**
    $$PI = \left( \frac{AC_{IR}}{DC_{IR}} \right) \times 100\%$$
    *A reading with $PI < 0.3\%$ triggers an "Electro-Optical Contact Warning" on the bedside dashboard.*
