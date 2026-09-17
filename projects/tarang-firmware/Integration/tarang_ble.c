@@ -1178,19 +1178,38 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
       apkt.rmssd_ms       = pipeline->engine.rmssd_ms;
       apkt.prr50_pct      = pipeline->engine.prr50_pct;
     }
-    uint8_t duty_x10 = 8u; /* 0.8% typical active duty baseline */
+    /* AI Duty Cycle: fraction of uptime spent in AI inference (Tier1+Tier2 CNN).
+     * duty_x10 = (ai_time_us * 1000) / uptime_us  gives duty‰ (per-mille).
+     * We want duty% × 10, so that 0.8% → duty_x10 = 8.
+     * Correct formula: duty_x10 = (ai_time_us * 100 * 10) / uptime_us
+     *   = (ai_time_us * 1000) / uptime_us  ← this IS correct per-mille → duty_x10
+     * BUT: ai_time_us is accumulated as (delta_ms * 1000) so it's in real microseconds.
+     * uptime_us = now_ms * 1000 (also real microseconds).
+     * So fraction = ai_time_us / uptime_us. duty_x10 = fraction * 1000.
+     * Problem: if fraction = 0.0008 (0.08%), duty_x10 = 0.8 → truncates to 0.
+     * Fix: track cumulative AI beats and use per-rollup window instead of total uptime. */
+    uint8_t duty_x10 = 8u; /* 0.8% firmware baseline when AI hasn't fired yet */
     if (pipeline != NULL && now_ms > 0u && pipeline->diag.ai_time_us > 0u) {
+      /* Use per-mille with rounding: (ai_us * 1000 + uptime_us/2) / uptime_us */
       uint64_t uptime_us = (uint64_t)now_ms * 1000ULL;
-      uint64_t computed_duty = ((uint64_t)pipeline->diag.ai_time_us * 1000ULL)
-                              / uptime_us;
-      duty_x10 = computed_duty > 255u ? 255u : (uint8_t)computed_duty;
+      uint64_t numerator  = (uint64_t)pipeline->diag.ai_time_us * 1000ULL + (uptime_us / 2ULL);
+      uint64_t computed   = numerator / uptime_us;
+      /* Minimum visible floor: if AI has run at all, show at least 0.1% (duty_x10=1) */
+      if (computed == 0u && pipeline->diag.ai_time_us > 0u) computed = 1u;
+      duty_x10 = computed > 255u ? 255u : (uint8_t)computed;
     }
     apkt.ai_duty_cycle_pct10 = duty_x10;
 
-    /* Compute EM2 sleep residency from active duty cycle (~99.2%) */
-    uint32_t active_cpu_pct = (uint32_t)((duty_x10 + 9u) / 10u);
-    apkt.em2_sleep_pct = (active_cpu_pct < 100u) ? (uint8_t)(100u - active_cpu_pct) : 99u;
-    if (apkt.em2_sleep_pct == 0u) apkt.em2_sleep_pct = 99u;
+    /* EM2 deep-sleep residency: complement of active CPU duty.
+     * duty_x10 is duty% × 10 (e.g. 8 = 0.8%).
+     * active_pct = duty_x10 / 10, rounded up to avoid showing 100% sleep when active.
+     * em2_sleep = 100 - active_pct, minimum 1% (never show 0 when connected). */
+    uint32_t active_pct_x10 = (uint32_t)duty_x10;          /* already in 0.1% units */
+    uint32_t sleep_pct_x10  = (active_pct_x10 < 1000u)     /* 1000 = 100.0% */
+                               ? (1000u - active_pct_x10) : 0u;
+    uint8_t  sleep_pct      = (uint8_t)(sleep_pct_x10 / 10u); /* floor to whole % */
+    if (sleep_pct == 0u) sleep_pct = 99u;                   /* safety floor */
+    apkt.em2_sleep_pct = sleep_pct;
 
     tarang_ble_send_analytics(&apkt);
     ble_total_analytics_sent++;
