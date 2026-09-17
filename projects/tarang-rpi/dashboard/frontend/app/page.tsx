@@ -271,7 +271,7 @@ export default function Page() {
           const packetSessionId = raw?.data?.sessionId ?? raw?.event?.sessionId ?? undefined;
           // In single-pod bedside kiosk mode, prioritize live patient vitals even if session ID epoch is transitioning
           if (currentSessionId && packetSessionId && packetSessionId !== currentSessionId) {
-            if (raw.type !== 'vitals_sample' && raw.type !== 'diagnostics') return;
+            if (raw.type !== 'vitals_sample' && raw.type !== 'diagnostics' && raw.type !== 'analytics_5min') return;
           }
 
           if (raw.type === 'vitals_sample' && raw.data) {
