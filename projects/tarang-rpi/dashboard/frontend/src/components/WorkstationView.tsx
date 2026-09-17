@@ -73,27 +73,27 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
   return (
     <div className="view-frame view-enter">
       {/* 1. Header / Synchronized Status */}
-      <header className="view-header mb-4">
+      <header className="view-header mb-2 sm:mb-3">
         <div>
-          <h1 className="view-title">Clinical Telemetry Workstation</h1>
-          <p className="text-xs text-[var(--muted)] mt-0.5">
+          <h1 className="view-title text-base sm:text-lg font-bold">Clinical Telemetry Workstation</h1>
+          <p className="text-[11px] text-[var(--muted)] mt-0.5 max-sm:hidden">
             Continuous real-time physiological rhythm analysis & edge-AI arrhythmia surveillance
           </p>
         </div>
         <div className="text-right max-sm:text-left">
-          <p className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Last synchronized</p>
+          <p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Last synchronized</p>
           <p className="font-mono text-xs font-bold text-[var(--ink)] mt-0.5">{formatTime(vitals.ts)}</p>
         </div>
       </header>
 
       {/* 2. Rhythm Status Alert Banner — Shown when an event is selected or active alert */}
       {latestEvent && (
-        <section className={`mb-4 flex items-center justify-between gap-3 rounded-lg px-4 py-2.5 ${rhythmTone}`} aria-live="polite">
-          <div className="flex items-center gap-2.5">
-            <RhythmIcon size={18} className="shrink-0" />
+        <section className={`mb-2 sm:mb-3 flex items-center justify-between gap-2.5 rounded-lg px-3 sm:px-4 py-1.5 sm:py-2 ${rhythmTone}`} aria-live="polite">
+          <div className="flex items-center gap-2">
+            <RhythmIcon size={16} className="shrink-0" />
             <div>
-              <h2 className="text-xs sm:text-sm font-bold tracking-tight">{rhythm.label}</h2>
-              <p className="text-[11px] opacity-90">{rhythm.detail}</p>
+              <h2 className="text-xs font-bold tracking-tight">{rhythm.label}</h2>
+              <p className="text-[10.5px] opacity-90">{rhythm.detail}</p>
             </div>
           </div>
           <span className="font-mono text-[10px] font-semibold hidden md:block opacity-75">
@@ -103,7 +103,7 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
       )}
 
       {/* 3. HERO: Physiological ECG Waveform */}
-      <section className="mb-4">
+      <section className="mb-2 sm:mb-3">
         <WaveformCanvas 
           currentEvent={latestEvent} 
           activeSnippet={activeSnippet} 
@@ -114,14 +114,14 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
       </section>
 
       {/* 4. Vital Signs (Prominent Physiological Numerals) */}
-      <section className="grid grid-cols-4 gap-3 sm:gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1" aria-label="Current vital signs">
-        <article className="rounded-lg border border-[var(--line)] bg-white p-3.5 sm:p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3" aria-label="Current vital signs">
+        <article className="rounded-lg border border-[var(--line)] bg-white p-2.5 sm:p-3.5 shadow-xs">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[var(--muted)] font-medium">
             <span>Heart rate</span>
-            <span className="font-mono text-[10px]">Ref 60–100</span>
+            <span className="font-mono text-[9px] sm:text-[10px]">Ref 60–100</span>
           </div>
-          <div className="my-1.5 flex items-baseline gap-1.5">
-            <span className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-[var(--ink)]">
+          <div className="my-1 flex items-baseline gap-1.5">
+            <span className="font-mono text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-[var(--ink)]">
               {vitals.heartRateBpm && vitals.heartRateBpm > 0 ? vitals.heartRateBpm : '--'}
             </span>
             <span className="font-mono text-xs text-[var(--muted)]">bpm</span>
@@ -131,13 +131,13 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
           </p>
         </article>
 
-        <article className="rounded-lg border border-[var(--line)] bg-white p-3.5 sm:p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
+        <article className="rounded-lg border border-[var(--line)] bg-white p-2.5 sm:p-3.5 shadow-xs">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[var(--muted)] font-medium">
             <span>Blood oxygen (SpO₂)</span>
-            <span className="font-mono text-[10px]">Ref 95–100</span>
+            <span className="font-mono text-[9px] sm:text-[10px]">Ref 95–100</span>
           </div>
-          <div className="my-1.5 flex items-baseline gap-1.5">
-            <span className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-[var(--ink)]">
+          <div className="my-1 flex items-baseline gap-1.5">
+            <span className="font-mono text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-[var(--ink)]">
               {vitals.spo2Pct && vitals.spo2Pct > 0 ? vitals.spo2Pct : '--'}
             </span>
             <span className="font-mono text-xs text-[var(--muted)]">%</span>
@@ -147,34 +147,34 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
           </p>
         </article>
 
-        <article className="rounded-lg border border-[var(--line)] bg-white p-3.5 sm:p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
-            <span>Arrhythmia burden (PVC / PAC)</span>
-            <span className="font-mono text-[10px]">Ref &lt; 5%</span>
+        <article className="rounded-lg border border-[var(--line)] bg-white p-2.5 sm:p-3.5 shadow-xs">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[var(--muted)] font-medium">
+            <span>Arrhythmia burden</span>
+            <span className="font-mono text-[9px] sm:text-[10px]">Ref &lt; 5%</span>
           </div>
-          <div className="my-1.5 flex items-baseline gap-1.5">
-            <span className="font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--ink)]">
+          <div className="my-1 flex items-baseline gap-1.5">
+            <span className="font-mono text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-[var(--ink)]">
               {analytics.pvcBurdenPct.toFixed(1)} / {analytics.pacBurdenPct.toFixed(1)}
             </span>
             <span className="font-mono text-xs text-[var(--muted)]">%</span>
           </div>
-          <p className="text-[10px] text-[var(--muted)] truncate">1-minute rolling window</p>
+          <p className="text-[10px] text-[var(--muted)] truncate">PVC / PAC rolling 1m</p>
         </article>
 
-        <article className="rounded-lg border border-[var(--line)] bg-white p-3.5 sm:p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
+        <article className="rounded-lg border border-[var(--line)] bg-white p-2.5 sm:p-3.5 shadow-xs">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[var(--muted)] font-medium">
             <span className="flex items-center gap-1.5">
-              <span>Motion correlation (r)</span>
+              <span>Motion (r)</span>
               {(vitals.motionMg ?? 0) > 150 && (
-                <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
-                  Motion Active
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.2 text-[8.5px] font-semibold text-amber-800">
+                  Active
                 </span>
               )}
             </span>
-            <span className="font-mono text-[10px]">Ref &lt; 0.20</span>
+            <span className="font-mono text-[9px] sm:text-[10px]">Ref &lt; 0.20</span>
           </div>
-          <div className="my-1.5 flex items-baseline gap-1.5">
-            <span className={`font-mono text-3xl sm:text-4xl font-bold tracking-tight ${(vitals.correlationFactor ?? 0) > 0.35 ? 'text-amber-600' : 'text-[var(--ink)]'}`}>
+          <div className="my-1 flex items-baseline gap-1.5">
+            <span className={`font-mono text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight ${(vitals.correlationFactor ?? 0) > 0.35 ? 'text-amber-600' : 'text-[var(--ink)]'}`}>
               {vitals.correlationFactor !== undefined && vitals.correlationFactor !== null
                 ? (vitals.correlationFactor >= 0 ? `+${vitals.correlationFactor.toFixed(2)}` : vitals.correlationFactor.toFixed(2))
                 : '+0.00'}
@@ -182,14 +182,14 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
             <span className="font-mono text-xs text-[var(--muted)]">r</span>
           </div>
           <p className="text-[10px] text-[var(--muted)] truncate flex items-center justify-between">
-            <span>Pearson r(Motion, ECG)</span>
+            <span>Pearson r(IMU, ECG)</span>
             <span className="font-mono text-[10px] text-[var(--ink)] font-medium">{vitals.motionMg ?? 0} mg</span>
           </p>
         </article>
       </section>
 
       {/* 5. Clinical Event Log & Technical Diagnostics */}
-      <section className="mt-4 grid grid-cols-[minmax(0,1fr)_320px] gap-4 max-xl:grid-cols-1">
+      <section className="mt-2 sm:mt-4 grid grid-cols-[minmax(0,1fr)_320px] gap-3 sm:gap-4 max-xl:grid-cols-1">
         <div className="rounded-lg border border-[var(--line)] bg-white overflow-hidden shadow-xs">
           <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3 bg-[var(--paper-2)]">
             <h2 className="text-xs font-bold text-[var(--ink)] uppercase tracking-wider">Recent rhythm events</h2>

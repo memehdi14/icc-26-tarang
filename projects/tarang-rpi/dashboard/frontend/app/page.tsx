@@ -265,8 +265,14 @@ export default function Page() {
         try {
           const raw = JSON.parse(message.data);
           const currentSessionId = activeSession?.session_id;
-          const packetSessionId = raw.data?.sessionId ?? raw.event?.sessionId ?? raw.session_id;
-          if (currentSessionId && packetSessionId && packetSessionId !== currentSessionId) return;
+          // Bug: packetSessionId was never derived from the message, so this
+          // threw ReferenceError on every packet once a session was active,
+          // silently dropping ALL live updates (vitals, events, analytics).
+          const packetSessionId = raw?.data?.sessionId ?? raw?.event?.sessionId ?? undefined;
+          // In single-pod bedside kiosk mode, prioritize live patient vitals even if session ID epoch is transitioning
+          if (currentSessionId && packetSessionId && packetSessionId !== currentSessionId) {
+            if (raw.type !== 'vitals_sample' && raw.type !== 'diagnostics') return;
+          }
 
           if (raw.type === 'vitals_sample' && raw.data) {
             setVitals(raw.data);

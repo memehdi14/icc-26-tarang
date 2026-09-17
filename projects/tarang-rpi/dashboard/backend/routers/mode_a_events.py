@@ -149,6 +149,9 @@ class ClinicalEventIngest(BaseModel):
 
     # Optional 4s ECG snippet & annotations in single transaction
     waveform: Optional[List[float]] = None # Array of ECG samples (e.g. 1000 samples @ 250Hz)
+    # True when the gateway had to zero-fill missing BLE chunks (Issue #8) so
+    # the frontend can distinguish "partial signal" from a clean idle state.
+    waveform_incomplete: bool = False
     sample_rate_hz: Optional[int] = Field(default=250)
     annotations: Optional[List[BeatAnnotationInput]] = None
 
@@ -361,6 +364,7 @@ async def ingest_clinical_event(payload: ClinicalEventIngest, db: Session = Depe
         "type": "clinical_event",
         "event": event.to_dict(),
         "snippet": snippet.to_dict(include_waveform=True) if snippet else None,
+        "waveform_incomplete": payload.waveform_incomplete,
     }
     await manager.broadcast(broadcast_data)
 

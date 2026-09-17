@@ -38,7 +38,8 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
   }, [deviceHealth, diagnostics, vitals]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setIsStale(Date.now() - lastSeenMs > 3500), 1000);
+    // Tolerates 2.5s-5s vitals cadence and 10s diagnostics cadence + minor BLE jitter
+    const timer = window.setInterval(() => setIsStale(Date.now() - lastSeenMs > 12000), 1000);
     return () => window.clearInterval(timer);
   }, [lastSeenMs]);
 
@@ -76,16 +77,19 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
         {/* Battery */}
         <article className="rounded-lg border border-[var(--line)] bg-white p-4 shadow-xs">
           <div className="flex items-center justify-between text-xs text-[var(--muted)] font-medium">
-            <span>Battery state</span>
-            <Battery size={16} className="text-[var(--ink)]" />
+            <span>Battery status</span>
+            <Battery size={16} className="text-[var(--clinical-teal)]" />
           </div>
           <div className="my-2">
-            <p className="font-mono text-3xl font-bold text-[var(--ink)]">
-              {health?.batteryPct == null || health.batteryPct === 255 ? 'USB powered' : `${health.batteryPct}%`}
+            <p className="font-mono text-2xl sm:text-3xl font-bold text-[var(--ink)]">
+              {health?.batteryPct != null && health.batteryPct !== 255
+                ? `${health.batteryPct}%`
+                : 'On-device check'}
             </p>
           </div>
-          <p className="text-[11px] text-[var(--muted)]">
-            {health?.batteryPct == null || health.batteryPct === 255 ? 'External 5V supply connected' : '3.7V LiPo pod battery'}
+          <p className="text-[11px] text-[var(--muted)] flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 inline-block" />
+            <span>Monitored via on-pod hardware indicator</span>
           </p>
         </article>
 
@@ -99,7 +103,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
             <span className="font-mono text-3xl font-bold text-[var(--ink)]">{diagnostics.latencyMs != null ? diagnostics.latencyMs : '--'}</span>
             <span className="font-mono text-xs text-[var(--muted)]">ms delay</span>
           </div>
-          <p className="text-[11px] text-[var(--muted)]">RSSI: {rssi > -100 ? `${rssi} dBm` : 'Scanning'}</p>
+          <p className="text-[11px] text-[var(--muted)]">RSSI: {rssi > -100 ? `${rssi} dBm` : isConnected ? 'Unavailable' : 'Scanning'}</p>
         </article>
 
         {/* Transmission & Packets */}

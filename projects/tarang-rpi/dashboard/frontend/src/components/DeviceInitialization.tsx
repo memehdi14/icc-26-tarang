@@ -706,8 +706,8 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
       </header>
 
       {/* Main 3D Voxel Anatomical Heart Centerpiece */}
-      <div className="flex-1 flex flex-col items-center justify-center p-4 max-sm:px-2">
-        <div className="relative w-full max-w-4xl aspect-[16/10] sm:aspect-[16/9] max-h-[540px] rounded-xl border border-[var(--line)] bg-[#FAFAF9] overflow-hidden shadow-sm">
+      <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-4 max-sm:px-2 min-h-0">
+        <div className="relative w-full max-w-4xl aspect-[16/10] sm:aspect-[16/9] max-h-[220px] sm:max-h-[360px] lg:max-h-[520px] rounded-xl border border-[var(--line)] bg-[#FAFAF9] overflow-hidden shadow-sm">
           <canvas
             ref={canvasRef}
             aria-hidden="true"
@@ -724,7 +724,7 @@ export const DeviceInitialization: React.FC<DeviceInitializationProps> = ({
         </div>
 
         {/* 5 Milestone Tags in Green / Clinical Teal Theme */}
-        <div className="w-full max-w-4xl mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5" role="status" aria-label="Commissioning progress">
+        <div className="w-full max-w-4xl mt-2 sm:mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5" role="status" aria-label="Commissioning progress">
           {STAGES.map((st, i) => {
             const isDone = i < displayStage || displayStage === 4;
             const isActive = i === displayStage && displayStage < 4;

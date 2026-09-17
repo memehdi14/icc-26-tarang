@@ -170,13 +170,13 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
   return (
     <main className="min-h-screen bg-[var(--paper)]">
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-white/95 backdrop-blur-md">
-        <div className="mx-auto flex h-[58px] max-w-[1440px] items-center justify-between px-6">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex h-[48px] sm:h-[58px] max-w-[1440px] items-center justify-between px-3 sm:px-6">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             <img
               src="/logo_mark.svg"
               alt="Tarang"
-              className="h-7 w-7 shrink-0 object-contain"
-              style={{ width: '28px', height: '28px' }}
+              className="h-6 w-6 sm:h-7 sm:w-7 shrink-0 object-contain"
+              style={{ width: '26px', height: '26px' }}
               onError={(e) => {
                 const target = e.currentTarget as HTMLImageElement;
                 target.onerror = null;
@@ -184,8 +184,8 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
               }}
             />
             <div>
-              <div className="text-sm font-bold text-[var(--ink)] leading-none">Tarang Clinical</div>
-              <div className="text-[10px] font-medium text-[var(--muted)] mt-0.5">Patient worklist</div>
+              <div className="text-xs sm:text-sm font-bold text-[var(--ink)] leading-none">Tarang Clinical</div>
+              <div className="text-[9px] sm:text-[10px] font-medium text-[var(--muted)] mt-0.5">Patient worklist</div>
             </div>
             <div className="hidden sm:flex items-center pl-2.5 border-l border-[var(--line)]">
               <img
@@ -197,27 +197,27 @@ export const PatientOnboarding: React.FC<PatientOnboardingProps> = ({
               />
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setShowCreate(true)} className="discovery-pill-primary !py-1.5 !px-3.5 !text-xs">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button onClick={() => setShowCreate(true)} className="discovery-pill-primary !py-1 sm:!py-1.5 !px-2.5 sm:!px-3.5 !text-xs">
               <Plus size={14} /> <span>New patient</span>
             </button>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-[1440px] px-6 py-6 max-sm:px-4">
-        <div className="view-header view-enter !pb-4">
+      <div className="mx-auto max-w-[1440px] px-3 sm:px-6 py-3 sm:py-6">
+        <div className="view-header view-enter !pb-3 sm:!pb-4 max-md:flex-col max-md:items-start gap-3">
           <div>
             <span className="text-xs font-semibold text-[var(--ink)] flex items-center gap-1">
               <span className="text-[var(--accent)] text-[10px]">✦</span> Telemetry management
             </span>
-            <h1 className="text-2xl font-bold text-[var(--ink)]">Patient worklist</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-[var(--ink)]">Patient worklist</h1>
             <p className="text-xs text-[var(--ink-soft)] mt-0.5">Select an admitted patient to begin live BLE telemetry.</p>
           </div>
           <div className="flex divide-x divide-[var(--line)] border border-[var(--line)] rounded-lg bg-white shadow-xs">
-            <div className="px-4 py-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Patients</p><p className="font-mono text-base font-bold text-[var(--ink)]">{patients.length}</p></div>
-            <div className="px-4 py-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Active</p><p className="font-mono text-base font-bold text-[var(--clinical-teal)]">{activeSessionCount}</p></div>
-            <div className="px-4 py-2"><p className="text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Devices ready</p><p className="font-mono text-base font-bold text-[var(--ink)]">{availableDevices.length}</p></div>
+            <div className="px-3 sm:px-4 py-1.5 sm:py-2"><p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Patients</p><p className="font-mono text-sm sm:text-base font-bold text-[var(--ink)]">{patients.length}</p></div>
+            <div className="px-3 sm:px-4 py-1.5 sm:py-2"><p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Active</p><p className="font-mono text-sm sm:text-base font-bold text-[var(--clinical-teal)]">{activeSessionCount}</p></div>
+            <div className="px-3 sm:px-4 py-1.5 sm:py-2"><p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-[var(--muted)] font-medium">Devices ready</p><p className="font-mono text-sm sm:text-base font-bold text-[var(--ink)]">{availableDevices.length}</p></div>
           </div>
         </div>
 

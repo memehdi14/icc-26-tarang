@@ -492,13 +492,13 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   5-INCH (800x480) RASPBERRY PI TOUCH DISPLAY & KIOSK OPTIMIZATIONS
+   5-INCH (800x480 / 848x480) RASPBERRY PI TOUCH DISPLAY & KIOSK OPTIMIZATIONS
    ═══════════════════════════════════════════════════════════════════════════ */
 @media screen and (max-width: 900px), screen and (max-height: 540px) {
   :root {
     --header-height: 38px;
-    --sidebar-width: 54px;
-    --sidebar-collapsed-width: 54px;
+    --sidebar-width: 52px;
+    --sidebar-collapsed-width: 52px;
     --patient-rail-width: 0px;
   }
 
@@ -507,10 +507,10 @@ body {
     overflow-x: hidden;
   }
 
-  /* Compact TopBar */
+  /* Compact TopBar adhering strictly to 38px kiosk header */
   .app-topbar {
-    height: 38px;
-    padding: 0 8px;
+    height: 38px !important;
+    padding: 0 10px !important;
   }
 
   .app-topbar h1, .app-topbar .brand-title {
@@ -519,13 +519,13 @@ body {
 
   /* Auto-collapse sidebar to compact icon strip */
   .app-sidebar {
-    width: 54px !important;
-    min-width: 54px !important;
+    width: 52px !important;
+    min-width: 52px !important;
   }
 
   .app-sidebar .sidebar-clinician {
-    padding: 6px 4px;
-    min-height: 42px;
+    padding: 4px 2px;
+    min-height: 38px;
     justify-content: center;
   }
 
@@ -533,17 +533,23 @@ body {
     display: none !important;
   }
 
+  .app-sidebar .sidebar-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
+  }
+
   .app-sidebar .sidebar-nav {
-    padding: 6px 4px;
+    padding: 4px 2px;
     gap: 2px;
   }
 
   .app-sidebar .sidebar-nav button {
     justify-content: center;
     padding: 0;
-    width: 44px;
-    height: 38px;
-    min-height: 38px;
+    width: 42px;
+    height: 36px;
+    min-height: 36px;
   }
 
   .app-sidebar .sidebar-nav button span {
@@ -558,15 +564,16 @@ body {
 
   .app-sidebar .sidebar-footer button {
     justify-content: center;
-    padding: 6px 0;
-    width: 44px;
+    padding: 4px 0;
+    width: 42px;
+    min-height: 34px;
   }
 
   /* Full-width Workspace without dead margins */
   .app-main {
-    margin-left: 54px !important;
+    margin-left: 52px !important;
     margin-right: 0 !important;
-    padding: calc(var(--header-height) + 6px) 10px 10px !important;
+    padding: calc(var(--header-height) + 6px) 8px 8px !important;
     min-height: calc(100vh - 38px);
   }
 
@@ -575,7 +582,7 @@ body {
     top: var(--header-height) !important;
     right: 0 !important;
     bottom: 0 !important;
-    width: 290px !important;
+    width: 280px !important;
     z-index: 60 !important;
     background: #ffffff !important;
     box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2) !important;
@@ -594,39 +601,64 @@ body {
   }
 
   .view-header {
-    margin-bottom: 8px !important;
-    padding-bottom: 6px !important;
-    gap: 8px;
+    margin-bottom: 6px !important;
+    padding-bottom: 4px !important;
+    gap: 6px !important;
   }
 
   .view-header h1 {
-    font-size: 16px !important;
+    font-size: 15px !important;
   }
 
   .view-header p {
-    font-size: 11px !important;
+    font-size: 10.5px !important;
   }
 
   /* Compact Vitals & Cards Grid */
   .grid {
-    gap: 8px !important;
+    gap: 6px !important;
   }
 
-  /* Compact Waveform Container */
+  /* Compact Waveform Container with explicit bounds for 480px height */
   .waveform-grid {
+    height: 155px !important;
     min-height: 140px !important;
-    height: auto !important;
+    max-height: 165px !important;
   }
 
-  canvas {
-    max-height: 180px !important;
+  .waveform-grid canvas {
+    height: 100% !important;
+    max-height: 165px !important;
   }
 
-  /* Big touch-friendly buttons */
+  /* Big touch-friendly buttons for 5-inch capacitive touchscreen */
   button, .button-primary, .button-secondary {
     min-height: 34px !important;
     font-size: 11px !important;
-    padding: 0 10px !important;
+    padding: 0 8px !important;
+  }
+}
+
+/* ── Mobile viewport (phones < 640px) ────────────────────────────────────── */
+@media screen and (max-width: 640px) {
+  :root {
+    --header-height: 44px;
+    --sidebar-width: 48px;
+    --sidebar-collapsed-width: 48px;
+  }
+
+  .app-main {
+    margin-left: 48px !important;
+    padding: calc(var(--header-height) + 6px) 6px 12px !important;
+  }
+
+  .app-topbar {
+    height: 44px !important;
+    padding: 0 6px !important;
+  }
+
+  .waveform-grid {
+    height: 160px !important;
   }
 }
 

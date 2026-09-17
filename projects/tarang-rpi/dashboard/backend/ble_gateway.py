@@ -67,6 +67,10 @@ LOG = logging.getLogger("tarang.ble_gateway")
 # ============================================================================
 DEFAULT_BLE_ADDRESS = "64:02:8F:64:26:14"
 
+# Consecutive zero/dropped HR notifications tolerated before the gateway
+# actually reports loss-of-signal (Issue #11 HR flicker debounce).
+HR_DROPOUT_HOLD_CYCLES = 3
+
 
 def _env_bool(name: str, default: bool) -> bool:
     value = os.getenv(name)
@@ -222,9 +226,15 @@ class BackendPublisher:
                 "/api/sessions", params={"status": "active"}
             )
             response.raise_for_status()
-            for session in response.json():
+            sessions = response.json()
+            for session in sessions:
                 if session.get("device_id") == device_id:
                     return session.get("session_id")
+            # Kiosk single-pod fallback: if there is an active session, bind to it
+            if sessions and isinstance(sessions, list) and len(sessions) > 0:
+                fallback_id = sessions[0].get("session_id")
+                LOG.info("Active monitoring session resolved via kiosk fallback: %s", fallback_id)
+                return fallback_id
         except (httpx.HTTPError, ValueError, TypeError) as exc:
             LOG.warning("Could not resolve active monitoring session: %s", exc)
         return None
@@ -323,6 +333,7 @@ class GatewaySession:
         self.device_id = config.device_id or self.address
         self.session_id = session_id
         self.last_hr: int | None = None
+        self._hr_dropout_streak: int = 0
         self.last_spo2: int | None = None
         self.last_motion_mg: int | None = None
         self.last_correlation_factor: float | None = None
@@ -359,9 +370,20 @@ class GatewaySession:
 
     def on_heart_rate(self, _sender: Any, data: bytearray) -> None:
         value = self._decode("heart-rate", decode_heart_rate, data)
-        if value is not None:
+        if value is None:
+            return
+        if value > 0:
             self.last_hr = value
-            self._schedule_vitals()
+            self._hr_dropout_streak = 0
+        else:
+            # Issue #11: a single dropped/zero HR notification previously
+            # flipped the dashboard straight to "--". Hold the last known
+            # value across a couple of notification cycles (HR is pushed
+            # every ~2.5s) before actually reporting loss of signal.
+            self._hr_dropout_streak += 1
+            if self._hr_dropout_streak >= HR_DROPOUT_HOLD_CYCLES:
+                self.last_hr = value
+        self._schedule_vitals()
 
     def on_spo2(self, _sender: Any, data: bytearray) -> None:
         value = self._decode("SpO2", decode_spo2, data)
@@ -543,13 +565,31 @@ class GatewaySession:
         if self._event.posted or self._event.rhythm_status is None:
             return
 
+        waveform_incomplete = False
         if self._event.snippet_started and self._event.waveform is None:
-            LOG.warning(
-                "Posting event %s without waveform; received %d/%d ECG chunks",
-                self._event.event_id,
-                self._snippet.received_chunks,
-                self._snippet.total_chunks,
-            )
+            received, total = self._snippet.received_chunks, self._snippet.total_chunks
+            # Issue #8: previously any missing chunk left waveform=None and the
+            # whole 4s snippet was silently dropped, so the dashboard rendered
+            # an idle flatline underneath an active alert banner. Reconstruct
+            # whatever chunks did arrive (gaps zero-filled) instead of nothing.
+            partial, is_complete = self._snippet.partial_waveform()
+            if partial is not None:
+                self._event.waveform = partial
+                waveform_incomplete = not is_complete
+                LOG.warning(
+                    "Posting event %s with a partial waveform (%d/%d ECG chunks "
+                    "received; missing chunks zero-filled)",
+                    self._event.event_id,
+                    received,
+                    total,
+                )
+            else:
+                LOG.warning(
+                    "Posting event %s without waveform; received %d/%d ECG chunks",
+                    self._event.event_id,
+                    received,
+                    total,
+                )
 
         if self._event.routine:
             pattern = "Routine"
@@ -569,6 +609,7 @@ class GatewaySession:
                 "confidence": self._event.confidence,
                 "sample_rate_hz": 250,
                 "waveform": self._event.waveform,
+                "waveform_incomplete": waveform_incomplete,
                 "annotations": self._event.annotations,
             }
         )

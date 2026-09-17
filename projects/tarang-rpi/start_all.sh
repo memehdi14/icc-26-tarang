@@ -152,6 +152,7 @@ CHROME_FLAGS=(
     --no-sandbox
     --disable-gpu
     --password-store=basic
+    --autoplay-policy=no-user-gesture-required
     --force-device-scale-factor="${TARANG_SCALE_FACTOR:-1.0}"
     --user-data-dir=/tmp/chromium_hub_data
     --app=http://127.0.0.1:3000

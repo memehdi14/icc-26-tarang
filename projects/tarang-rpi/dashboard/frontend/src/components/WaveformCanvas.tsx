@@ -31,7 +31,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       const rect = container.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       canvas.width = Math.max(300, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(160, Math.floor(rect.height * dpr));
+      canvas.height = Math.max(130, Math.floor(rect.height * dpr));
     };
 
     resizeCanvas();
@@ -191,7 +191,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         </div>
       </div>
 
-      <div ref={containerRef} className="waveform-grid relative h-[210px] sm:h-[240px] lg:h-[270px] bg-[#FFFFFF]">
+      <div ref={containerRef} className="waveform-grid relative h-[155px] sm:h-[185px] lg:h-[240px] bg-[#FFFFFF]">
         <canvas ref={canvasRef} className="block h-full w-full" />
         {!hasEvent && (
           <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5 rounded bg-white/90 border border-[var(--line-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--ink)] shadow-xs">

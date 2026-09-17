@@ -172,6 +172,10 @@ CHROME_FLAGS=(
     --disable-gpu
     --password-store=basic
     --user-data-dir=/tmp/chromium_kiosk_data
+    # DEMO FIX: Allow Web Audio API alarms to play without a user gesture.
+    # In kiosk mode there is no desktop interaction model, so the default
+    # autoplay policy silences all AudioContext-based medical alarms.
+    --autoplay-policy=no-user-gesture-required
     --app=http://127.0.0.1:3000
 )
 

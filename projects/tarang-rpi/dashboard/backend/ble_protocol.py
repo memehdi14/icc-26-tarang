@@ -298,3 +298,27 @@ class SnippetReassembler:
             waveform.extend(float(sample) / 1000.0 for sample in self._chunks[index])
         self.reset()
         return waveform
+
+    def partial_waveform(self) -> tuple[list[float] | None, bool]:
+        """Best-effort reconstruction for a snippet that timed out before
+        every chunk arrived (Issue #8: a single dropped chunk previously
+        caused the whole 4s waveform to be discarded/None, making the
+        dashboard show an idle flatline underneath an active alert banner).
+
+        Missing chunks are zero-filled so the caller still gets a partial
+        trace instead of nothing. Returns (waveform, is_complete); waveform
+        is None only if not a single chunk was ever received.
+        """
+        if not self._chunks:
+            return None, False
+        is_complete = len(self._chunks) == self._total_chunks
+        fill_len = len(next(iter(self._chunks.values())))
+        waveform: list[float] = []
+        for index in range(self._total_chunks):
+            chunk = self._chunks.get(index)
+            if chunk is None:
+                waveform.extend([0.0] * fill_len)
+            else:
+                waveform.extend(float(sample) / 1000.0 for sample in chunk)
+        self.reset()
+        return waveform, is_complete
