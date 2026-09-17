@@ -322,13 +322,8 @@ static void ppg_update_metrics(void)
                 : (ibi_array[(valid_ibi_count / 2) - 1] + ibi_array[valid_ibi_count / 2]) * 0.5f;
 
             if (median_ibi_ms > 0.0f) {
+                /* Convert median IBI to BPM — no artificial clamps, truth from peak detection */
                 estimated_bpm = 60000.0f / median_ibi_ms;
-                /* Physiological resting range alignment: damp any dicrotic double-counting leakage */
-                if (estimated_bpm > 105.0f && estimated_bpm < 145.0f) {
-                    estimated_bpm *= 0.72f;
-                }
-                if (estimated_bpm > 98.0f) estimated_bpm = 96.0f;
-                if (estimated_bpm < 68.0f && estimated_bpm >= 45.0f) estimated_bpm = 72.0f;
             }
         }
     }

@@ -1065,10 +1065,6 @@ uint16_t tarang_fuse_heart_rate(
   /* Rate-limited EMA filter for fused telemetry output: prevents erratic jumps */
   static float s_fused_hr_ema = 0.0f;
   if (final_hr >= TARANG_HR_MIN_PHYSIOLOGICAL && final_hr <= TARANG_HR_MAX_PHYSIOLOGICAL) {
-    /* Physiological resting range alignment: keeps fused rate in clean 70-98 BPM band */
-    if (final_hr > 98u) final_hr = 96u;
-    if (final_hr < 68u && final_hr >= 45u) final_hr = 72u;
-
     if (s_fused_hr_ema < (float)TARANG_HR_MIN_PHYSIOLOGICAL) {
       s_fused_hr_ema = (float)final_hr;
     } else {
