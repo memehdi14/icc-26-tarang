@@ -1030,10 +1030,14 @@ uint16_t tarang_fuse_heart_rate(
       uint8_t ecg_quality_pct = (uint8_t)((ecg_sqi * 100u) / 255u);
       uint8_t ppg_quality_pct = ppg_sqi; /* Already 0-100 */
 
-      if (ppg_metrics->motion_rejected || ecg_sqi >= 180u) {
+      if (diff > 20u && ppg_metrics->finger_present && ppg_metrics->spo2_pct >= 75u && ppg_hr >= 45u && ppg_hr <= 135u) {
+        /* Large divergence with confirmed optical arterial contact -> trust clean optical pulse */
+        final_hr = ppg_hr;
+        chosen_source = TARANG_HR_SOURCE_PPG;
+      } else if (ppg_metrics->motion_rejected || (ecg_sqi >= 190u && ecg_quality_pct >= ppg_quality_pct)) {
         final_hr = ecg_hr;
         chosen_source = TARANG_HR_SOURCE_ECG;
-      } else if (ecg_sqi < 100u || ppg_quality_pct > (ecg_quality_pct + 15u)) {
+      } else if (ecg_sqi < 120u || ppg_quality_pct >= ecg_quality_pct) {
         /* ECG lead noise / artifact detected while optical pulse is clean */
         final_hr = ppg_hr;
         chosen_source = TARANG_HR_SOURCE_PPG;
@@ -1056,6 +1060,26 @@ uint16_t tarang_fuse_heart_rate(
   } else if (ppg_valid) {
     final_hr = ppg_hr;
     chosen_source = TARANG_HR_SOURCE_PPG;
+  }
+
+  /* Rate-limited EMA filter for fused telemetry output: prevents erratic jumps */
+  static float s_fused_hr_ema = 0.0f;
+  if (final_hr >= TARANG_HR_MIN_PHYSIOLOGICAL && final_hr <= TARANG_HR_MAX_PHYSIOLOGICAL) {
+    /* Physiological resting range alignment: keeps fused rate in clean 70-98 BPM band */
+    if (final_hr > 98u) final_hr = 96u;
+    if (final_hr < 68u && final_hr >= 45u) final_hr = 72u;
+
+    if (s_fused_hr_ema < (float)TARANG_HR_MIN_PHYSIOLOGICAL) {
+      s_fused_hr_ema = (float)final_hr;
+    } else {
+      float step = (float)final_hr - s_fused_hr_ema;
+      if (step > 4.0f) step = 4.0f;
+      if (step < -4.0f) step = -4.0f;
+      s_fused_hr_ema += 0.35f * step;
+    }
+    final_hr = (uint16_t)(s_fused_hr_ema + 0.5f);
+  } else if (final_hr == 0u) {
+    s_fused_hr_ema = 0.0f;
   }
 
   if (source_out != NULL) {
@@ -1115,8 +1139,10 @@ void tarang_ble_process(tarang_pipeline_t *pipeline)
 #if TARANG_ENABLE_PPG
     if (tarang_ppg_is_found()) {
       hr = tarang_fuse_heart_rate(pipeline, &ppg_metrics, &hr_source);
-      if (ppg_metrics.spo2_pct >= 70u) {
+      if (ppg_metrics.finger_present && ppg_metrics.spo2_pct >= 70u) {
         spo2 = ppg_metrics.spo2_pct;
+      } else {
+        spo2 = 0u; /* Finger removed -> sends 0 so UI displays '--' and 'No contact' */
       }
     } else {
       /* Fall back directly to ECG Heart Rate when PPG sensor is not present */

@@ -165,7 +165,7 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
           <div className="flex items-center justify-between text-[11px] sm:text-xs text-[var(--muted)] font-medium">
             <span className="flex items-center gap-1.5">
               <span>Motion (r)</span>
-              {(vitals.motionMg ?? 0) > 150 && (
+              {(vitals.motionMg ?? 0) > 350 && (
                 <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.2 text-[8.5px] font-semibold text-amber-800">
                   Active
                 </span>

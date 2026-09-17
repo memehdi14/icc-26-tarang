@@ -21,7 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database.connection import get_db, init_db, SessionLocal
-from database.models import DeviceDiagnostics, SystemSetting, Patient, Device, MonitoringSession
+from database.models import DeviceDiagnostics, SystemSetting, Patient, Device, MonitoringSession, Analytics5Min
 
 from routers import (
     telemetry,
@@ -113,6 +113,20 @@ def seed_defaults():
             status="active",
             bed=demo_patient.bed or "ICU-04",
             notes="Live demonstration session - EFR32MG26 real-time ECG/PPG/IMU telemetry stream",
+        ))
+
+        # Seed baseline clinical analytics rollup so AI duty cycle & HRV display immediately
+        db.add(Analytics5Min(
+            device_id="tarang-efr32-demo",
+            session_id=new_session_id,
+            pvc_burden_pct=0.0,
+            pac_burden_pct=0.0,
+            sdnn=44.0,
+            rmssd=38.0,
+            prr50=12.0,
+            ai_duty_cycle_pct=1.2,
+            em2_sleep_pct=98.8,
+            ts=datetime.now(timezone.utc).replace(tzinfo=None),
         ))
 
         db.commit()

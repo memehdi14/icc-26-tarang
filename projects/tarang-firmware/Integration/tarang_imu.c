@@ -213,9 +213,9 @@ static void imu_store_sample(void)
     gravity_z_q8 = ((int32_t)accel_z) << 8;
     gravity_initialized = true;
   } else {
-    gravity_x_q8 += ((((int32_t)accel_x) << 8) - gravity_x_q8) / 32;
-    gravity_y_q8 += ((((int32_t)accel_y) << 8) - gravity_y_q8) / 32;
-    gravity_z_q8 += ((((int32_t)accel_z) << 8) - gravity_z_q8) / 32;
+    gravity_x_q8 += ((((int32_t)accel_x) << 8) - gravity_x_q8) / 128;
+    gravity_y_q8 += ((((int32_t)accel_y) << 8) - gravity_y_q8) / 128;
+    gravity_z_q8 += ((((int32_t)accel_z) << 8) - gravity_z_q8) / 128;
   }
 
   int32_t hx = (int32_t)accel_x - (gravity_x_q8 >> 8);
@@ -227,6 +227,13 @@ static void imu_store_sample(void)
   if (mag_sq > UINT32_MAX) mag_sq = UINT32_MAX;
   uint32_t mag_lsb = imu_isqrt32((uint32_t)mag_sq);
   uint32_t mag_mg = (mag_lsb * 1000u + 8192u) / 16384u;
+  /* Deadband filter: MPU6050 stationary thermal noise floor is ~40 mg.
+   * Suppress stationary noise so resting sensor reads clean 0-25 mg. */
+  if (mag_mg < 40u) {
+    mag_mg = 0u;
+  } else {
+    mag_mg -= 40u;
+  }
   motion_mg = (uint16_t)(mag_mg > 65535u ? 65535u : mag_mg);
 
   tarang_imu_sample_t *slot = &imu_ring[imu_ring_head];
