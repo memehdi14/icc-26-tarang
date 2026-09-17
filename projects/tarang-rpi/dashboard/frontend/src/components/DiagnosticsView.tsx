@@ -84,12 +84,12 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({ diagnostics, d
             <p className="font-mono text-2xl sm:text-3xl font-bold text-[var(--ink)]">
               {health?.batteryPct != null && health.batteryPct !== 255
                 ? `${health.batteryPct}%`
-                : 'On-device check'}
+                : 'Status on device'}
             </p>
           </div>
           <p className="text-[11px] text-[var(--muted)] flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 inline-block" />
-            <span>Monitored via on-pod hardware indicator</span>
+            <span>Battery status monitored on device</span>
           </p>
         </article>
 
