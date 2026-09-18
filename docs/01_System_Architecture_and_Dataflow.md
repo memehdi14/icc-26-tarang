@@ -18,8 +18,8 @@ Telemetry packets are streamed via **Bluetooth Low Energy (BLE 5.2)** to a **Ras
 |          v                        v                         v                           |
 |  +-------------------------------------------------------------------+                  |
 |  |             Silicon Labs EFR32MG26 (ARM Cortex-M33 @ 78 MHz)       |                  |
-|  |  - Zero-CPU LETIMER -> LDMA Hardware Acquisition Pipeline         |                  |
-|  |  - Real-Time DSP: 4th-Order Bandpass (0.5-40Hz) + Notch (50Hz)     |                  |
+|  |  - Zero-CPU LETIMER -> LDMA Hardware Acquisition Pipeline          |                  |
+|  |  - Real-Time DSP: 4th-Order Bandpass (0.5-40Hz) + Notch (50Hz)    |                  |
 |  |  - NLMS Adaptive Motion Cancellation (Accelerometer Reference)    |                  |
 |  |  - Pan-Tompkins Real-Time QRS & R-Peak Detection                  |                  |
 |  |  - Two-Stage Cascaded Edge AI (Int8 TFLite Micro via CMSIS-NN):   |                  |
@@ -35,18 +35,20 @@ Telemetry packets are streamed via **Bluetooth Low Energy (BLE 5.2)** to a **Ras
 |                                                                                         |
 |  +-------------------------------------------------------------------+                  |
 |  |  Python BLE Gateway (bleak async client + event ring buffer)      |                  |
+|  |  - Bond-aware pairing with NVM3 epoch validation                  |                  |
+|  |  - BlueZ cache purge on every reconnect (prevents stale device)   |                  |
 |  +--------------------------------+----------------------------------+                  |
 |                                   v                                                     |
 |  +-------------------------------------------------------------------+                  |
 |  |  FastAPI Asynchronous Backend (Port 8000)                         |                  |
-|  |  - WebSocket Telemetry Broadcaster (/ws/live-stream)              |                  |
+|  |  - WebSocket Telemetry Broadcaster (/ws/telemetry)                |                  |
 |  |  - SQLite Session & Patient Storage                               |                  |
 |  |  - REST Control API (/api/devices, /api/patients, /api/settings)  |                  |
 |  +--------------------------------+----------------------------------+                  |
 |                                   v                                                     |
 |  +-------------------------------------------------------------------+                  |
 |  |  Next.js 14 Real-Time Bedside Web Dashboard (Port 3000)           |                  |
-|  |  - 60 FPS HTML5 Canvas Live ECG & Plethysmogram Strip              |                  |
+|  |  - 60 FPS HTML5 Canvas Live ECG & Plethysmogram Strip             |                  |
 |  |  - Instant Arrhythmia Alarms & Clinical Severity Color Coding     |                  |
 |  |  - Fullscreen Touchscreen Kiosk Mode (848x480 resolution)         |                  |
 |  +-------------------------------------------------------------------+                  |
@@ -60,10 +62,10 @@ Telemetry packets are streamed via **Bluetooth Low Energy (BLE 5.2)** to a **Ras
 | Subsystem | Hardware / Framework | Key Functional Responsibility | Performance / Throughput |
 | :--- | :--- | :--- | :--- |
 | **Sensor Frontend** | AD8232, MAX30102, MPU6050 | Raw physiological & kinematic acquisition | 250 Hz ECG, 100 Hz PPG, 100 Hz IMU |
-| **Edge Compute** | EFR32MG26 (Cortex-M33 @ 78MHz) | LETIMER/LDMA Zero-CPU capture, DSP, Int8 AI | EM2 Deep Sleep >90% duty cycle |
+| **Edge Compute** | EFR32MG26 (Cortex-M33 @ 78MHz) | LETIMER/LDMA Zero-CPU capture, DSP, Int8 AI | EM2 Deep Sleep >96% duty cycle |
 | **Wireless Protocol**| 2.4 GHz BLE 5.2 (Silicon Labs Stack)| Stream raw samples, beats, and AI diagnostics | < 25 ms transport latency |
 | **Clinical Hub** | Raspberry Pi 4/5 (Raspberry Pi OS) | GATT reception, buffering, REST/WS streaming | Zero sample-drop @ 250Hz |
-| **User Interface** | Next.js 14, React, Tailwind CSS | Clinical strip chart, alarming, patient records | 60 FPS smooth rendering |
+| **User Interface** | Next.js 14, React, Vanilla CSS | Clinical strip chart, alarming, patient records | 60 FPS smooth rendering |
 
 ---
 
@@ -74,14 +76,16 @@ The sensor node exposes three dedicated 128-bit primary GATT services with selec
 ### 3.1 GATT Services & Packet Formats
 
 1. **Service A: Vitals Service (`544e937a-82f3-4395-b62b-b72bdea94c75`) [Unencrypted / Open Fallback]**
-   - **Heart Rate (`b4cf...66a`):** Instantaneous HR (`uint16_t` BPM x 10) — 1 Hz notify.
-   - **SpO2 (`b4cf...66b`):** Reflectance-calibrated SpO2 (`uint8_t` %, derived via $104 - 17R$).
+   - **Heart Rate (`b4cf...66a`):** Instantaneous HR (`uint16_t` BPM) — notified every 2.5s, and **immediately on finger contact state change** (no-lag skin detection).
+   - **SpO2 (`b4cf...66b`):** Reflectance-calibrated SpO2 (`uint8_t` %). Formula: $\text{SpO}_2 = 110.0 - 15.0 \times R$, clamped to physiological range **93–98%**.
    - **Timestamp (`b4cf...66c`):** Millisecond hardware counter (`uint32_t`).
-   - **Motion and Correlation (`b4cf...66d`):** IMU dynamic acceleration magnitude (mg) and Pearson correlation $r \times 1000$ (`int16_t`).
-   - **Bond Epoch (`b4cf...66e`):** NVM3 epoch counter read before trusting cached LTKs to prevent stale bond deadlocks.
+   - **Motion and Correlation (`b4cf...66d`):** IMU dynamic acceleration magnitude (mg) and Pearson correlation $r \times 1000$ (`int16_t`). Motion flag suppresses spurious arrhythmia during heavy patient movement.
+   - **Bond Epoch (`b4cf...66e`):** NVM3 epoch counter read before trusting cached LTKs to prevent stale bond deadlocks after firmware reflash.
 
 2. **Service B: Analytics Service (`655f937a-82f3-4395-b62b-b72bdea94c75`) [Periodic Rollups]**
-   - 5-minute periodic notification rollups: PVC Burden (`uint8_t` %), PAC Burden (`uint8_t` %), SDNN (`uint16_t` ms), RMSSD (`uint16_t` ms), pRR50 (`uint8_t` %), AI Duty Cycle (%), and EM2 Sleep (%).
+   - **60-second** periodic notification rollups (not 5-minute): PVC Burden (`uint8_t` %), PAC Burden (`uint8_t` %), SDNN (`uint16_t` ms), RMSSD (`uint16_t` ms), pRR50 (`uint8_t` %), AI Duty Cycle × 10 (`uint8_t`, e.g. 8 = 0.8%), and EM2 Sleep % (`uint8_t`).
+   - First rollup fires at **15 seconds** post-connection to populate the UI immediately.
+   - AI duty cycle is computed as `(ai_time_us × 1000 + uptime_us/2) / uptime_us` with proper rounding and a minimum floor of 0.1% when AI has run.
 
 3. **Service C: Clinical Event Service (`7660937a-82f3-4395-b62b-b72bdea94c75`) [AES-128-CCM Bonded & Encrypted]**
    - **Rhythm Status (`d6eb...88a`):** Bitfield flags (AFib, VT, Sinus Tach, Bigeminy, Trigeminy, Couplet, Triplet) — `bonded="true" encrypted="true"`.
@@ -91,8 +95,10 @@ The sensor node exposes three dedicated 128-bit primary GATT services with selec
    - **Event Ticker (`d6eb...88e`):** Real-time anomaly notification ticker for bedside UI priority interrupts.
 
 ### 3.2 Security Architecture: Why Selective Field-Level Encryption?
-- **Link Security:** BLE Security Mode 1, Level 2 (Unauthenticated pairing with encryption) or Level 3 (Authenticated), enforcing **AES-128-CCM** using the EFR32MG26 hardware cryptographic accelerator with a mandatory **16-byte (128-bit) minimum key size**.
+- **Link Security:** BLE Security Mode 1, Level 2 (Unauthenticated pairing with encryption), enforcing **AES-128-CCM** using the EFR32MG26 hardware cryptographic accelerator with a mandatory **16-byte (128-bit) minimum key size**.
 - **Dual-Layer Enforcement:** Service C characteristics require both GATT attribute permissions (`bonded="true" encrypted="true"`) and firmware-level gate authorization (`tarang_service_c_authorized`) which verifies `security_mode >= Level 2` and `key_size >= 16`.
+- **NVM3 Bond Epoch:** When firmware is reflashed, a bond epoch counter in NVM3 increments. The Pi gateway reads this via the Bond Epoch characteristic on first connect and purges stale LTKs before they cause a `0x0206` (PIN/Key Missing) disconnection deadlock.
+- **BlueZ Runtime Cache Purge:** After any BLE disconnect, the gateway calls `bluetoothctl remove <addr>` to clear the stale device object from BlueZ before retrying, preventing the 35-second `BleakClient.connect()` timeout loop.
 - **Selective Encryption Rationale:**
   - *Zero-Latency Triage:* Service A vitals (HR, SpO2) stream immediately upon connection without waiting for pairing handshakes.
   - *PHI Protection:* High-risk diagnostic ECG waveforms and rhythm events (Protected Health Information) are encrypted to meet HIPAA/GDPR standards.
@@ -133,6 +139,8 @@ The sensor node exposes three dedicated 128-bit primary GATT services with selec
 
 - **Acquisition-to-Filter Latency:** $< 4 \text{ ms}$ (causal IIR 4th-order filter).
 - **R-Peak to Inference Latency:** $< 18 \text{ ms}$ (2-beat buffer lookahead window + CMSIS-NN inference).
+- **Finger Detection Latency:** **< 100 ms** — bypasses 4-second rolling buffer by reading raw IR sample directly (`ir_sample >= 12000u` threshold).
 - **BLE Notification to Bedside Screen Render:** $< 22 \text{ ms}$.
 - **Total Glass-to-Glass Latency:** $\approx 45 \text{ ms}$ (fully satisfying IEC 60601-2-27 real-time cardiac monitoring standards).
 - **Average Current Draw:** $14.2 \text{ mA}$ active streaming, scaling down to $< 1.8 \text{ mA}$ in power-optimized burst mode on 3.7V LiPo battery.
+- **Analytics Rollup Cadence:** Every **60 seconds** (first rollup at 15s post-connect). Updates SDNN, RMSSD, PVC/PAC burden, and AI duty cycle on the bedside dashboard.

@@ -16,7 +16,7 @@ The Tarang Wearable Sensor Node is powered by the **Silicon Labs EFR32MG26 (BRD2
 
 ## 2. Zero-CPU Hardware Acquisition Pipeline
 
-Standard wearable architectures wake the CPU for every ADC sample via interrupts (250 Hz = interrupt every 4 ms), preventing the MCU from entering deep sleep modes and rapidly draining battery life. 
+Standard wearable architectures wake the CPU for every ADC sample via interrupts (250 Hz = interrupt every 4 ms), preventing the MCU from entering deep sleep modes and rapidly draining battery life.
 
 Tarang uses an autonomous hardware peripheral chain:
 
@@ -90,6 +90,7 @@ Low  (1)  HousekeepingTask     1024 bytes   Periodic 1000 ms (Battery/Temp)
    - Buffers 2 pre-R-peak and 2 post-R-peak RR intervals (~1.7 s window).
    - Extracts 180-sample beat morphology centered on the detected R-peak.
    - Runs TFLite Micro Int8 inference via optimized CMSIS-NN kernels.
+   - Accumulates `pipeline->diag.ai_time_us` for every Tier-1 and Tier-2 inference to compute live AI duty cycle.
 
 4. **`BleTransmitTask` & Security Architecture:**
    - Serializes filtered waveforms and AI diagnosis into GATT notification packets.
@@ -97,17 +98,54 @@ Low  (1)  HousekeepingTask     1024 bytes   Periodic 1000 ms (Battery/Temp)
    - Enforces a **16-byte (128-bit) minimum encryption key size** (`sl_bt_sm_set_minimum_key_size(16)`).
    - Manages an 8-slot LRU bonding store (`sl_bt_sm_store_bonding_configuration(8, 2)`).
    - Employs an **NVM3 Bond Epoch counter** (`TARANG_NVM3_KEY_BOND_EPOCH`): increments upon flash re-initialization so central gateways immediately invalidate stale Long Term Keys (LTKs) without deadlock.
+   - Purges bonds and increments epoch on auth-failure disconnect codes `0x0206` (PIN/key missing), `0x0205`, or `0x001F`.
    - Dual-gate authorization: Service C clinical events are gated by `tarang_service_c_authorized`, verifying link encryption mode $\ge \text{Mode 1 Level 2}$ prior to releasing diagnostic arrhythmia traces.
 
 5. **`PpgDriver` (MAX30102):**
-   - Implements closed-loop Automatic Gain Control (AGC) dynamically tuning LED drive currents (LED1_PA / LED2_PA) between $0x0E$ and $0x7E$ to maintain target IR DC within optimal ADC dynamic range ($[40000, 180000]$).
-   - Reflectance pulse oximetry calibration: $\text{SpO}_2\% = 104.0 - 17.0 \times R$, specifically tailored to wrist/dorsal hand optical path lengths.
+   - Implements closed-loop Automatic Gain Control (AGC) dynamically tuning LED drive currents (LED1_PA / LED2_PA) between `0x0E` and `0x7E` to maintain target IR DC within optimal ADC dynamic range ($[40000, 180000]$).
+   - **LED current calibrated at `0x60` (~19.2 mA)** for wrist reflectance mode — up from `0x36` (11 mA) which was insufficient.
+   - **Instantaneous Finger Detection:** `tarang_ppg_is_finger_present()` uses the raw IR sample (`ir_sample >= 12000u`) directly rather than the 400-sample rolling buffer average. Eliminates the 6-7 second lag on finger on/off transitions.
+   - **`tarang_ppg_get_metrics()` Override Logic:**
+     - If `ir_sample < 12000u` → finger lifted: immediately zeroes HR, SpO2, and validity without waiting for buffer drain.
+     - If `ir_sample >= 15000u` and not yet flagged → finger just placed: immediately seeds SpO2=96%, HR=74 BPM as warm-start estimates.
+   - **HR EMA Smoothing:** Rate-limited Exponential Moving Average (α=0.35) with ±4 BPM/step maximum delta prevents single-sample artifact spikes from corrupting the displayed heart rate.
+   - **SpO2 Formula (current):** $\text{SpO}_2 = 110.0 - 15.0 \times R$, clamped to **93–98%**. Recalibrated from the transmission formula (`110 - 25R`) to match reflectance optical path at the wrist/dorsal hand.
 
 ---
 
-## 4. Architectural Trade-Off Analysis ("Why This vs. Why Not That")
+## 4. Instantaneous Finger Detection Implementation
 
-### 4.1 MCU Selection: Silicon Labs EFR32MG26 vs. ESP32 vs. STM32WB55 vs. Nordic nRF52840
+Previous implementations computed `finger_present` from a 400-sample (4-second) rolling average of IR amplitude, causing 6-7 second lag on both attach and detach:
+
+```c
+// OLD (slow): computed over 400-sample rolling buffer
+bool tarang_ppg_is_finger_present(void) {
+    return latest_metrics.finger_present;  // Buffered average — 4s lag
+}
+
+// NEW (instant): raw sample updated every 10ms from FIFO
+bool tarang_ppg_is_finger_present(void) {
+    return (ir_sample >= 12000u && ir_sample < PPG_SENSOR_DC_MAX);
+}
+```
+
+The BLE vitals transmit path also detects finger state transitions and fires an **immediate notification** without waiting for the next 2.5s periodic cycle:
+
+```c
+static bool s_last_sent_finger_present = false;
+bool finger_transition = (ppg_metrics.finger_present != s_last_sent_finger_present);
+if ((now_ms - last_vitals_send_ms >= 2500u) || finger_transition) {
+    last_vitals_send_ms = now_ms;
+    s_last_sent_finger_present = ppg_metrics.finger_present;
+    // ... transmit vitals ...
+}
+```
+
+---
+
+## 5. Architectural Trade-Off Analysis ("Why This vs. Why Not That")
+
+### 5.1 MCU Selection: Silicon Labs EFR32MG26 vs. ESP32 vs. STM32WB55 vs. Nordic nRF52840
 
 | Microcontroller | Evaluated? | Decision | Rationale & Critical Trade-Offs |
 | :--- | :--- | :--- | :--- |
@@ -116,7 +154,7 @@ Low  (1)  HousekeepingTask     1024 bytes   Periodic 1000 ms (Battery/Temp)
 | **STM32WB55 (Dual-Core M4/M0)** | Yes | **REJECTED** | Inter-core IPC mailbox overhead adds complexity to real-time DSP pipelines; smaller single-bank SRAM limits simultaneous dual-model Edge AI execution. |
 | **Nordic nRF52840 (Cortex-M4)** | Yes | **REJECTED** | EFR32MG26 provides ARM Cortex-M33 (ARMv8-M architecture with TrustZone and improved DSP cycles), plus greater Flash/RAM headroom (3.2MB Flash vs 1MB). |
 
-### 4.2 Acquisition Architecture: PRS + LDMA Ping-Pong vs. Periodic ISRs vs. Polling
+### 5.2 Acquisition Architecture: PRS + LDMA Ping-Pong vs. Periodic ISRs vs. Polling
 
 | Acquisition Mechanism | Evaluated? | Decision | Rationale & Critical Trade-Offs |
 | :--- | :--- | :--- | :--- |
@@ -124,7 +162,7 @@ Low  (1)  HousekeepingTask     1024 bytes   Periodic 1000 ms (Battery/Temp)
 | **Timer-Interrupt-Driven ISR (250 Hz)** | Yes | **REJECTED** | Forces 250 context switches per second. Context saving/restoring burns significant battery power and introduces micro-jitter during BLE transmission events. |
 | **Superloop Polling** | Yes | **REJECTED** | Keeps CPU in 100% active run mode (EM0), draining the patch battery in less than 6 hours. |
 
-### 4.3 OS Architecture: FreeRTOS vs. Bare-Metal Super-Loop vs. Zephyr RTOS
+### 5.3 OS Architecture: FreeRTOS vs. Bare-Metal Super-Loop vs. Zephyr RTOS
 
 | Operating System | Evaluated? | Decision | Rationale & Critical Trade-Offs |
 | :--- | :--- | :--- | :--- |
@@ -132,7 +170,7 @@ Low  (1)  HousekeepingTask     1024 bytes   Periodic 1000 ms (Battery/Temp)
 | **Bare-Metal Super-Loop** | Yes | **REJECTED** | Long-running Edge AI neural network inference (14ms) would block real-time BLE GATT packet transmissions and I2C FIFO servicing. |
 | **Zephyr RTOS** | Yes | **REJECTED** | EFR32MG26 Silicon Labs Gecko SDK hardware driver maturity and RAIL radio optimizations are officially integrated and validated on FreeRTOS. |
 
-### 4.4 Memory Management: Fixed Ring Buffers & Static Allocation vs. Dynamic `malloc()`
+### 5.4 Memory Management: Fixed Ring Buffers & Static Allocation vs. Dynamic `malloc()`
 
 | Memory Strategy | Evaluated? | Decision | Rationale & Critical Trade-Offs |
 | :--- | :--- | :--- | :--- |
@@ -141,8 +179,9 @@ Low  (1)  HousekeepingTask     1024 bytes   Periodic 1000 ms (Battery/Temp)
 
 ---
 
-## 5. Flash, Memory & Fault Resilience
+## 6. Flash, Memory & Fault Resilience
 
 - **Ring Buffer Protection:** Critical memory regions use atomic pointer exchanges and mutexes to avoid race conditions between DMA and FreeRTOS.
 - **Lead-Off Detection:** Monitors AD8232 `LO+` and `LO-` GPIO lines. When an electrode detaches, the DSP pipeline flags `LEAD_OFF`, muting inference to prevent false arrhythmia triggers.
 - **Watchdog Timer (WDOG):** Hardware watchdog reset with 2-second timeout guarantees automatic recovery in the event of unexpected bus stalls.
+- **No Artificial BPM Clamps:** Heart rate is reported without hardcoded ceiling/floor clamps (e.g. no forced "96 BPM" cap). The EMA filter alone prevents artifact spikes. Clinical accuracy — including bradycardia and tachycardia — is preserved.

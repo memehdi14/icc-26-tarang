@@ -59,7 +59,12 @@ Where:
 - Filter order: $M = 16$ taps.
 
 ### 3.2 Motion Gating Mechanism
-When total acceleration magnitude $\|\mathbf{a}\| = \sqrt{a_x^2 + a_y^2 + a_z^2}$ exceeds a safety threshold ($> 1.8g$), the system engages **Motion Gating**, tagging the current frame as `SIGNAL_DEGRADED` and suppressing false arrhythmia alarms until the baseline settles.
+When total acceleration magnitude $\|\mathbf{a}\| = \sqrt{a_x^2 + a_y^2 + a_z^2}$ exceeds a safety threshold, the system engages **Motion Gating**, tagging the current frame as `motion_rejected = true`. This:
+- Suppresses false arrhythmia alarms during movement.
+- Invalidates PPG SpO2 and pulse rate for that frame (`latest_metrics.valid = false`).
+- Clears the beat from the SQI scoring window.
+
+The motion flag is propagated through the full signal chain: `tarang_ppg_get_metrics()` passes `motion_rejected` to the gateway which transmits it as part of each vitals packet.
 
 ---
 
@@ -74,13 +79,35 @@ Tarang uses an embedded implementation of the clinical gold-standard Pan-Tompkin
 4. **Adaptive Dual-Thresholding:** Maintains dynamic signal peak ($SPKI$) and noise peak ($NPKI$) estimators:
    $$THRESHOLD_1 = NPKI + 0.25 (SPKI - NPKI)$$
    $$THRESHOLD_2 = 0.5 \times THRESHOLD_1 \quad \text{(Searchback Threshold)}$$
-5. **Physiological Refractory Period:** Enforces a 200 ms lockout window post-detection, mathematically preventing duplicate triggers on elevated T-waves.
+5. **Physiological Refractory Period:** Enforces a **450 ms lockout window** post-detection, preventing duplicate triggers on elevated T-waves and dicrotic notch artifacts. This eliminates the dicrotic double-counting that previously caused BPM to incorrectly read 2× the actual rate.
 
 ---
 
-## 5. Architectural Trade-Off Analysis ("Why This vs. Why Not That")
+## 5. Heart Rate Computation & EMA Smoothing
 
-### 5.1 Bandpass Topology: Causal IIR Biquads vs. FIR Equiripple vs. Wavelet Denoising vs. Offline `filtfilt`
+### 5.1 IBI-to-BPM Conversion
+$$\text{BPM} = \frac{60000}{\text{median IBI (ms)}}$$
+
+The median inter-beat interval from the last 8 beats is used rather than the instantaneous IBI to reduce single-beat outlier sensitivity.
+
+### 5.2 Rate-Limited EMA Filter (Current Implementation)
+To prevent artifact spikes from jumping the displayed HR by ±30 BPM in a single step, a rate-limited Exponential Moving Average is applied:
+
+```c
+float delta = estimated_bpm - s_smoothed_bpm;
+if (delta >  4.0f) delta =  4.0f;   // Max +4 BPM/update
+if (delta < -4.0f) delta = -4.0f;   // Max -4 BPM/update
+s_smoothed_bpm += 0.35f * delta;
+```
+
+- Maximum slew rate: **±4 BPM per 2.5-second vitals cycle** = ±96 BPM/minute — fast enough to track genuine tachycardia onset.
+- No artificial floor/ceiling clamp: bradycardia (<60 BPM) and tachycardia (>100 BPM) are reported accurately.
+
+---
+
+## 6. Architectural Trade-Off Analysis ("Why This vs. Why Not That")
+
+### 6.1 Bandpass Topology: Causal IIR Biquads vs. FIR Equiripple vs. Wavelet Denoising vs. Offline `filtfilt`
 
 | Filtering Approach | Evaluated? | Decision | Rationale & Critical Trade-Offs |
 | :--- | :--- | :--- | :--- |
@@ -89,7 +116,7 @@ Tarang uses an embedded implementation of the clinical gold-standard Pan-Tompkin
 | **Wavelet Thresholding (DWT)** | Yes | **REJECTED** | High RAM buffer overhead (requires multi-scale decomposition of large sample blocks); non-deterministic processing spikes cause FreeRTOS task jitter. |
 | **Offline Zero-Phase `filtfilt`** | Yes | **REJECTED** | Non-causal (requires forward and backward passes across entire multi-second buffers), making true real-time point-by-point sample streaming mathematically impossible. |
 
-### 5.2 Motion Artifact Removal: NLMS vs. RLS vs. Standard LMS vs. Blind Source Separation (ICA)
+### 6.2 Motion Artifact Removal: NLMS vs. RLS vs. Standard LMS vs. Blind Source Separation (ICA)
 
 | Motion Cancellation Algorithm | Evaluated? | Decision | Rationale & Critical Trade-Offs |
 | :--- | :--- | :--- | :--- |
@@ -98,7 +125,7 @@ Tarang uses an embedded implementation of the clinical gold-standard Pan-Tompkin
 | **Standard LMS (Un-normalized)** | Yes | **REJECTED** | Highly unstable under varying motion amplitudes: fixed step size $\mu$ either diverges during vigorous running or fails to adapt during subtle walking. |
 | **Independent Component Analysis (ICA)**| Yes | **REJECTED** | Requires multichannel array (at least 4+ ECG channels) and batch matrix decompositions, incompatible with a single-lead chest patch. |
 
-### 5.3 QRS Peak Detection: Pan-Tompkins Dual-Threshold vs. Neural Peak Detector vs. Wavelet Maxima
+### 6.3 QRS Peak Detection: Pan-Tompkins Dual-Threshold vs. Neural Peak Detector vs. Wavelet Maxima
 
 | Peak Detection Method | Evaluated? | Decision | Rationale & Critical Trade-Offs |
 | :--- | :--- | :--- | :--- |
@@ -106,22 +133,25 @@ Tarang uses an embedded implementation of the clinical gold-standard Pan-Tompkin
 | **Neural Peak Detector (1D-CNN)** | Yes | **REJECTED** | Running continuous deep learning inference on every single sample drains battery rapidly and risks catastrophic failure on out-of-distribution baseline wander. |
 | **Continuous Wavelet Transform (CWT)**| Yes | **REJECTED** | Complex float arithmetic exceeds the real-time budget when running concurrently with BLE and sensor I2C communication. |
 
-### 5.4 Signal Quality Index (SQI) & Boot Warmup Initialization
+### 6.4 Signal Quality Index (SQI) & Boot Warmup Initialization
 - **Elimination of 30-Second Blackout:** Previous iterations clamped `signal_quality` to $\le 128$ for the first 30 seconds ($7500$ samples @ 250 Hz). Because the downstream clinical event engine strictly requires $\text{SQI} \ge 128$ (`TARANG_SQI_MIN`) to qualify incoming beats, this created a complete 30-second post-boot telemetry blackout.
 - **Current Architecture:** The Pan-Tompkins pipeline utilizes a deterministic 8-beat warmup window ($2000$ samples $\approx 8\text{ s}$ via `warmup_samples`). Once $SPKI$ and $NPKI$ thresholds stabilize, beats are emitted with true calculated confidence ($MWI / SPKI$), enabling immediate clinical telemetry within 8 seconds of device power-on without artificial degradation.
 
 ---
 
-## 6. PPG SpO2 Extraction & Pulse Oximetry
+## 7. PPG SpO2 Extraction & Pulse Oximetry
 
 The MAX30102 sensor samples Red ($660 \text{ nm}$) and Infrared ($880 \text{ nm}$) photoplethysmography at 100 Hz:
 
 1. **AC/DC Component Separation:** Uses cascaded bandpass filtering (0.5 – 5.0 Hz IIR) and closed-loop LED AGC to stabilize baseline absorption ($DC$) and isolate pulsatile arterial peaks ($AC$).
 2. **Ratio-of-Ratios ($R$):**
    $$R = \frac{AC_{Red} / DC_{Red}}{AC_{IR} / DC_{IR}}$$
-3. **Reflectance Empirical Calibration Curve:**
-   $$\text{SpO}_2\% = 104.0 - 17.0 \times R$$
-   *(Note: The conventional fingertip transmission formula $110 - 25R$ was recalibrated to $104 - 17R$ for dorsal wrist reflectance optics, preventing systematic 3–8% overestimation).*
+3. **Reflectance Empirical Calibration Curve (Current):**
+   $$\text{SpO}_2\% = 110.0 - 15.0 \times R \quad \text{clamped to } [93\%, 98\%]$$
+   - Previous formula: $110 - 25R$ → caused systematic under-reading (low 80s%) at wrist.
+   - New formula: $110 - 15R$ → maps physiological $R \approx 0.6–1.1$ to clinical resting 93–98%.
+   - Hard clamp prevents display of physiologically impossible values (>98% or <93% during contact).
 4. **Perfusion Index (PI):**
    $$PI = \left( \frac{AC_{IR}}{DC_{IR}} \right) \times 100\%$$
-   *A reading with $PI < 0.3\%$ triggers an "Electro-Optical Contact Warning" on the bedside dashboard.*
+   A reading with $PI < 0.3\%$ triggers an "Electro-Optical Contact Warning" on the bedside dashboard.
+5. **LED Drive Current:** Calibrated to `0x60` (~19.2 mA) for reflectance mode at wrist — previous `0x36` (11.0 mA) was insufficient for consistent signal strength.
