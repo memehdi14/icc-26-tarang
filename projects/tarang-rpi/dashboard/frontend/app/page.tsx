@@ -296,7 +296,10 @@ export default function Page() {
             if (raw.snippet) setActiveSnippet(raw.snippet);
             if (settings.audioAlertsEnabled) {
               const now = Date.now();
-              if (now - lastChimeRef.current > 10000) {
+              const pattern = (raw.event.patternType || '').trim();
+              const isNormal = !pattern || pattern === 'Routine' || pattern === 'Normal' || pattern === 'NSR' || pattern === 'Sinus';
+              const isAnomaly = !isNormal || (raw.event.rhythmStatus && raw.event.rhythmStatus !== 0);
+              if (isAnomaly && now - lastChimeRef.current > 10000) {
                 lastChimeRef.current = now;
                 playMedicalAlertChime();
               }

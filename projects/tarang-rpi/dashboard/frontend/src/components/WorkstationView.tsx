@@ -39,16 +39,27 @@ function formatTime(value?: string | null): string {
 
 function rhythmPresentation(event?: ClinicalEvent | null) {
   const flags = event?.rhythmStatus ?? 0;
-  if ((flags & 0x80) !== 0 || event?.patternType === 'VT' || event?.patternType === 'V-Run') {
+  const pattern = (event?.patternType || '').trim();
+  const isNormal = !pattern || pattern === 'Routine' || pattern === 'Normal' || pattern === 'NSR' || pattern === 'Sinus';
+
+  if ((flags & 0x80) !== 0 || pattern === 'VT' || pattern === 'V-Run') {
     return { label: 'Ventricular tachycardia alert', detail: 'Immediate clinical review required.', tone: 'critical', icon: ShieldAlert };
   }
-  if ((flags & 0x01) !== 0 || event?.patternType === 'AFib') {
+  if ((flags & 0x01) !== 0 || pattern === 'AFib') {
     return { label: 'Atrial fibrillation detected', detail: 'RR irregularity crossed clinical threshold.', tone: 'warning', icon: AlertTriangle };
   }
-  if (event?.patternType) {
-    return { label: `${event.patternType} recorded`, detail: 'Event snapshot available in history log.', tone: 'warning', icon: AlertTriangle };
+  if (pattern && !isNormal) {
+    return { label: `${pattern} recorded`, detail: 'Event snapshot available in history log.', tone: 'warning', icon: AlertTriangle };
   }
-  return { label: 'Normal sinus rhythm', detail: 'No active clinical alerts.', tone: 'normal', icon: CheckCircle2 };
+  if (flags !== 0) {
+    return { label: 'Rhythm anomaly detected', detail: 'Event snapshot available in history log.', tone: 'warning', icon: AlertTriangle };
+  }
+  return { 
+    label: pattern === 'Routine' ? 'Normal sinus rhythm • ECG snapshot' : 'Normal sinus rhythm', 
+    detail: pattern === 'Routine' ? '4-second Lead-I snapshot acquired • No arrhythmias detected.' : 'No active clinical alerts.', 
+    tone: 'normal', 
+    icon: CheckCircle2 
+  };
 }
 
 export const WorkstationView: React.FC<WorkstationViewProps> = ({
@@ -66,9 +77,11 @@ export const WorkstationView: React.FC<WorkstationViewProps> = ({
 }) => {
   const rhythm = rhythmPresentation(latestEvent);
   const RhythmIcon = rhythm.icon;
-  const rhythmTone = (rhythm.tone === 'critical' || rhythm.tone === 'warning')
-    ? 'border border-red-200 bg-red-50 text-red-700'
-    : 'border border-emerald-200 bg-emerald-50 text-emerald-800';
+  const rhythmTone = rhythm.tone === 'critical'
+    ? 'border border-red-300 bg-red-50 text-red-700'
+    : rhythm.tone === 'warning'
+    ? 'border border-amber-300 bg-amber-50 text-amber-800'
+    : 'border border-emerald-300 bg-emerald-50 text-emerald-800';
 
   return (
     <div className="view-frame view-enter">

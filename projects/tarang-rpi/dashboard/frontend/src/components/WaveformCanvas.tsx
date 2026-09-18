@@ -13,6 +13,7 @@ interface WaveformCanvasProps {
 }
 
 export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({ 
+  currentEvent,
   activeSnippet, 
   onClearSnapshot,
   sweepSpeed = '25',
@@ -123,7 +124,11 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
         const gainMult = gain === '0.5x' ? 0.5 : gain === '1.0x' ? 1.0 : gain === '2.0x' ? 2.0 : 1.0;
         const scaleY = ((height * 0.72) / dynamicRange) * (gain === 'auto' ? 1.0 : gainMult);
 
-        context.strokeStyle = '#1d4ed8'; // Crisp Clinical Blue
+        const flags = currentEvent?.rhythmStatus ?? 0;
+        const pattern = (currentEvent?.patternType || '').trim();
+        const isCritical = (flags & 0x80) !== 0 || pattern === 'VT' || pattern === 'V-Run';
+        const isWarning = (flags & 0x01) !== 0 || (pattern !== '' && !['Routine', 'Normal', 'NSR', 'Sinus'].includes(pattern));
+        context.strokeStyle = isCritical ? '#dc2626' : isWarning ? '#d97706' : '#059669'; // Emerald Green for normal instead of blue
         context.lineWidth = 1.8 * dpr;
         context.lineCap = 'round';
         context.lineJoin = 'round';
@@ -166,7 +171,7 @@ export const WaveformCanvas: React.FC<WaveformCanvasProps> = ({
       window.removeEventListener('resize', resizeCanvas);
       cancelAnimationFrame(animationId);
     };
-  }, [activeSnippet, hasEvent, sweepSpeed, gain]);
+  }, [activeSnippet, hasEvent, sweepSpeed, gain, currentEvent]);
 
   return (
     <div className="rounded-lg border border-[var(--line)] bg-white overflow-hidden shadow-xs">
